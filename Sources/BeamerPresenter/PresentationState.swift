@@ -283,6 +283,19 @@ final class PresentationState: ObservableObject {
         selectedItemID = item.id
     }
 
+    /// Inserts a text item pre-filled with `text` (used by the quick commands).
+    func addTextItem(_ text: String) {
+        var item = BoardItem.makeDefault(.text)
+        item.text = text
+        mutateActiveBoard { $0.items.append(item) }
+        selectedItemID = item.id
+    }
+
+    func deleteItem(_ id: UUID) {
+        mutateActiveBoard { $0.items.removeAll { $0.id == id } }
+        if selectedItemID == id { selectedItemID = nil }
+    }
+
     /// Adds an empty table of the chosen size (rows × columns), like the grid
     /// picker in Apple Notes.
     func addTable(rows: Int, columns: Int) {

@@ -36,8 +36,9 @@ app can also pull `\note{}` speaker notes straight from the source.
   a laser pointer; both mirror live onto the audience screen.
 - **Whiteboard** — press `W` for a blank white scratch slide to work through a
   calculation live. Draw on it, drop in text boxes, a clean Safari-style table
-  (pick rows × columns from an Apple Notes-style grid), or a QR code, move and
-  **resize** items with handles, keep several boards,
+  (pick rows × columns from an Apple Notes-style grid), a QR code, or **quick
+  commands** (time, deck name, slide number). Move and **resize** items with
+  handles, delete any item via the red **✕** at its corner, keep several boards,
   export any of them to its own PDF, or **insert** one after the current slide
   into a *copy* of the deck PDF (the original is untouched). The board toolbar is
   a compact, Safari-like rounded bar.
