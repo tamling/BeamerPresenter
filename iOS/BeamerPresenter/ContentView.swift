@@ -19,120 +19,84 @@ struct ContentView: View {
     }
 }
 
-/// Start screen: branding, open / sample actions, recent files, and a quick
-/// tour of what the app can do.
+/// Start screen: branding, open / sample actions, recent files, and a version line.
 struct StartView: View {
     @EnvironmentObject var model: PresentationModel
     @State private var showSettings = false
     let open: () -> Void
 
-    private let features: [(String, String, String)] = [
-        ("rectangle.on.rectangle.angled", "External display", "Audience sees just the slide; iPad stays your console"),
-        ("note.text", "Speaker notes", "Split PDFs or \\note{} from a .tex"),
-        ("pencil.tip", "Ink & laser", "6 colours, pressure, Apple Pencil, laser pointer"),
-        ("square.grid.2x2", "Overview", "Grid & thumbnails to jump anywhere"),
-        ("rectangle.badge.plus", "Whiteboard", "Scratch boards: text, table, QR, ink"),
-        ("timer", "Timer & clock", "Stopwatch with start / pause / reset"),
-        ("eye.slash", "Black-out", "Hide the audience with a message or image"),
-        ("square.and.arrow.up", "Export", "Save the annotated deck as a new PDF"),
-        ("dot.radiowaves.left.and.right", "Remote", "Bluetooth clicker & keyboard control"),
-    ]
-
-    private let cols = [GridItem(.adaptive(minimum: 240), spacing: 14)]
-
     var body: some View {
-        ScrollView {
-            VStack(spacing: 26) {
-                HStack {
-                    Spacer()
-                    Button { showSettings = true } label: {
-                        Image(systemName: "gearshape").font(.title2)
-                    }
+        VStack(spacing: 24) {
+            HStack {
+                Spacer()
+                Button { showSettings = true } label: {
+                    Image(systemName: "gearshape").font(.title2)
                 }
-
-                VStack(spacing: 10) {
-                    Image(systemName: "rectangle.on.rectangle.angled")
-                        .font(.system(size: 56)).foregroundStyle(.tint)
-                    Text("BeamerPresenter").font(.largeTitle.bold())
-                    Text("Present PDF slides on your iPad.").foregroundStyle(.secondary)
-                }
-
-                VStack(spacing: 12) {
-                    Button(action: open) {
-                        Label("Open PDF…", systemImage: "folder").frame(maxWidth: 360)
-                    }
-                    .buttonStyle(.borderedProminent).controlSize(.large)
-
-                    if let sample = Bundle.main.url(forResource: "sample", withExtension: "pdf") {
-                        Button { model.open(url: sample) } label: {
-                            Label("Try a sample deck", systemImage: "sparkles").frame(maxWidth: 360)
-                        }
-                        .buttonStyle(.bordered).controlSize(.large)
-                    }
-                }
-
-                if !model.recents.isEmpty {
-                    section("Recent") {
-                        ForEach(model.recents, id: \.self) { url in
-                            Button { model.open(url: url) } label: {
-                                HStack {
-                                    Image(systemName: "doc.richtext").foregroundStyle(.tint)
-                                    Text(url.deletingPathExtension().lastPathComponent)
-                                        .foregroundStyle(.primary)
-                                    Spacer()
-                                    Image(systemName: "chevron.right")
-                                        .font(.caption).foregroundStyle(.tertiary)
-                                }
-                                .padding(.vertical, 10).padding(.horizontal, 14)
-                                .background(.quaternary, in: RoundedRectangle(cornerRadius: 10))
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                }
-
-                section("What you can do") {
-                    LazyVGrid(columns: cols, alignment: .leading, spacing: 14) {
-                        ForEach(features, id: \.1) { icon, title, desc in
-                            HStack(alignment: .top, spacing: 12) {
-                                Image(systemName: icon)
-                                    .font(.title3).foregroundStyle(.tint)
-                                    .frame(width: 28)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(title).font(.subheadline.weight(.semibold))
-                                    Text(desc).font(.caption).foregroundStyle(.secondary)
-                                }
-                                Spacer(minLength: 0)
-                            }
-                            .padding(12)
-                            .background(.quaternary, in: RoundedRectangle(cornerRadius: 12))
-                        }
-                    }
-                }
-
-                Text("BeamerPresenter for iPadOS · \(appVersion)")
-                    .font(.caption).foregroundStyle(.tertiary)
-                    .padding(.top, 4)
             }
-            .frame(maxWidth: 820)
-            .frame(maxWidth: .infinity)
-            .padding(32)
+
+            Spacer()
+
+            VStack(spacing: 10) {
+                Image(systemName: "rectangle.on.rectangle.angled")
+                    .font(.system(size: 60)).foregroundStyle(.tint)
+                Text("BeamerPresenter").font(.largeTitle.bold())
+                Text("Present PDF slides on your iPad.").foregroundStyle(.secondary)
+            }
+
+            VStack(spacing: 12) {
+                Button(action: open) {
+                    Label("Open PDF…", systemImage: "folder").frame(maxWidth: 360)
+                }
+                .buttonStyle(.borderedProminent).controlSize(.large)
+
+                if let sample = Bundle.main.url(forResource: "sample", withExtension: "pdf") {
+                    Button { model.open(url: sample) } label: {
+                        Label("Try a sample deck", systemImage: "sparkles").frame(maxWidth: 360)
+                    }
+                    .buttonStyle(.bordered).controlSize(.large)
+                }
+            }
+
+            if !model.recents.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Recent").font(.headline)
+                    ForEach(model.recents.prefix(5), id: \.self) { url in
+                        Button { model.open(url: url) } label: {
+                            HStack {
+                                Image(systemName: "doc.richtext").foregroundStyle(.tint)
+                                Text(url.deletingPathExtension().lastPathComponent)
+                                    .foregroundStyle(.primary)
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.caption).foregroundStyle(.tertiary)
+                            }
+                            .padding(.vertical, 10).padding(.horizontal, 14)
+                            .background(.quaternary, in: RoundedRectangle(cornerRadius: 10))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .frame(maxWidth: 360)
+            }
+
+            Spacer()
+
+            VStack(spacing: 2) {
+                Text("BeamerPresenter \(Self.version)").font(.headline)
+                Text("\(Self.releaseDate) · by \(Self.author)")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            .padding(.bottom, 8)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(40)
         .sheet(isPresented: $showSettings) { SettingsView() }
     }
 
-    private var appVersion: String {
-        let v = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
-        return "Version \(v)"
-    }
-
-    @ViewBuilder
-    private func section<Content: View>(_ title: String, @ViewBuilder _ content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(title).font(.headline)
-            content()
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
+    static let author = "Timo Amling"
+    static let releaseDate = "2026-06-17"
+    static var version: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "2.0"
     }
 }
 
