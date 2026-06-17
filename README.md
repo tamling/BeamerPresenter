@@ -22,6 +22,9 @@ app can also pull `\note{}` speaker notes straight from the source.
 - **Overview grid** — press `G` for a full grid of every slide; click to jump.
 - **Ink & laser** — draw freehand on a slide (pen, 4 colours, undo/clear) or use
   a laser pointer; both mirror live onto the audience screen.
+- **Whiteboard** — press `W` for a blank white scratch slide to work through a
+  calculation live. Draw on it, drop in text boxes, a small table, or a QR code,
+  keep several boards, and export any of them to its own PDF.
 - **Audience window** — full-bleed slide, fullscreen on the external display.
 
 ## How notes work
@@ -85,6 +88,7 @@ fullscreen on your external display (or the only display if there's just one).
 | Home / End | First / last slide |
 | `G` | Toggle the slide overview |
 | `B` | Black out the audience screen |
+| `W` | Toggle the whiteboard scratch slide |
 | `R` | Reset the elapsed timer |
 | `P` | Pen tool |
 | `L` | Laser pointer |
@@ -105,6 +109,8 @@ Bluetooth presenter remotes emit Page Up / Page Down, so they work out of the bo
 | `TexNotes.swift` | Parses `\note{}` from a sibling `.tex` (+ `.nav` page ranges) |
 | `PDFPageView.swift` | Renders one non-interactive page (SwiftUI ↔ PDFKit) |
 | `SlideView.swift` | Aspect-correct slide + ink/laser annotation layer |
+| `Whiteboard.swift` | Whiteboard model, items, and QR-code generation |
+| `WhiteboardView.swift` | Board rendering, item editing, toolbar, and PDF export |
 | `RecentFiles.swift` | Recently-opened list persisted in UserDefaults |
 | `Favorites.swift` | Favorite folders + app version info, persisted in UserDefaults |
 | `WelcomeView.swift` | Start screen: open, drag-and-drop, recents |

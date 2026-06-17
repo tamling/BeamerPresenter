@@ -8,7 +8,10 @@ struct AudienceView: View {
     var body: some View {
         ZStack {
             Color.black
-            if !state.blackout {
+            if let board = state.activeBoard {
+                BoardCanvas(board: board)
+                    .aspectRatio(state.slideAspect, contentMode: .fit)
+            } else if !state.blackout {
                 SlideView(pageIndex: state.index, interactive: false)
             }
         }

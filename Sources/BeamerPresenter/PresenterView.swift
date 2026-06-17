@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import UniformTypeIdentifiers
 
 /// Root of the presenter window: shows the welcome screen until a presentation
 /// is loaded, then the full presenter console.
@@ -43,8 +44,12 @@ struct PresenterView: View {
             VStack(spacing: 8) {
                 ControlBar(onOpen: onOpen)
 
+                if state.isBoardActive {
+                    BoardBar(onSave: saveActiveBoard)
+                }
+
                 HStack(spacing: 0) {
-                    slidePane(title: "Current", index: state.index, interactive: true)
+                    currentPane
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
 
                     // Drag left/right to resize the side column (it sits to the
@@ -103,12 +108,44 @@ struct PresenterView: View {
         }
     }
 
+    /// The large left pane: the current slide, or the whiteboard when active.
+    private var currentPane: some View {
+        VStack(spacing: 4) {
+            Text(state.isBoardActive ? "Whiteboard" : "Current")
+                .font(.caption).foregroundStyle(.secondary)
+            if state.isBoardActive {
+                WhiteboardPane()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                SlideView(pageIndex: state.index, interactive: true)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .border(.gray.opacity(0.5))
+            }
+        }
+    }
+
     private func slidePane(title: String, index: Int, interactive: Bool) -> some View {
         VStack(spacing: 4) {
             Text(title).font(.caption).foregroundStyle(.secondary)
             SlideView(pageIndex: index, interactive: interactive)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .border(.gray.opacity(0.5))
+        }
+    }
+
+    /// Exports the active whiteboard to a PDF chosen by the user.
+    private func saveActiveBoard() {
+        guard let board = state.activeBoard else { return }
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.pdf]
+        panel.nameFieldStringValue = "\(board.name).pdf"
+        panel.canCreateDirectories = true
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        if !BoardExporter.writePDF(board: board, aspect: state.slideAspect, to: url) {
+            let alert = NSAlert()
+            alert.messageText = "Could not save the whiteboard"
+            alert.informativeText = url.lastPathComponent
+            alert.runModal()
         }
     }
 
@@ -244,6 +281,9 @@ private struct ControlBar: View {
                 Image(systemName: state.blackout ? "eye.slash.fill" : "eye.slash")
             }
             .help("Black out audience screen (B)")
+            Button { state.toggleBoard() } label: { Image(systemName: "square.and.pencil") }
+                .foregroundStyle(state.isBoardActive ? Color.accentColor : .primary)
+                .help("Whiteboard (W)")
 
             Divider().frame(height: 18)
 
