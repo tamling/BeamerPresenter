@@ -6,13 +6,15 @@ screen shows the slide; your laptop shows a full presenter console: current
 slide, next slide, speaker notes, a thumbnail strip, a slide overview, and a
 timer.
 
-It works directly off a compiled PDF, so there's no LaTeX parsing involved.
+It works directly off a compiled PDF; if a matching `.tex` is alongside it, the
+app can also pull `\note{}` speaker notes straight from the source.
 
 ## GUI
 
 - **Welcome screen** — open button, drag-and-drop a PDF, and a recent-files list.
 - **Presenter console** — control bar (open, home, prev/next, overview, blackout,
-  timer, clock), large current slide, next slide, notes pane.
+  timer, clock), large current slide, next slide, notes pane. The slide/sidebar
+  split and the next/notes split are **draggable**, and the sizes persist.
 - **Thumbnail strip** — click any slide to jump; auto-scrolls to the current one.
 - **Overview grid** — press `G` for a full grid of every slide; click to jump.
 - **Ink & laser** — draw freehand on a slide (pen, 4 colours, undo/clear) or use
@@ -37,8 +39,25 @@ your `\note{}` text on the right half:
 ```
 
 The app detects the double-width layout automatically and splits each page:
-left half → audience, right half → your notes pane. A plain PDF (no notes
-layout) still presents fine — the notes pane just shows a hint instead.
+left half → audience, right half → your notes pane.
+
+### Notes straight from the `.tex`
+
+You don't have to recompile with the second-screen option. If you open a plain
+PDF and a `.tex` file with the **same base name** sits next to it, the app reads
+your `\note{…}` text directly from the source and shows it in the notes pane:
+
+```latex
+\begin{frame}{Title}
+  Slide content here.
+  \note{These are my speaker notes for this slide.}
+\end{frame}
+```
+
+Page mapping is exact when the Beamer `.nav` file is also present (it encodes
+each frame's page range, so overlays line up); otherwise each frame is treated
+as one page. A plain PDF with neither notes layout nor a `.tex` still presents
+fine — the notes pane just shows a hint instead.
 
 ## Run it (development)
 
@@ -78,6 +97,7 @@ Bluetooth presenter remotes emit Page Up / Page Down, so they work out of the bo
 | `AppDelegate.swift` | Windows, screen placement, menu, keyboard |
 | `PresentationState.swift` | Shared state (index, timer, blackout, overview, thumbnails) |
 | `PDFModel.swift` | Loads the PDF and crops each page into halves |
+| `TexNotes.swift` | Parses `\note{}` from a sibling `.tex` (+ `.nav` page ranges) |
 | `PDFPageView.swift` | Renders one non-interactive page (SwiftUI ↔ PDFKit) |
 | `SlideView.swift` | Aspect-correct slide + ink/laser annotation layer |
 | `RecentFiles.swift` | Recently-opened list persisted in UserDefaults |

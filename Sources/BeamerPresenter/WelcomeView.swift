@@ -33,7 +33,7 @@ struct WelcomeView: View {
                 dropZone
 
                 Spacer()
-                Text("Tip: compile with \\setbeameroption{show notes on second screen=right}")
+                Text("Tip: compile with \\setbeameroption{show notes on second screen=right}, or keep the .tex with \\note{…} next to the PDF.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

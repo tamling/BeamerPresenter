@@ -20,9 +20,13 @@ struct Stroke: Identifiable {
 final class PresentationState: ObservableObject {
     @Published private(set) var slideDoc: PDFDocument?   // left half (or full page)
     @Published private(set) var notesDoc: PDFDocument?   // right half, nil for plain PDFs
+    @Published private(set) var textNotes: [Int: String] = [:]   // notes parsed from a sibling .tex
     @Published private(set) var pageCount: Int = 0
-    @Published private(set) var hasNotes: Bool = false
     @Published private(set) var isLoaded: Bool = false
+
+    /// True when this deck has any notes at all — either a PDF notes column or
+    /// `\note{}` text read from the `.tex` source.
+    var hasNotes: Bool { notesDoc != nil || !textNotes.isEmpty }
     @Published private(set) var title: String = ""
     @Published private(set) var slideAspect: CGFloat = 16.0 / 9.0
 
@@ -53,8 +57,10 @@ final class PresentationState: ObservableObject {
 
         let box = first.bounds(for: .cropBox)
         slideAspect = box.width / max(box.height, 1)
-        hasNotes = split
         pageCount = doc.pageCount
+        // A split deck already carries its notes in the right half; for a plain
+        // PDF, fall back to `\note{}` text from a sibling `.tex` if one exists.
+        textNotes = split ? [:] : TexNotes.load(forPDF: url, pageCount: doc.pageCount)
         title = url.deletingPathExtension().lastPathComponent
         thumbCache.removeAll()
         strokes.removeAll()
@@ -72,8 +78,8 @@ final class PresentationState: ObservableObject {
     func unload() {
         slideDoc = nil
         notesDoc = nil
+        textNotes = [:]
         pageCount = 0
-        hasNotes = false
         title = ""
         thumbCache.removeAll()
         strokes.removeAll()
