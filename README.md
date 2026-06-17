@@ -122,7 +122,8 @@ Bluetooth presenter remotes emit Page Up / Page Down, so they work out of the bo
 ## Build a real `.app`
 
 `swift run` is for iterating. To get a double-clickable bundle, run the included
-script — it builds a release `arm64` binary and wraps it with `Info.plist`:
+script — it builds a release `arm64` binary, generates the app icon, and wraps
+everything with `Info.plist`:
 
 ```bash
 ./build-app.sh
@@ -139,10 +140,24 @@ Then notarize with `xcrun notarytool submit build/BeamerPresenter.app --wait …
 and `xcrun stapler staple`. (You can also drop these sources into a regular
 Xcode macOS App target if you prefer the Xcode toolchain.)
 
+## App icon
+
+The icon is drawn programmatically — no design tools or binaries needed. Edit the
+shapes/colours in `Tools/make_icon.py` and run:
+
+```bash
+./make-icon.sh
+```
+
+It renders `Resources/AppIcon.iconset` (and a 1024px `Resources/AppIcon.png`
+preview), then, on macOS, compiles `Resources/BeamerPresenter.icns` with the
+built-in `iconutil`. `build-app.sh` does this automatically when assembling the
+bundle.
+
 ## Roadmap ideas
 
 - Embedded links and videos in the PDF
 - Persisting ink between sessions / exporting an annotated PDF
 - Larger / scrollable / markdown notes via the `pdfpc` embedded-notes format
 - Per-slide timing and a rehearsal mode
-- App icon + notarized release build
+- Notarized release build

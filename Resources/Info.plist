@@ -10,6 +10,8 @@
     <string>app.beamerpresenter.BeamerPresenter</string>
     <key>CFBundleExecutable</key>
     <string>BeamerPresenter</string>
+    <key>CFBundleIconFile</key>
+    <string>BeamerPresenter</string>
     <key>CFBundleVersion</key>
     <string>1</string>
     <key>CFBundleShortVersionString</key>
