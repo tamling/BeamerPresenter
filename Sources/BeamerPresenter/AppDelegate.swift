@@ -180,6 +180,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         add(to: blackMenu, "Clear Background Image", #selector(clearBlackImage(_:)))
 
         presoMenu.addItem(.separator())
+        add(to: presoMenu, "Start / Stop Timer", #selector(toggleTimer(_:)), "t")
         add(to: presoMenu, "Reset Timer", #selector(resetTimer(_:)), "r")
 
         // Tools menu — pen / laser / colours / ink.
@@ -239,6 +240,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         case #selector(closePresentation(_:)), #selector(nextSlide(_:)),
              #selector(previousSlide(_:)), #selector(firstSlide(_:)),
              #selector(lastSlide(_:)), #selector(resetTimer(_:)),
+             #selector(toggleTimer(_:)),
              #selector(toggleLaser(_:)), #selector(newBoard(_:)),
              #selector(saveNotes(_:)):
             return state.isLoaded
@@ -338,6 +340,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     @objc private func toggleOverview(_ sender: Any?) { state.showOverview.toggle() }
     @objc private func toggleBlackout(_ sender: Any?) { state.blackout.toggle() }
     @objc private func resetTimer(_ sender: Any?)     { state.resetTimer() }
+    @objc private func toggleTimer(_ sender: Any?)    { state.toggleTimer() }
 
     @objc private func setBlackScreenMessage(_ sender: Any?) {
         let alert = NSAlert()
@@ -494,6 +497,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         presenter.title = "BeamerPresenter"
         presenter.isReleasedWhenClosed = false   // we hold a strong ref; avoid an ARC over-release crash
         presenter.contentView = NSHostingView(rootView: root)
+        presenter.contentMinSize = NSSize(width: 560, height: 380)   // allow shrinking
         presenter.delegate = self
         presenter.center()
         // Stays hidden behind the launch splash; shown once the splash fades.
@@ -510,6 +514,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             styleMask: style, backing: .buffered, defer: false)
         audience.title = "Audience"
         audience.isReleasedWhenClosed = false   // held in a strong ref; avoid an ARC over-release crash
+        audience.contentMinSize = NSSize(width: 320, height: 200)   // freely resizable on a single screen
         audience.contentView = NSHostingView(rootView: AudienceView().environmentObject(state))
         if multiScreen {
             audience.level = .mainMenu

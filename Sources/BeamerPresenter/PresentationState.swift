@@ -41,7 +41,16 @@ final class PresentationState: ObservableObject {
     @Published var blackout: Bool = false
     @Published var showOverview: Bool = false
     @Published var scratch: String = ""          // free-form notes, saved next to the PDF as .txt
-    @Published private(set) var startDate = Date()
+
+    // Elapsed timer with start/stop/reset.
+    @Published private(set) var timerRunning = true
+    @Published private(set) var startDate = Date()   // start of the current running segment
+    private var accumulated: TimeInterval = 0        // time banked from previous segments
+
+    /// Total elapsed presentation time, accounting for pauses.
+    var elapsedSeconds: TimeInterval {
+        timerRunning ? accumulated + Date().timeIntervalSince(startDate) : accumulated
+    }
 
     // Annotation / laser
     @Published var tool: Tool = .none
@@ -93,6 +102,8 @@ final class PresentationState: ObservableObject {
         // Start blacked out unless the user turned it off in Settings.
         blackout = UserDefaults.standard.object(forKey: "startBlackedOut") as? Bool ?? true
         showOverview = false
+        accumulated = 0
+        timerRunning = true
         startDate = Date()
         isLoaded = true
         return true
@@ -150,8 +161,9 @@ final class PresentationState: ObservableObject {
     /// Records the elapsed time of the current deck into the usage stats.
     func recordCurrentSession() {
         guard isLoaded else { return }
-        Stats.record(seconds: Date().timeIntervalSince(startDate))
-        startDate = Date()   // so a later call doesn't double-count
+        Stats.record(seconds: elapsedSeconds)
+        accumulated = 0           // so a later call doesn't double-count
+        startDate = Date()
     }
 
     // MARK: - Navigation
@@ -172,7 +184,21 @@ final class PresentationState: ObservableObject {
         index = clamped
     }
 
-    func resetTimer() { startDate = Date() }
+    func resetTimer() {
+        accumulated = 0
+        startDate = Date()
+    }
+
+    /// Pauses or resumes the elapsed timer.
+    func toggleTimer() {
+        if timerRunning {
+            accumulated += Date().timeIntervalSince(startDate)
+            timerRunning = false
+        } else {
+            startDate = Date()
+            timerRunning = true
+        }
+    }
 
     // MARK: - Tools / annotations
 

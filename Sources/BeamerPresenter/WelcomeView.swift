@@ -27,7 +27,7 @@ struct WelcomeView: View {
             Divider()
             dashboard
         }
-        .frame(minWidth: 820, minHeight: 520)
+        .frame(minWidth: 640, minHeight: 440)
         .onReceive(NotificationCenter.default.publisher(for: Favorites.didChange)) { _ in
             favorites = Favorites.load()
         }

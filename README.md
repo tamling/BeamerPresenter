@@ -25,9 +25,10 @@ app can also pull `\note{}` speaker notes straight from the source.
   show presenter, next/previous, blackout, whiteboard, settings, quit).
 - **Settings (⌘,)** — open at login, show/hide the menu bar icon, the default
   black audience screen, its message (with presets + clear) and a background image.
-- **Presenter console** — a control bar with every live tool, each a captioned
-  symbol (exit, prev/next + slide counter, overview, blackout, whiteboard, pen,
-  laser, the pen-colour swatches, undo/clear ink, reset timer, elapsed + clock),
+- **Presenter console** — a centered control bar with every live tool, each a
+  captioned symbol (exit, prev/next + slide counter, overview, blackout,
+  whiteboard, pen, laser, the pen-colour swatches, undo/clear ink, a start/stop +
+  reset **timer**, elapsed + clock),
   large current slide, next slide, notes pane, and a **scratch-notes** field
   autosaved as `<pdf>.notes.txt` (resizable, with quick-insert of time/deck/slide,
   or exported to a chosen `.txt` via its button / *File ▸ Save Notes…*). Arrow keys
