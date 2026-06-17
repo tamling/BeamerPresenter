@@ -1,0 +1,53 @@
+# XcodeGen spec for the iPad app. Generate the Xcode project with:
+#
+#   brew install xcodegen      # once
+#   cd iOS && xcodegen generate
+#   open BeamerPresenter.xcodeproj
+#
+# Then set your signing team and run on the iPad.
+name: BeamerPresenter
+options:
+  bundleIdPrefix: app.beamerpresenter
+  deploymentTarget:
+    iOS: "16.0"
+  createIntermediateGroups: true
+
+targets:
+  BeamerPresenter:
+    type: application
+    platform: iOS
+    sources:
+      - BeamerPresenter
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.beamerpresenter.ios
+        TARGETED_DEVICE_FAMILY: 2          # iPad only
+        MARKETING_VERSION: "2.0"
+        CURRENT_PROJECT_VERSION: "2"
+        GENERATE_INFOPLIST_FILE: NO
+        SWIFT_VERSION: "5.0"
+        DEVELOPMENT_TEAM: ""               # ← set your Apple Developer team in Xcode
+        CODE_SIGN_STYLE: Automatic
+    info:
+      path: BeamerPresenter/Info.plist
+      properties:
+        CFBundleDisplayName: BeamerPresenter
+        CFBundleShortVersionString: "2.0"
+        CFBundleVersion: "2"
+        UILaunchScreen: {}
+        UIRequiresFullScreen: false
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        # Open PDFs from the Files app / iCloud Drive
+        UIFileSharingEnabled: true
+        LSSupportsOpeningDocumentsInPlace: true
+        UISupportsDocumentBrowser: false
+        CFBundleDocumentTypes:
+          - CFBundleTypeName: PDF
+            CFBundleTypeRole: Viewer
+            LSHandlerRank: Alternate
+            LSItemContentTypes:
+              - com.adobe.pdf
