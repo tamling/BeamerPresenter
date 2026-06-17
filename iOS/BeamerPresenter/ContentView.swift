@@ -38,16 +38,21 @@ struct StartView: View {
 
             VStack(spacing: 10) {
                 Image(systemName: "rectangle.on.rectangle.angled")
-                    .font(.system(size: 60)).foregroundStyle(.tint)
-                Text("BeamerPresenter").font(.largeTitle.bold())
+                    .font(.system(size: 60)).foregroundStyle(LinearGradient.brand)
+                Text("BeamerPresenter")
+                    .font(.largeTitle.bold())
+                    .foregroundStyle(LinearGradient.brand)
                 Text("Present PDF slides on your iPad.").foregroundStyle(.secondary)
             }
 
             VStack(spacing: 12) {
                 Button(action: open) {
-                    Label("Open PDF…", systemImage: "folder").frame(maxWidth: 360)
+                    Label("Open PDF…", systemImage: "folder")
+                        .font(.headline).foregroundStyle(.white)
+                        .frame(maxWidth: 360).padding(.vertical, 14)
+                        .background(LinearGradient.brand, in: RoundedRectangle(cornerRadius: 12))
                 }
-                .buttonStyle(.borderedProminent).controlSize(.large)
+                .buttonStyle(.plain)
 
                 if let sample = Bundle.main.url(forResource: "sample", withExtension: "pdf") {
                     Button { model.open(url: sample) } label: {
