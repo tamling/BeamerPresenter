@@ -50,6 +50,7 @@ struct BlackoutView: View {
     }
 
     /// Quick away-messages, mirroring the macOS black-screen presets.
-    static let presets = ["Be right back", "Break", "Questions?",
-                          "Please wait", "Thank you"]
+    static let presets = ["Back in 5 minutes", "Back in 10 minutes",
+                          "Back in 15 minutes", "Short break",
+                          "Lunch break", "Back soon"]
 }

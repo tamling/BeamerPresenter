@@ -149,6 +149,10 @@ struct PresenterView: View {
     @AppStorage("pencilOnly") private var pencilOnly = false
     @AppStorage("blackoutMessage") private var blackoutMessage = ""
     @AppStorage("blackoutShowClock") private var blackoutShowClock = true
+    @AppStorage("blackoutImagePath") private var blackoutImagePath = ""
+    @State private var importingBlackImage = false
+    @State private var showCustomMessage = false
+    @State private var customMessage = ""
     @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var landscape = false
     let openPicker: () -> Void
@@ -168,7 +172,7 @@ struct PresenterView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            toolbar
+            if landscape { controlBar } else { toolbar }
             if model.isBoardActive { boardInsertBar }
             GeometryReader { geo in
                 Group {
@@ -213,6 +217,19 @@ struct PresenterView: View {
             if let url = exportURL { ShareSheet(items: [url]) }
         }
         .sheet(isPresented: $showSettings) { SettingsView() }
+        .fileImporter(isPresented: $importingBlackImage, allowedContentTypes: [.image]) { result in
+            if case .success(let url) = result { importBlackImage(url) }
+        }
+        .alert("Black-out message", isPresented: $showCustomMessage) {
+            TextField("Message", text: $customMessage)
+            Button("Set") {
+                blackoutMessage = customMessage
+                if !model.blackout { model.toggleBlackout() }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Shown centred on the audience screen.")
+        }
     }
 
     /// Bake ink + boards into a new PDF in the temp dir and present the share sheet.
@@ -268,11 +285,7 @@ struct PresenterView: View {
             Button { model.toggleLaser() } label: { Image(systemName: "dot.radiowaves.left.and.right") }
                 .foregroundStyle(model.laserActive ? .red : .primary)
 
-            if landscape {
-                penToolsInline   // colours visible directly when there's room
-            } else {
-                penMenu          // collapsed into one control in portrait
-            }
+            penMenu   // colours/weight collapsed into one control (portrait)
 
             Button {
                 model.isBoardActive ? model.boardUndoInk() : model.undoInk()
@@ -289,25 +302,142 @@ struct PresenterView: View {
         .background(.ultraThinMaterial)
     }
 
+    // MARK: - Captioned control bar (macOS-style, landscape)
+
+    /// A wide control bar matching the macOS app: every control is an icon with a
+    /// small caption beneath it, grouped with spacers.
+    private var controlBar: some View {
+        HStack(alignment: .top, spacing: 14) {
+            captionedButton("Exit", "rectangle.portrait.and.arrow.right") { model.close() }
+            captioned("More") {
+                Menu { overflowMenuContent } label: { Image(systemName: "ellipsis.circle") }
+            }
+
+            Spacer(minLength: 8)
+
+            captionedButton("Prev", "chevron.left", disabled: model.index == 0) { model.previous() }
+            captioned("Slide") {
+                Text("\(model.index + 1) / \(model.pageCount)").font(.headline.monospacedDigit())
+            }
+            captionedButton("Next", "chevron.right",
+                            disabled: model.index + 1 >= model.pageCount) { model.next() }
+
+            Spacer(minLength: 18)
+
+            captionedButton("Overview", "square.grid.2x2") { showOverview = true }
+            captioned("Blackout") {
+                Menu { blackoutMenuContent } label: {
+                    Image(systemName: model.blackout ? "eye.slash.fill" : "eye.slash")
+                } primaryAction: { model.toggleBlackout() }
+                .foregroundStyle(model.blackout ? Color.accentColor : .primary)
+            }
+            captioned("Board") {
+                Menu { boardMenuContent } label: {
+                    Image(systemName: model.isBoardActive ? "square.and.pencil.circle.fill" : "square.and.pencil")
+                }
+                .foregroundStyle(model.isBoardActive ? Color.accentColor : .primary)
+            }
+            if external.isConnected {
+                captioned("Display") { Image(systemName: "tv.fill").foregroundStyle(.green) }
+            }
+
+            Spacer(minLength: 18)
+
+            captionedButton("Pen", "pencil.tip", active: model.penActive) { model.togglePen() }
+            captionedButton("Laser", "dot.circle.and.cursorarrow", active: model.laserActive) { model.toggleLaser() }
+            ForEach(colors, id: \.0) { name, color in captionedColor(name, color) }
+            captioned("Weight") {
+                Menu {
+                    Section("Line weight") {
+                        ForEach(widths, id: \.0) { name, w in
+                            Button { model.penWidth = w; model.penActive = true } label: {
+                                Label(name, systemImage: model.penWidth == w ? "checkmark" : "scribble")
+                            }
+                        }
+                    }
+                    Toggle("Apple Pencil only", isOn: $pencilOnly)
+                } label: { Image(systemName: "lineweight") }
+            }
+            captionedButton("Undo", "arrow.uturn.backward",
+                            disabled: model.isBoardActive ? !model.hasBoardInk : !model.hasInk) {
+                model.isBoardActive ? model.boardUndoInk() : model.undoInk()
+            }
+            captionedButton("Clear", "trash",
+                            disabled: model.isBoardActive ? !model.hasBoardInk : !model.hasInk) {
+                model.isBoardActive ? model.boardClearInk() : model.clearInk()
+            }
+
+            Spacer(minLength: 8)
+
+            TimelineView(.periodic(from: .now, by: 1)) { _ in
+                HStack(alignment: .top, spacing: 14) {
+                    captionedButton(model.timerRunning ? "Pause" : "Start",
+                                    model.timerRunning ? "pause" : "play",
+                                    active: !model.timerRunning) { model.toggleTimer() }
+                    captionedButton("Reset", "arrow.counterclockwise") { model.resetTimer() }
+                    captioned("Elapsed") {
+                        Label(TimerControls.elapsedString(model.elapsed), systemImage: "stopwatch")
+                            .font(.headline.monospacedDigit())
+                    }
+                    captioned("Time") {
+                        Text(TimerControls.clockString())
+                            .font(.headline.monospacedDigit()).foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }
+        .font(.title3)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 7)
+        .background(.ultraThinMaterial)
+    }
+
+    private func captioned<C: View>(_ caption: String, @ViewBuilder _ content: () -> C) -> some View {
+        VStack(spacing: 3) {
+            content().frame(height: 26)
+            Text(caption).font(.system(size: 10)).foregroundStyle(.secondary)
+        }
+    }
+
+    private func captionedButton(_ caption: String, _ icon: String,
+                                 active: Bool = false, disabled: Bool = false,
+                                 action: @escaping () -> Void) -> some View {
+        captioned(caption) {
+            Button(action: action) { Image(systemName: icon) }
+                .foregroundStyle(active ? Color.accentColor : .primary)
+                .disabled(disabled)
+        }
+    }
+
+    private func captionedColor(_ name: String, _ color: Color) -> some View {
+        captioned(name) {
+            Button {
+                model.penColor = color; model.penActive = true; model.laserActive = false
+            } label: {
+                Circle().fill(color).frame(width: 22, height: 22)
+                    .overlay(Circle().strokeBorder(
+                        .white.opacity(model.penColor == color ? 0.9 : 0.3),
+                        lineWidth: model.penColor == color ? 2 : 1))
+            }
+        }
+    }
+
     /// Less-frequent actions, tucked away to keep the bar narrow.
     private var overflowMenu: some View {
-        Menu {
-            Button { openPicker() } label: { Label("Open PDF…", systemImage: "folder") }
-            Button { exportAndShare() } label: { Label("Export & Share…", systemImage: "square.and.arrow.up") }
-            Button { showSettings = true } label: { Label("Settings…", systemImage: "gearshape") }
-            Divider()
-            Button { model.close() } label: { Label("Back to start", systemImage: "house") }
-        } label: { Image(systemName: "ellipsis.circle") }
+        Menu { overflowMenuContent } label: { Image(systemName: "ellipsis.circle") }
+    }
+
+    @ViewBuilder private var overflowMenuContent: some View {
+        Button { openPicker() } label: { Label("Open PDF…", systemImage: "folder") }
+        Button { exportAndShare() } label: { Label("Export & Share…", systemImage: "square.and.arrow.up") }
+        Button { showSettings = true } label: { Label("Settings…", systemImage: "gearshape") }
+        Divider()
+        Button { model.close() } label: { Label("Back to start", systemImage: "house") }
     }
 
     private var blackoutButton: some View {
         Menu {
-            Button(model.blackout ? "Show slide" : "Black out audience") { model.toggleBlackout() }
-            Toggle("Show clock", isOn: $blackoutShowClock)
-            Picker("Message", selection: $blackoutMessage) {
-                Text("None").tag("")
-                ForEach(BlackoutView.presets, id: \.self) { Text($0).tag($0) }
-            }
+            blackoutMenuContent
         } label: {
             Image(systemName: model.blackout ? "eye.slash.fill" : "eye.slash")
         } primaryAction: {
@@ -316,61 +446,79 @@ struct PresenterView: View {
         .foregroundStyle(model.blackout ? Color.accentColor : .primary)
     }
 
+    /// The full macOS-style "Black Screen" menu: toggle, clock, preset / custom
+    /// messages, and a background image.
+    @ViewBuilder private var blackoutMenuContent: some View {
+        Button(model.blackout ? "Show slide" : "Black out audience") { model.toggleBlackout() }
+        Toggle("Show clock", isOn: $blackoutShowClock)
+        Section("Message") {
+            ForEach(BlackoutView.presets, id: \.self) { preset in
+                Button {
+                    blackoutMessage = preset
+                    if !model.blackout { model.toggleBlackout() }
+                } label: {
+                    Label(preset, systemImage: blackoutMessage == preset ? "checkmark" : "text.bubble")
+                }
+            }
+            Button { customMessage = blackoutMessage; showCustomMessage = true } label: {
+                Label("Custom Message…", systemImage: "square.and.pencil")
+            }
+            Button(role: .destructive) { blackoutMessage = "" } label: {
+                Label("Clear Message", systemImage: "xmark")
+            }
+        }
+        Section("Background") {
+            Button { importingBlackImage = true } label: {
+                Label("Choose Background Image…", systemImage: "photo")
+            }
+            if !blackoutImagePath.isEmpty {
+                Button(role: .destructive) { clearBlackImage() } label: {
+                    Label("Clear Background Image", systemImage: "xmark")
+                }
+            }
+        }
+    }
+
+    private func importBlackImage(_ url: URL) {
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+        guard let data = try? Data(contentsOf: url) else { return }
+        let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let dest = dir.appendingPathComponent("blackout-bg.img")
+        if (try? data.write(to: dest)) != nil { blackoutImagePath = dest.path }
+    }
+    private func clearBlackImage() {
+        if !blackoutImagePath.isEmpty { try? FileManager.default.removeItem(atPath: blackoutImagePath) }
+        blackoutImagePath = ""
+    }
+
     private var boardMenu: some View {
-        Menu {
-            Button { withAnimation { model.addBoard() } } label: {
-                Label("New board", systemImage: "plus.rectangle")
-            }
-            if model.isBoardActive {
-                Button { withAnimation { model.closeBoard() } } label: {
-                    Label("Back to slides", systemImage: "rectangle.on.rectangle")
-                }
-                Button(role: .destructive) { withAnimation { model.deleteActiveBoard() } } label: {
-                    Label("Delete this board", systemImage: "trash")
-                }
-            }
-            if !model.boards.isEmpty {
-                Divider()
-                ForEach(Array(model.boards.enumerated()), id: \.element.id) { i, board in
-                    Button { withAnimation { model.showBoard(i) } } label: {
-                        Label(board.name, systemImage: model.activeBoardIndex == i ? "checkmark" : "square")
-                    }
-                }
-            }
-        } label: {
+        Menu { boardMenuContent } label: {
             Image(systemName: model.isBoardActive ? "rectangle.fill.badge.plus" : "rectangle.badge.plus")
         }
         .foregroundStyle(model.isBoardActive ? Color.accentColor : .primary)
     }
 
-    /// Pen toggle, the colour swatches shown directly, and a weight / Pencil-only
-    /// menu — used in landscape where there's room.
-    private var penToolsInline: some View {
-        HStack(spacing: 10) {
-            Button { model.togglePen() } label: { Image(systemName: "pencil.tip") }
-                .foregroundStyle(model.penActive ? model.penColor : .primary)
-            ForEach(colors, id: \.0) { name, color in
-                Button {
-                    model.penColor = color; model.penActive = true; model.laserActive = false
-                } label: {
-                    Circle().fill(color).frame(width: 20, height: 20)
-                        .overlay(Circle().strokeBorder(
-                            .white.opacity(model.penColor == color ? 0.9 : 0.3),
-                            lineWidth: model.penColor == color ? 2 : 1))
+    @ViewBuilder private var boardMenuContent: some View {
+        Button { withAnimation { model.addBoard() } } label: {
+            Label("New board", systemImage: "plus.rectangle")
+        }
+        if model.isBoardActive {
+            Button { withAnimation { model.closeBoard() } } label: {
+                Label("Back to slides", systemImage: "rectangle.on.rectangle")
+            }
+            Button(role: .destructive) { withAnimation { model.deleteActiveBoard() } } label: {
+                Label("Delete this board", systemImage: "trash")
+            }
+        }
+        if !model.boards.isEmpty {
+            Divider()
+            ForEach(Array(model.boards.enumerated()), id: \.element.id) { i, board in
+                Button { withAnimation { model.showBoard(i) } } label: {
+                    Label(board.name, systemImage: model.activeBoardIndex == i ? "checkmark" : "square")
                 }
             }
-            Menu {
-                Section("Line weight") {
-                    ForEach(widths, id: \.0) { name, w in
-                        Button {
-                            model.penWidth = w; model.penActive = true; model.laserActive = false
-                        } label: {
-                            Label(name, systemImage: model.penWidth == w ? "checkmark" : "scribble")
-                        }
-                    }
-                }
-                Toggle("Apple Pencil only", isOn: $pencilOnly)
-            } label: { Image(systemName: "lineweight") }
         }
     }
 
