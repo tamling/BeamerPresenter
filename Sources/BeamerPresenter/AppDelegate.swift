@@ -14,6 +14,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     private var statusItem: NSStatusItem?
     private weak var statusInfoItem: NSMenuItem?
     private var deckMenuItems: [NSMenuItem] = []   // Presentation/Tools/Whiteboard menus
+    private weak var audienceFSItem: NSMenuItem?
     private var keyMonitor: Any?
     private var cancellables = Set<AnyCancellable>()
 
@@ -235,7 +236,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         presoMenu.addItem(.separator())
         add(to: presoMenu, "Toggle Overview", #selector(toggleOverview(_:)), "1")
         add(to: presoMenu, "Black Out Audience", #selector(toggleBlackout(_:)), "b")
-        add(to: presoMenu, "Audience Full Screen", #selector(toggleAudienceFullscreen(_:)))
+        audienceFSItem = add(to: presoMenu, "Audience Full Screen", #selector(toggleAudienceFullscreen(_:)))
+        updateAudienceMenuTitle()
 
         let blackMenu = addSubmenu(to: presoMenu, "Black Screen")
         for preset in BlackScreen.presets {
@@ -336,8 +338,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             item.state = state.isBoardActive ? .on : .off
             return state.isLoaded
         case #selector(toggleAudienceFullscreen(_:)):
-            let fullscreen = UserDefaults.standard.object(forKey: Prefs.audienceFullscreen) as? Bool ?? true
-            item.title = fullscreen ? "Exit Audience Full Screen" : "Enter Audience Full Screen"
+            updateAudienceMenuTitle()
             return state.isLoaded && NSScreen.screens.count > 1
         case #selector(togglePen(_:)):
             item.state = state.tool == .pen ? .on : .off
@@ -781,9 +782,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         let current = UserDefaults.standard.object(forKey: Prefs.audienceFullscreen) as? Bool ?? true
         UserDefaults.standard.set(!current, forKey: Prefs.audienceFullscreen)
         rebuildAudienceWindow()
+        updateAudienceMenuTitle()
     }
 
-    @objc private func screensChanged() { positionWindows() }
+    /// Reflects the actual audience state in the menu item's title.
+    private func updateAudienceMenuTitle() {
+        audienceFSItem?.title = audienceFillsExternal ? "Exit Audience Full Screen"
+                                                      : "Enter Audience Full Screen"
+    }
+
+    @objc private func screensChanged() {
+        positionWindows()
+        updateAudienceMenuTitle()
+    }
 
     /// Positions the windows: a full-screen audience fills the external display; a
     /// windowed audience opens large on it; the presenter stays on the main one.
