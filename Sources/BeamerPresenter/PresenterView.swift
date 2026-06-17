@@ -113,13 +113,18 @@ struct PresenterView: View {
         }
     }
 
-    /// A small free-form notes editor, autosaved as `<pdf>.notes.txt`.
+    /// A small free-form notes editor, autosaved as `<pdf>.notes.txt` and
+    /// explicitly saveable to a file of your choice via the button.
     private var scratchPane: some View {
         VStack(spacing: 4) {
             HStack {
                 Text("Scratch notes").font(.caption).foregroundStyle(.secondary)
                 Spacer()
-                Image(systemName: "square.and.pencil").font(.caption2).foregroundStyle(.secondary)
+                Button { saveScratchToFile() } label: {
+                    Image(systemName: "square.and.arrow.down")
+                }
+                .buttonStyle(.borderless)
+                .help("Save notes as a .txt file…")
             }
             TextEditor(text: $state.scratch)
                 .font(.callout)
@@ -129,6 +134,24 @@ struct PresenterView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 6))
                 .overlay(RoundedRectangle(cornerRadius: 6).stroke(.gray.opacity(0.3)))
                 .onChange(of: state.scratch) { _ in state.saveScratch() }
+        }
+    }
+
+    /// Saves the scratch notes to a user-chosen `.txt` file.
+    @MainActor
+    private func saveScratchToFile() {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.plainText]
+        panel.nameFieldStringValue = "\(state.title.isEmpty ? "notes" : state.title) notes.txt"
+        panel.canCreateDirectories = true
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            try state.scratch.write(to: url, atomically: true, encoding: .utf8)
+        } catch {
+            let alert = NSAlert()
+            alert.messageText = "Could not save the notes"
+            alert.informativeText = url.lastPathComponent
+            alert.runModal()
         }
     }
 

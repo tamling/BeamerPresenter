@@ -97,6 +97,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         add(to: fileMenu, "Open…", #selector(openDocument(_:)), "o")
         add(to: fileMenu, "Add Folder to Favorites…", #selector(addFavoriteFolder(_:)), "d")
         fileMenu.addItem(.separator())
+        add(to: fileMenu, "Save Notes…", #selector(saveNotes(_:)))
         add(to: fileMenu, "Close Presentation", #selector(closePresentation(_:)), "w")
 
         // Presentation menu — navigation + audience controls.
@@ -168,7 +169,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         case #selector(closePresentation(_:)), #selector(nextSlide(_:)),
              #selector(previousSlide(_:)), #selector(firstSlide(_:)),
              #selector(lastSlide(_:)), #selector(resetTimer(_:)),
-             #selector(toggleLaser(_:)), #selector(newBoard(_:)):
+             #selector(toggleLaser(_:)), #selector(newBoard(_:)),
+             #selector(saveNotes(_:)):
             return state.isLoaded
 
         case #selector(toggleOverview(_:)):
@@ -242,6 +244,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     @objc private func closePresentation(_ sender: Any?) {
         guard state.isLoaded else { return }
         state.unload()
+    }
+
+    @objc private func saveNotes(_ sender: Any?) {
+        guard state.isLoaded else { return }
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.plainText]
+        panel.nameFieldStringValue = "\(state.title.isEmpty ? "notes" : state.title) notes.txt"
+        panel.canCreateDirectories = true
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        if (try? state.scratch.write(to: url, atomically: true, encoding: .utf8)) == nil {
+            let alert = NSAlert()
+            alert.messageText = "Could not save the notes"
+            alert.informativeText = url.lastPathComponent
+            alert.runModal()
+        }
     }
 
     @objc private func nextSlide(_ sender: Any?)      { state.next() }
