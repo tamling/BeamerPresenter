@@ -11,20 +11,24 @@ app can also pull `\note{}` speaker notes straight from the source.
 
 ## GUI
 
-- **Menu bar** — *App* (About + version), *File* (Open, Add Folder to Favorites,
-  Close Presentation), *View* (next/previous, overview, blackout, reset timer).
+- **Menu bar** — every command lives here: *File* (Open, Add Folder to Favorites,
+  Close), *Presentation* (next/previous/first/last, overview, blackout, reset
+  timer), *Tools* (pen, laser, pen colours, undo/clear ink), *Whiteboard* (toggle,
+  boards, add text/table/QR, save/insert). *App* holds About + version.
 - **Welcome screen** — open button, drag-and-drop a PDF, **favorite folders**
   (expand to the PDFs inside; add with the `+`), and a recent-files list.
-- **Presenter console** — control bar (open, home, prev/next, overview, blackout,
-  timer, clock), large current slide, next slide, notes pane. The slide/sidebar
-  split and the next/notes split are **draggable**, and the sizes persist.
+- **Presenter console** — a slim control bar (slide counter, pen-colour swatches,
+  elapsed timer + clock; everything else is in the menu bar), large current slide,
+  next slide, notes pane. The slide/sidebar split and the next/notes split are
+  **draggable**, and the sizes persist.
 - **Thumbnail strip** — click any slide to jump; auto-scrolls to the current one.
 - **Overview grid** — press `G` for a full grid of every slide; click to jump.
 - **Ink & laser** — draw freehand on a slide (pen, 4 colours, undo/clear) or use
   a laser pointer; both mirror live onto the audience screen.
 - **Whiteboard** — press `W` for a blank white scratch slide to work through a
   calculation live. Draw on it, drop in text boxes, a small table, or a QR code,
-  keep several boards, and export any of them to its own PDF.
+  keep several boards, export any of them to its own PDF, or **insert** one after
+  the current slide into a *copy* of the deck PDF (the original is untouched).
 - **Audience window** — full-bleed slide, fullscreen on the external display.
 
 ## How notes work

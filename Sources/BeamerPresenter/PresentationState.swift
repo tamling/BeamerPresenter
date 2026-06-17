@@ -5,6 +5,12 @@ import Combine
 /// Active drawing tool on the slide.
 enum Tool { case none, pen, laser }
 
+/// The fixed pen palette, shared by the in-app colour swatches and the menu bar.
+enum PenPalette {
+    static let colors: [(name: String, color: Color)] =
+        [("Red", .red), ("Green", .green), ("Blue", .blue), ("Yellow", .yellow)]
+}
+
 /// One freehand annotation, stored in *unit* coordinates (0...1 of the slide
 /// rect) and a *relative* width so it scales identically on the small presenter
 /// pane and the full audience screen.
@@ -18,6 +24,7 @@ struct Stroke: Identifiable {
 /// Single source of truth shared by both windows. A keypress or click mutates
 /// state here and the presenter + audience views update in lockstep.
 final class PresentationState: ObservableObject {
+    @Published private(set) var sourceURL: URL?          // the opened PDF on disk
     @Published private(set) var slideDoc: PDFDocument?   // left half (or full page)
     @Published private(set) var notesDoc: PDFDocument?   // right half, nil for plain PDFs
     @Published private(set) var textNotes: [Int: String] = [:]   // notes parsed from a sibling .tex
@@ -57,6 +64,7 @@ final class PresentationState: ObservableObject {
     func load(url: URL) -> Bool {
         guard let probe = PDFDocument(url: url), probe.pageCount > 0 else { return false }
         let split = PDFModel.isNotesLayout(probe)
+        sourceURL = url
 
         slideDoc = PDFModel.croppedDocument(url: url, half: split ? .left : .full)
         notesDoc = split ? PDFModel.croppedDocument(url: url, half: .right) : nil
@@ -87,6 +95,7 @@ final class PresentationState: ObservableObject {
     }
 
     func unload() {
+        sourceURL = nil
         slideDoc = nil
         notesDoc = nil
         textNotes = [:]

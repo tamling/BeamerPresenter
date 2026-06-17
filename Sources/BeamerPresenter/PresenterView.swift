@@ -11,7 +11,7 @@ struct RootPresenterView: View {
 
     var body: some View {
         if state.isLoaded {
-            PresenterView(onOpen: onOpen)
+            PresenterView()
         } else {
             WelcomeView(onOpen: onOpen, onOpenURL: onOpenURL)
         }
@@ -26,7 +26,6 @@ struct RootPresenterView: View {
 /// launches.
 struct PresenterView: View {
     @EnvironmentObject var state: PresentationState
-    let onOpen: () -> Void
 
     /// Width of the right-hand column (next slide + notes), in points.
     @AppStorage("presenterSidebarWidth") private var sidebarWidth: Double = 360
@@ -42,10 +41,10 @@ struct PresenterView: View {
     var body: some View {
         ZStack {
             VStack(spacing: 8) {
-                ControlBar(onOpen: onOpen)
+                ControlBar()
 
                 if state.isBoardActive {
-                    BoardBar(onSave: saveActiveBoard)
+                    BoardBar(onSave: saveActiveBoard, onInsert: insertBoardIntoPDF)
                 }
 
                 HStack(spacing: 0) {
@@ -150,6 +149,25 @@ struct PresenterView: View {
         }
     }
 
+    /// Inserts the active whiteboard after the current slide into a copy of the
+    /// deck PDF, saved to a user-chosen file (the original is left untouched).
+    @MainActor
+    private func insertBoardIntoPDF() {
+        guard let board = state.activeBoard, let source = state.sourceURL else { return }
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.pdf]
+        panel.nameFieldStringValue = "\(state.title) + \(board.name).pdf"
+        panel.canCreateDirectories = true
+        guard panel.runModal() == .OK, let dest = panel.url else { return }
+        if !BoardExporter.insertIntoCopy(of: source, board: board, afterIndex: state.index,
+                                         aspect: state.slideAspect, to: dest) {
+            let alert = NSAlert()
+            alert.messageText = "Could not insert the whiteboard into the PDF"
+            alert.informativeText = dest.lastPathComponent
+            alert.runModal()
+        }
+    }
+
     private var notesPane: some View {
         VStack(spacing: 4) {
             Text("Notes").font(.caption).foregroundStyle(.secondary)
@@ -247,81 +265,50 @@ private extension Double {
     }
 }
 
-/// Top toolbar with open/close, navigation, overview, blackout, and clocks.
+/// Slim in-app bar: the live slide counter, the pen-colour swatches, and the
+/// clocks. Every command lives in the macOS menu bar (and on the keyboard);
+/// only the colour picker — which doesn't map well to a menu — stays here.
 private struct ControlBar: View {
     @EnvironmentObject var state: PresentationState
-    let onOpen: () -> Void
 
     @State private var now = Date()
     private let tick = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
-    private let penColors: [(String, Color)] = [("Red", .red), ("Green", .green),
-                                                ("Blue", .blue), ("Yellow", .yellow)]
 
     var body: some View {
         HStack(spacing: 12) {
-            Button(action: onOpen) { Image(systemName: "folder") }
-                .help("Open another presentation")
-            Button { state.unload() } label: { Image(systemName: "house") }
-                .help("Back to start")
-
-            Divider().frame(height: 18)
-
-            Button { state.previous() } label: { Image(systemName: "chevron.left") }
-                .disabled(state.index == 0)
             Text("Slide \(state.index + 1) / \(state.pageCount)")
                 .font(.headline.monospacedDigit())
-                .frame(minWidth: 120)
-            Button { state.next() } label: { Image(systemName: "chevron.right") }
-                .disabled(state.index + 1 >= state.pageCount)
 
-            Divider().frame(height: 18)
+            Spacer()
 
-            Button { state.showOverview.toggle() } label: { Image(systemName: "square.grid.2x2") }
-                .help("Overview (G)")
-            Button { state.blackout.toggle() } label: {
-                Image(systemName: state.blackout ? "eye.slash.fill" : "eye.slash")
-            }
-            .help("Black out audience screen (B)")
-            Button { state.toggleBoard() } label: { Image(systemName: "square.and.pencil") }
-                .foregroundStyle(state.isBoardActive ? Color.accentColor : .primary)
-                .help("Whiteboard (W)")
-
-            Divider().frame(height: 18)
-
-            Button { state.toggleTool(.pen) } label: { Image(systemName: "pencil.tip") }
-                .foregroundStyle(state.tool == .pen ? Color.accentColor : .primary)
-                .help("Pen (P)")
-            Button { state.toggleTool(.laser) } label: { Image(systemName: "dot.circle.and.cursorarrow") }
-                .foregroundStyle(state.tool == .laser ? Color.accentColor : .primary)
-                .help("Laser pointer (L)")
-            ForEach(penColors, id: \.0) { name, color in
-                Button { state.penColor = color } label: {
-                    Circle().fill(color)
-                        .frame(width: 14, height: 14)
-                        .overlay(Circle().strokeBorder(.primary.opacity(state.penColor == color ? 0.9 : 0.2),
-                                                       lineWidth: state.penColor == color ? 2 : 1))
+            HStack(spacing: 8) {
+                Image(systemName: state.tool == .pen ? "pencil.tip" : "paintpalette")
+                    .foregroundStyle(.secondary)
+                ForEach(PenPalette.colors, id: \.name) { name, color in
+                    Button {
+                        state.penColor = color
+                        if state.tool != .pen { state.tool = .pen }   // picking a colour readies the pen
+                    } label: {
+                        Circle().fill(color)
+                            .frame(width: 18, height: 18)
+                            .overlay(Circle().strokeBorder(
+                                .primary.opacity(state.penColor == color ? 0.9 : 0.2),
+                                lineWidth: state.penColor == color ? 2.5 : 1))
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Pen colour: \(name)")
                 }
-                .help("Pen colour: \(name)")
             }
-            Button { state.undoStroke() } label: { Image(systemName: "arrow.uturn.backward") }
-                .disabled(!state.hasInkOnCurrentSlide)
-                .help("Undo stroke (Z)")
-            Button { state.clearStrokes() } label: { Image(systemName: "trash") }
-                .disabled(!state.hasInkOnCurrentSlide)
-                .help("Clear ink (C)")
 
             Spacer()
 
             Label(elapsed, systemImage: "stopwatch")
                 .font(.headline.monospacedDigit())
-            Button { state.resetTimer() } label: { Image(systemName: "arrow.counterclockwise") }
-                .help("Reset timer (R)")
             Text(now, style: .time)
                 .font(.headline.monospacedDigit())
                 .foregroundStyle(.secondary)
         }
-        .buttonStyle(.borderless)
-        .padding(.horizontal, 10)
+        .padding(.horizontal, 12)
         .padding(.vertical, 6)
         .background(Color(nsColor: .underPageBackgroundColor))
         .onReceive(tick) { now = $0 }
