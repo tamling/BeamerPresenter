@@ -47,7 +47,10 @@ Target device: **iPad Pro 2021** (USB‑C, external display capable), iPadOS 16+
        menu adds/switches/deletes blank white boards shown instead of the deck
        (and on the audience screen). Draw ink, and insert movable/resizable
        **text**, **table** (`a | b` rows), and **QR** items with a delete ✕.
-8. [ ] **Export** the annotated deck (ink + boards) to a new PDF (share sheet)
+8. [x] **Export** — `square.and.arrow.up` bakes the freehand ink onto each
+       slide and inserts each whiteboard after the slide it was made on, into a
+       new vector PDF (Core Graphics), then opens the share sheet (Files /
+       AirDrop / Mail). Ported from the macOS `BoardExporter`.
 9. [ ] **Apple Pencil** pressure / palm rejection (PencilKit option)
 10. [ ] **Settings** (black‑screen message/image, defaults)
 11. [ ] **Bluetooth presenter remote** support (page up/down)

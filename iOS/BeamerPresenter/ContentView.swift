@@ -73,6 +73,8 @@ struct PresenterView: View {
     @State private var showOverview = false
     @State private var showNotes = false
     @State private var importingNotes = false
+    @State private var exportURL: URL?
+    @State private var showShare = false
     let openPicker: () -> Void
 
     private var texTypes: [UTType] {
@@ -108,6 +110,20 @@ struct PresenterView: View {
         }
         .fileImporter(isPresented: $importingNotes, allowedContentTypes: texTypes) { result in
             if case .success(let url) = result { model.loadTexNotes(url: url) }
+        }
+        .sheet(isPresented: $showShare) {
+            if let url = exportURL { ShareSheet(items: [url]) }
+        }
+    }
+
+    /// Bake ink + boards into a new PDF in the temp dir and present the share sheet.
+    private func exportAndShare() {
+        let name = (model.title.isEmpty ? "Presentation" : model.title) + " (annotated).pdf"
+        let dest = FileManager.default.temporaryDirectory.appendingPathComponent(name)
+        try? FileManager.default.removeItem(at: dest)
+        if DeckExporter.export(model: model, to: dest) != nil {
+            exportURL = dest
+            showShare = true
         }
     }
 
@@ -173,6 +189,8 @@ struct PresenterView: View {
                 Image(systemName: model.isBoardActive ? "rectangle.fill.badge.plus" : "rectangle.badge.plus")
             }
             .foregroundStyle(model.isBoardActive ? Color.accentColor : .primary)
+
+            Button { exportAndShare() } label: { Image(systemName: "square.and.arrow.up") }
 
             if external.isConnected {
                 Image(systemName: "tv.fill")
