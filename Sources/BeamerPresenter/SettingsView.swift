@@ -9,6 +9,7 @@ struct SettingsView: View {
     @AppStorage(Prefs.blackScreenMessage) private var blackMessage = ""
     @AppStorage(Prefs.blackScreenImage) private var blackImage = ""
     @AppStorage(Prefs.showStatusItem) private var showStatusItem = true
+    @AppStorage(Prefs.backgroundMode) private var backgroundMode = false
 
     var body: some View {
         Form {
@@ -18,6 +19,12 @@ struct SettingsView: View {
                     .onChange(of: showStatusItem) { _ in
                         NotificationCenter.default.post(name: .statusItemPrefChanged, object: nil)
                     }
+                Toggle("Run in background (hide Dock icon)", isOn: $backgroundMode)
+                    .onChange(of: backgroundMode) { _ in
+                        NotificationCenter.default.post(name: .backgroundModePrefChanged, object: nil)
+                    }
+                Text("Background mode keeps only the menu bar icon; the macOS menu bar is unavailable then.")
+                    .font(.caption).foregroundStyle(.secondary)
             }
 
             Section("Audience black screen") {
@@ -55,7 +62,7 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 500, height: 430)
+        .frame(width: 500, height: 480)
     }
 
     private func chooseImage() {
@@ -89,6 +96,7 @@ enum Prefs {
     static let blackScreenMessage = "blackScreenMessage"
     static let blackScreenImage = "blackScreenImage"
     static let showStatusItem = "showStatusItem"
+    static let backgroundMode = "backgroundMode"
 }
 
 /// Predefined "be right back" messages for the black screen.

@@ -24,22 +24,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         NotificationCenter.default.addObserver(
             self, selector: #selector(updateStatusItem),
             name: .statusItemPrefChanged, object: nil)
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(applyBackgroundMode),
+            name: .backgroundModePrefChanged, object: nil)
         // Returning to the home screen (unload) hides the audience window.
         state.$isLoaded
             .dropFirst()
             .sink { [weak self] loaded in if !loaded { self?.audienceWindow?.orderOut(nil) } }
             .store(in: &cancellables)
         buildPresenterWindow()
-        updateStatusItem()
+        applyBackgroundMode()
         showSplash()
         NSApp.activate(ignoringOtherApps: true)
     }
 
     // MARK: - Menu bar status item
 
-    /// Adds or removes the Time Machine-style menu bar icon based on the setting.
+    /// Hides/shows the Dock icon: in background mode the app runs as a menu bar
+    /// accessory (no Dock icon, the status item stays available).
+    @objc private func applyBackgroundMode() {
+        let background = UserDefaults.standard.bool(forKey: Prefs.backgroundMode)
+        NSApp.setActivationPolicy(background ? .accessory : .regular)
+        updateStatusItem()
+    }
+
+    /// Adds or removes the Time Machine-style menu bar icon based on the setting
+    /// (always present in background mode, so there's a way to interact).
     @objc private func updateStatusItem() {
-        let show = UserDefaults.standard.object(forKey: Prefs.showStatusItem) as? Bool ?? true
+        let background = UserDefaults.standard.bool(forKey: Prefs.backgroundMode)
+        let show = background || (UserDefaults.standard.object(forKey: Prefs.showStatusItem) as? Bool ?? true)
         if show {
             guard statusItem == nil else { return }
             let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -116,7 +129,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         }
     }
 
-    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        // In background mode the app keeps running in the menu bar after the
+        // window is closed; otherwise closing the window quits.
+        !UserDefaults.standard.bool(forKey: Prefs.backgroundMode)
+    }
 
     func applicationWillTerminate(_ notification: Notification) {
         state.recordCurrentSession()
@@ -155,6 +172,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         add(to: fileMenu, "Open…", #selector(openDocument(_:)), "o")
         add(to: fileMenu, "Add Folder to Favorites…", #selector(addFavoriteFolder(_:)), "d")
         fileMenu.addItem(.separator())
+        add(to: fileMenu, "Save Presentation As… (with ink & boards)", #selector(savePresentationAs(_:)), "S")
         add(to: fileMenu, "Save Notes…", #selector(saveNotes(_:)))
         add(to: fileMenu, "Close Presentation", #selector(closePresentation(_:)), "w")
 
@@ -242,7 +260,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
              #selector(lastSlide(_:)), #selector(resetTimer(_:)),
              #selector(toggleTimer(_:)),
              #selector(toggleLaser(_:)), #selector(newBoard(_:)),
-             #selector(saveNotes(_:)):
+             #selector(saveNotes(_:)), #selector(savePresentationAs(_:)):
             return state.isLoaded
 
         case #selector(toggleOverview(_:)):
@@ -316,6 +334,42 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     @objc private func closePresentation(_ sender: Any?) {
         guard state.isLoaded else { return }
         state.unload()
+    }
+
+    /// Exports a new PDF of the deck with the freehand ink and the whiteboards
+    /// baked in. Defaults to the source folder (next to the .tex/.pdf) and reports
+    /// where each board was inserted.
+    @objc private func savePresentationAs(_ sender: Any?) {
+        guard state.isLoaded, let source = state.sourceURL else { return }
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.pdf]
+        panel.nameFieldStringValue = "\(state.title) annotated.pdf"
+        panel.directoryURL = source.deletingLastPathComponent()
+        panel.canCreateDirectories = true
+        guard panel.runModal() == .OK, let dest = panel.url else { return }
+
+        guard let summary = BoardExporter.exportPresentation(
+                sourceURL: source, split: state.notesDoc != nil, aspect: state.slideAspect,
+                strokes: state.strokes, boards: state.boards, to: dest) else {
+            let alert = NSAlert()
+            alert.messageText = "Could not export the presentation"
+            alert.informativeText = dest.lastPathComponent
+            alert.runModal()
+            return
+        }
+
+        let alert = NSAlert()
+        alert.messageText = "Saved \(dest.lastPathComponent)"
+        var info = "Folder: \(dest.deletingLastPathComponent().path)\n"
+            + "Ink burned onto \(summary.inkSlides) slide(s)."
+        if summary.boardsAfterSlides.isEmpty {
+            info += "\nNo whiteboards."
+        } else {
+            let list = summary.boardsAfterSlides.map(String.init).joined(separator: ", ")
+            info += "\n\(summary.boardsAfterSlides.count) whiteboard(s) inserted after slide(s): \(list)."
+        }
+        alert.informativeText = info
+        alert.runModal()
     }
 
     @objc private func saveNotes(_ sender: Any?) {
@@ -599,4 +653,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
 extension Notification.Name {
     /// Posted by Settings when the "show menu bar icon" preference changes.
     static let statusItemPrefChanged = Notification.Name("statusItemPrefChanged")
+    /// Posted by Settings when the "run in background" preference changes.
+    static let backgroundModePrefChanged = Notification.Name("backgroundModePrefChanged")
 }

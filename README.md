@@ -14,17 +14,26 @@ app can also pull `\note{}` speaker notes straight from the source.
 ## GUI
 
 - **Launch splash** — shown alone at startup, then the home screen appears.
-- **Menu bar** — every command lives here: *File* (Open, Add Folder to Favorites,
-  Close), *Presentation* (next/previous/first/last, overview, blackout, reset
-  timer), *Tools* (pen, laser, pen colours, undo/clear ink), *Whiteboard* (toggle,
-  boards, add text/table/QR, save/insert). *App* holds About + Settings (⌘,).
+- **Menu bar** — every command lives here: *File* (Open, **Save Presentation As…**
+  with ink & boards, Save Notes, Close), *Presentation* (next/previous/first/last,
+  overview, blackout, black-screen presets, start/stop + reset timer), *Tools*
+  (pen, laser, pen colours, undo/clear ink), *Whiteboard* (toggle, boards, add
+  text/table/QR, save/insert). *App* holds About + Settings (⌘,).
 - **Home screen** — open button, drag-and-drop a PDF/`.tex`, **favorite folders**
   (expand to the PDFs inside; add with the `+`), a recent-files list, and a bottom
   **dashboard** (presentations run, average + total time, version).
 - **Menu bar icon** — a Time Machine-style status item with quick actions (open,
   show presenter, next/previous, blackout, whiteboard, settings, quit).
-- **Settings (⌘,)** — open at login, show/hide the menu bar icon, the default
-  black audience screen, its message (with presets + clear) and a background image.
+- **Settings (⌘,)** — open at login, show/hide the menu bar icon, **run in
+  background** (menu-bar-only, no Dock icon), the default black audience screen,
+  its message (with presets + clear) and a background image.
+
+### Saving an annotated presentation
+
+*File ▸ Save Presentation As…* writes a new PDF of the whole deck with your
+freehand **ink** burned onto each slide and every **whiteboard** inserted after
+the slide it was created on. It defaults to the source folder (next to the
+`.tex`/`.pdf`) and afterwards reports where each board was placed.
 - **Presenter console** — a centered control bar with every live tool, each a
   captioned symbol (exit, prev/next + slide counter, overview, blackout,
   whiteboard, pen, laser, the pen-colour swatches, undo/clear ink, a start/stop +

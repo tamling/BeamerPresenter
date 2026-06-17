@@ -9,6 +9,7 @@ import CoreImage
 struct Whiteboard: Identifiable {
     let id = UUID()
     var name: String
+    var slideIndex: Int = 0           // the slide that was showing when this board was created
     var strokes: [Stroke] = []
     var items: [BoardItem] = []
 }
