@@ -265,9 +265,9 @@ private extension Double {
     }
 }
 
-/// Slim in-app bar: the live slide counter, the pen-colour swatches, and the
-/// clocks. Every command lives in the macOS menu bar (and on the keyboard);
-/// only the colour picker — which doesn't map well to a menu — stays here.
+/// Slim in-app bar: an exit button, the live slide counter, the pen-colour
+/// swatches, and the clocks — each shown as a symbol with a caption beneath it.
+/// Every other command lives in the macOS menu bar (and on the keyboard).
 private struct ControlBar: View {
     @EnvironmentObject var state: PresentationState
 
@@ -275,43 +275,69 @@ private struct ControlBar: View {
     private let tick = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var body: some View {
-        HStack(spacing: 12) {
-            Text("Slide \(state.index + 1) / \(state.pageCount)")
-                .font(.headline.monospacedDigit())
+        HStack(alignment: .top, spacing: 18) {
+            captioned("Exit") {
+                Button { NSApplication.shared.terminate(nil) } label: {
+                    Image(systemName: "power").font(.title3)
+                }
+                .buttonStyle(.borderless)
+                .help("Quit BeamerPresenter")
+            }
+
+            Divider().frame(height: 30)
+
+            captioned("Slide") {
+                Text("\(state.index + 1) / \(state.pageCount)")
+                    .font(.headline.monospacedDigit())
+            }
 
             Spacer()
 
-            HStack(spacing: 8) {
-                Image(systemName: state.tool == .pen ? "pencil.tip" : "paintpalette")
-                    .foregroundStyle(.secondary)
+            HStack(alignment: .top, spacing: 12) {
                 ForEach(PenPalette.colors, id: \.name) { name, color in
-                    Button {
-                        state.penColor = color
-                        if state.tool != .pen { state.tool = .pen }   // picking a colour readies the pen
-                    } label: {
-                        Circle().fill(color)
-                            .frame(width: 18, height: 18)
-                            .overlay(Circle().strokeBorder(
-                                .primary.opacity(state.penColor == color ? 0.9 : 0.2),
-                                lineWidth: state.penColor == color ? 2.5 : 1))
+                    captioned(name) {
+                        Button {
+                            state.penColor = color
+                            if state.tool != .pen { state.tool = .pen }   // picking a colour readies the pen
+                        } label: {
+                            Circle().fill(color)
+                                .frame(width: 20, height: 20)
+                                .overlay(Circle().strokeBorder(
+                                    .primary.opacity(state.penColor == color ? 0.9 : 0.2),
+                                    lineWidth: state.penColor == color ? 2.5 : 1))
+                        }
+                        .buttonStyle(.borderless)
                     }
-                    .buttonStyle(.borderless)
-                    .help("Pen colour: \(name)")
                 }
             }
 
             Spacer()
 
-            Label(elapsed, systemImage: "stopwatch")
-                .font(.headline.monospacedDigit())
-            Text(now, style: .time)
-                .font(.headline.monospacedDigit())
-                .foregroundStyle(.secondary)
+            captioned("Elapsed") {
+                Label(elapsed, systemImage: "stopwatch")
+                    .font(.headline.monospacedDigit())
+            }
+            captioned("Time") {
+                Text(now, style: .time)
+                    .font(.headline.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 7)
         .background(Color(nsColor: .underPageBackgroundColor))
         .onReceive(tick) { now = $0 }
+    }
+
+    /// A control stacked above a small caption, so every symbol is labelled.
+    private func captioned<Content: View>(_ caption: String,
+                                          @ViewBuilder _ content: () -> Content) -> some View {
+        VStack(spacing: 3) {
+            content()
+            Text(caption)
+                .font(.system(size: 9))
+                .foregroundStyle(.secondary)
+        }
     }
 
     private var elapsed: String {
