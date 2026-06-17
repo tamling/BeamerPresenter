@@ -286,97 +286,130 @@ struct PresenterView: View {
     /// A wide control bar matching the macOS app: every control is an icon with a
     /// small caption beneath it, grouped with spacers.
     private var controlBar: some View {
-        HStack(alignment: .top, spacing: 14) {
-            captionedButton("Exit", "rectangle.portrait.and.arrow.right") { model.close() }
-            captioned("More") {
-                Menu { overflowMenuContent } label: { Image(systemName: "ellipsis.circle") }
-            }
-
-            Spacer(minLength: 8)
-
-            captionedButton("Prev", "chevron.left", disabled: model.index == 0) { model.previous() }
-            captioned("Slide") {
-                Text("\(model.index + 1) / \(model.pageCount)").font(.headline.monospacedDigit())
-            }
-            captionedButton("Next", "chevron.right",
-                            disabled: model.index + 1 >= model.pageCount) { model.next() }
-
-            Spacer(minLength: 18)
-
-            captionedButton("Overview", "square.grid.2x2") { showOverview = true }
-            captioned("Blackout") {
-                Menu { blackoutMenuContent } label: {
-                    Image(systemName: model.blackout ? "eye.slash.fill" : "eye.slash")
+        HStack(alignment: .top, spacing: 0) {
+            group {
+                captionedButton("Exit", "rectangle.portrait.and.arrow.right") { model.close() }
+                captioned("More") {
+                    Menu { overflowMenuContent } label: { Image(systemName: "ellipsis.circle") }
                 }
-                .foregroundStyle(model.blackout ? Color.accentColor : .primary)
             }
-            captioned("Board") {
-                Menu { boardMenuContent } label: {
-                    Image(systemName: model.isBoardActive ? "square.and.pencil.circle.fill" : "square.and.pencil")
+
+            Spacer(minLength: 14)
+
+            group {
+                captionedButton("Prev", "chevron.left", disabled: model.index == 0) { model.previous() }
+                captioned("Slide") {
+                    Text("\(model.index + 1) / \(model.pageCount)")
+                        .font(.callout.monospacedDigit().weight(.semibold))
                 }
-                .foregroundStyle(model.isBoardActive ? Color.accentColor : .primary)
-            }
-            captionedButton("Keep Awake", doNotDisturb ? "moon.fill" : "moon",
-                            active: doNotDisturb) { doNotDisturb.toggle() }
-            if external.isConnected {
-                captioned("Display") { Image(systemName: "tv.fill").foregroundStyle(.green) }
+                captionedButton("Next", "chevron.right",
+                                disabled: model.index + 1 >= model.pageCount) { model.next() }
             }
 
-            Spacer(minLength: 18)
+            Spacer(minLength: 14)
 
-            captionedButton("Pen", "pencil.tip", active: model.penActive) { model.togglePen() }
-            captionedButton("Laser", "dot.circle.and.cursorarrow", active: model.laserActive) { model.toggleLaser() }
-            ForEach(colors, id: \.0) { name, color in captionedColor(name, color) }
-            captioned("Weight") {
-                Menu {
-                    Section("Line weight") {
-                        ForEach(widths, id: \.0) { name, w in
-                            Button { model.penWidth = w; model.penActive = true } label: {
-                                Label(name, systemImage: model.penWidth == w ? "checkmark" : "scribble")
+            group {
+                captionedButton("Overview", "square.grid.2x2") { showOverview = true }
+                captioned("Blackout") {
+                    Menu { blackoutMenuContent } label: {
+                        Image(systemName: model.blackout ? "eye.slash.fill" : "eye.slash")
+                    }
+                    .foregroundStyle(model.blackout ? Color.accentColor : .primary)
+                }
+                captioned("Board") {
+                    Menu { boardMenuContent } label: {
+                        Image(systemName: model.isBoardActive ? "square.and.pencil.circle.fill" : "square.and.pencil")
+                    }
+                    .foregroundStyle(model.isBoardActive ? Color.accentColor : .primary)
+                }
+                captionedButton("Awake", doNotDisturb ? "moon.fill" : "moon",
+                                active: doNotDisturb) { doNotDisturb.toggle() }
+                if external.isConnected {
+                    captioned("Display") { Image(systemName: "tv.fill").foregroundStyle(.green) }
+                }
+            }
+
+            Spacer(minLength: 14)
+
+            group {
+                captionedButton("Pen", "pencil.tip", active: model.penActive) { model.togglePen() }
+                captionedButton("Laser", "dot.circle.and.cursorarrow", active: model.laserActive) { model.toggleLaser() }
+                colourStrip
+                captioned("Weight") {
+                    Menu {
+                        Section("Line weight") {
+                            ForEach(widths, id: \.0) { name, w in
+                                Button { model.penWidth = w; model.penActive = true } label: {
+                                    Label(name, systemImage: model.penWidth == w ? "checkmark" : "scribble")
+                                }
                             }
                         }
-                    }
-                    Toggle("Apple Pencil only", isOn: $pencilOnly)
-                } label: { Image(systemName: "lineweight") }
-            }
-            captionedButton("Undo", "arrow.uturn.backward",
-                            disabled: model.isBoardActive ? !model.hasBoardInk : !model.hasInk) {
-                model.isBoardActive ? model.boardUndoInk() : model.undoInk()
-            }
-            captionedButton("Clear", "trash",
-                            disabled: model.isBoardActive ? !model.hasBoardInk : !model.hasInk) {
-                model.isBoardActive ? model.boardClearInk() : model.clearInk()
+                        Toggle("Apple Pencil only", isOn: $pencilOnly)
+                    } label: { Image(systemName: "lineweight") }
+                }
+                captionedButton("Undo", "arrow.uturn.backward",
+                                disabled: model.isBoardActive ? !model.hasBoardInk : !model.hasInk) {
+                    model.isBoardActive ? model.boardUndoInk() : model.undoInk()
+                }
+                captionedButton("Clear", "trash",
+                                disabled: model.isBoardActive ? !model.hasBoardInk : !model.hasInk) {
+                    model.isBoardActive ? model.boardClearInk() : model.clearInk()
+                }
             }
 
-            Spacer(minLength: 8)
+            Spacer(minLength: 14)
 
             TimelineView(.periodic(from: .now, by: 1)) { _ in
-                HStack(alignment: .top, spacing: 14) {
+                group {
                     captionedButton(model.timerRunning ? "Pause" : "Start",
                                     model.timerRunning ? "pause" : "play",
                                     active: !model.timerRunning) { model.toggleTimer() }
                     captionedButton("Reset", "arrow.counterclockwise") { model.resetTimer() }
                     captioned("Elapsed") {
-                        Label(TimerControls.elapsedString(model.elapsed), systemImage: "stopwatch")
-                            .font(.headline.monospacedDigit())
+                        Text(TimerControls.elapsedString(model.elapsed))
+                            .font(.callout.monospacedDigit().weight(.semibold))
                     }
                     captioned("Time") {
                         Text(TimerControls.clockString())
-                            .font(.headline.monospacedDigit()).foregroundStyle(.secondary)
+                            .font(.callout.monospacedDigit()).foregroundStyle(.secondary)
                     }
                 }
             }
         }
-        .font(.title3)
-        .padding(.horizontal, 14)
-        .padding(.vertical, 7)
+        .font(.system(size: 18, weight: .regular))
+        .padding(.horizontal, 20)
+        .padding(.vertical, 8)
         .background(.ultraThinMaterial)
     }
 
+    /// A cluster of related controls, spaced for breathing room (Keynote-style).
+    private func group<C: View>(@ViewBuilder _ content: () -> C) -> some View {
+        HStack(alignment: .top, spacing: 20) { content() }
+    }
+
+    /// The pen colours as one tidy dot row under a single caption (no six labels).
+    private var colourStrip: some View {
+        captioned("Colour") {
+            HStack(spacing: 8) {
+                ForEach(colors, id: \.0) { _, color in
+                    Button {
+                        model.penColor = color; model.penActive = true; model.laserActive = false
+                    } label: {
+                        Circle().fill(color).frame(width: 17, height: 17)
+                            .overlay(Circle().strokeBorder(
+                                .white.opacity(model.penColor == color ? 0.95 : 0.25),
+                                lineWidth: model.penColor == color ? 2 : 1))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
     private func captioned<C: View>(_ caption: String, @ViewBuilder _ content: () -> C) -> some View {
-        VStack(spacing: 3) {
-            content().frame(height: 26)
-            Text(caption).font(.system(size: 10)).foregroundStyle(.secondary)
+        VStack(spacing: 4) {
+            content().frame(height: 24)
+            Text(caption).font(.system(size: 9)).foregroundStyle(.secondary)
         }
     }
 
@@ -387,19 +420,6 @@ struct PresenterView: View {
             Button(action: action) { Image(systemName: icon) }
                 .foregroundStyle(active ? Color.accentColor : .primary)
                 .disabled(disabled)
-        }
-    }
-
-    private func captionedColor(_ name: String, _ color: Color) -> some View {
-        captioned(name) {
-            Button {
-                model.penColor = color; model.penActive = true; model.laserActive = false
-            } label: {
-                Circle().fill(color).frame(width: 22, height: 22)
-                    .overlay(Circle().strokeBorder(
-                        .white.opacity(model.penColor == color ? 0.9 : 0.3),
-                        lineWidth: model.penColor == color ? 2 : 1))
-            }
         }
     }
 
