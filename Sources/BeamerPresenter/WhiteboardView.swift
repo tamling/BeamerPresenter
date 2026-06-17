@@ -253,7 +253,7 @@ private struct BoardItemInspector: View {
 /// quick-insert buttons (text / table / QR) and export.
 struct BoardBar: View {
     @EnvironmentObject var state: PresentationState
-    let onSave: () -> Void
+    let onSave: @MainActor () -> Void
 
     var body: some View {
         HStack(spacing: 12) {
@@ -282,7 +282,7 @@ struct BoardBar: View {
 
             Divider().frame(height: 18)
 
-            Button(action: onSave) { Label("Save…", systemImage: "square.and.arrow.down") }
+            Button { onSave() } label: { Label("Save…", systemImage: "square.and.arrow.down") }
                 .help("Save this whiteboard as a PDF")
 
             Spacer()

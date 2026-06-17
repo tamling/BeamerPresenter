@@ -134,6 +134,7 @@ struct PresenterView: View {
     }
 
     /// Exports the active whiteboard to a PDF chosen by the user.
+    @MainActor
     private func saveActiveBoard() {
         guard let board = state.activeBoard else { return }
         let panel = NSSavePanel()
