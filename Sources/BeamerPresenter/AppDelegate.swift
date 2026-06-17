@@ -708,7 +708,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         audience.contentMinSize = NSSize(width: 320, height: 200)
         audience.contentView = NSHostingView(rootView: AudienceView().environmentObject(state))
         if fill {
-            audience.level = .mainMenu
+            // Keep it above ordinary windows on the projector, but below the
+            // menu-bar level so the menu bar stays visible during the talk.
+            audience.level = .floating
             audience.collectionBehavior = [.fullScreenAuxiliary, .canJoinAllSpaces]
         } else {
             audience.collectionBehavior = [.fullScreenNone]   // a normal, resizable window
