@@ -329,6 +329,7 @@ struct BoardBar: View {
 
     var body: some View {
         HStack(spacing: 10) {
+            Spacer(minLength: 0)
             group {
                 barButton("plus.rectangle", "New") { state.addBoard() }
                 barButton("chevron.left", disabled: boardIndex == 0) { state.previousBoard() }
@@ -370,11 +371,10 @@ struct BoardBar: View {
                           disabled: state.sourceURL == nil) { onInsert() }
             }
 
-            Spacer()
-
             group {
                 barButton("xmark.circle", "Done") { state.hideBoard() }
             }
+            Spacer(minLength: 0)
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
