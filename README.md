@@ -21,7 +21,10 @@ app can also pull `\note{}` speaker notes straight from the source.
 - **Home screen** — open button, drag-and-drop a PDF/`.tex`, **favorite folders**
   (expand to the PDFs inside; add with the `+`), a recent-files list, and a bottom
   **dashboard** (presentations run, average + total time, version).
-- **Settings (⌘,)** — toggle the default black audience screen and set its message.
+- **Menu bar icon** — a Time Machine-style status item with quick actions (open,
+  show presenter, next/previous, blackout, whiteboard, settings, quit).
+- **Settings (⌘,)** — open at login, show/hide the menu bar icon, toggle the
+  default black audience screen, and set its message.
 - **Presenter console** — a control bar with every live tool, each a captioned
   symbol (exit, prev/next + slide counter, overview, blackout, whiteboard, pen,
   laser, the pen-colour swatches, undo/clear ink, reset timer, elapsed + clock),
