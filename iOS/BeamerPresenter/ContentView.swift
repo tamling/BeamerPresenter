@@ -228,20 +228,20 @@ struct PresenterView: View {
 
     private var toolbar: some View {
         HStack(spacing: 14) {
-            // Clear "back to start" button.
-            Button { model.close() } label: {
-                Label("Back", systemImage: "chevron.backward").labelStyle(.iconOnly)
-            }
+            // Exit to the start screen (distinct icon so it's not confused with
+            // the previous-slide arrow).
+            Button { model.close() } label: { Image(systemName: "xmark") }
 
             overflowMenu
 
             Divider().frame(height: 20)
 
-            Button { model.previous() } label: { Image(systemName: "chevron.left") }
+            // Slide navigation: back / forward.
+            Button { model.previous() } label: { Image(systemName: "chevron.left.circle.fill") }
                 .disabled(model.index == 0)
             Text("\(model.index + 1) / \(model.pageCount)")
                 .font(.headline.monospacedDigit()).frame(minWidth: 72)
-            Button { model.next() } label: { Image(systemName: "chevron.right") }
+            Button { model.next() } label: { Image(systemName: "chevron.right.circle.fill") }
                 .disabled(model.index + 1 >= model.pageCount)
 
             Button { showOverview = true } label: { Image(systemName: "square.grid.2x2") }
@@ -268,7 +268,11 @@ struct PresenterView: View {
             Button { model.toggleLaser() } label: { Image(systemName: "dot.radiowaves.left.and.right") }
                 .foregroundStyle(model.laserActive ? .red : .primary)
 
-            penMenu
+            if landscape {
+                penToolsInline   // colours visible directly when there's room
+            } else {
+                penMenu          // collapsed into one control in portrait
+            }
 
             Button {
                 model.isBoardActive ? model.boardUndoInk() : model.undoInk()
@@ -337,6 +341,37 @@ struct PresenterView: View {
             Image(systemName: model.isBoardActive ? "rectangle.fill.badge.plus" : "rectangle.badge.plus")
         }
         .foregroundStyle(model.isBoardActive ? Color.accentColor : .primary)
+    }
+
+    /// Pen toggle, the colour swatches shown directly, and a weight / Pencil-only
+    /// menu — used in landscape where there's room.
+    private var penToolsInline: some View {
+        HStack(spacing: 10) {
+            Button { model.togglePen() } label: { Image(systemName: "pencil.tip") }
+                .foregroundStyle(model.penActive ? model.penColor : .primary)
+            ForEach(colors, id: \.0) { name, color in
+                Button {
+                    model.penColor = color; model.penActive = true; model.laserActive = false
+                } label: {
+                    Circle().fill(color).frame(width: 20, height: 20)
+                        .overlay(Circle().strokeBorder(
+                            .white.opacity(model.penColor == color ? 0.9 : 0.3),
+                            lineWidth: model.penColor == color ? 2 : 1))
+                }
+            }
+            Menu {
+                Section("Line weight") {
+                    ForEach(widths, id: \.0) { name, w in
+                        Button {
+                            model.penWidth = w; model.penActive = true; model.laserActive = false
+                        } label: {
+                            Label(name, systemImage: model.penWidth == w ? "checkmark" : "scribble")
+                        }
+                    }
+                }
+                Toggle("Apple Pencil only", isOn: $pencilOnly)
+            } label: { Image(systemName: "lineweight") }
+        }
     }
 
     /// Pen toggle (tap) plus colour / weight / Pencil-only options (long-press),

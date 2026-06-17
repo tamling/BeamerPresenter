@@ -11,8 +11,8 @@ Target device: **iPad Pro 2021** (USB‑C, external display capable), iPadOS 16+
 >
 > **Landscape console:** in landscape the presenter view becomes a macOS-style
 > console — current slide on the left, with a resizable right column holding the
-> **next** slide, the **speaker notes**, and your **own notes** (autosaved per
-> deck). All dividers are draggable; portrait keeps the big single-slide layout.
+> **next** slide above the **speaker notes**. The divider is draggable; portrait
+> keeps the big single-slide layout. Pen colours are shown inline in landscape.
 
 ## ✅ Minimal app (done)
 - [x] Open a PDF from Files / iCloud (document picker, security‑scoped access)
