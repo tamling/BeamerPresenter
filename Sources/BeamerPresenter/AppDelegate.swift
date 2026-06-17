@@ -38,7 +38,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             .dropFirst()
             .sink { [weak self] loaded in
                 if !loaded { self?.audienceWindow?.orderOut(nil) }
-                self?.updateDeckMenusVisibility()
+                self?.updateDeckMenusVisibility(loaded: loaded)
             }
             .store(in: &cancellables)
         buildPresenterWindow()
@@ -284,13 +284,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
 
         // These deck-specific menus are hidden on the home screen.
         deckMenuItems = [presoItem, toolsItem, boardItem]
-        updateDeckMenusVisibility()
+        updateDeckMenusVisibility(loaded: state.isLoaded)
 
         NSApp.mainMenu = mainMenu
     }
 
-    private func updateDeckMenusVisibility() {
-        deckMenuItems.forEach { $0.isHidden = !state.isLoaded }
+    /// `@Published.$isLoaded` fires in `willSet`, so the new value is passed in
+    /// rather than read back from `state`.
+    private func updateDeckMenusVisibility(loaded: Bool) {
+        deckMenuItems.forEach { $0.isHidden = !loaded }
     }
 
     private func addSubmenu(to mainMenu: NSMenu, _ title: String) -> NSMenu {
