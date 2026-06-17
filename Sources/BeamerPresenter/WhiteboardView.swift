@@ -366,9 +366,10 @@ struct BoardBar: View {
             }
 
             group {
-                barButton("square.and.arrow.down", "Save") { onSave() }
+                barButton("square.and.arrow.down", "Save",
+                          disabled: state.activeBoardIsEmpty) { onSave() }
                 barButton("rectangle.stack.badge.plus", "Insert",
-                          disabled: state.sourceURL == nil) { onInsert() }
+                          disabled: state.activeBoardIsEmpty || state.sourceURL == nil) { onInsert() }
             }
 
             group {

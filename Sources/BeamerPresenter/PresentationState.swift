@@ -248,6 +248,12 @@ final class PresentationState: ObservableObject {
 
     var isBoardActive: Bool { activeBoardIndex != nil }
 
+    /// True when there's nothing drawn or placed on the active board yet.
+    var activeBoardIsEmpty: Bool {
+        guard let board = activeBoard else { return true }
+        return board.strokes.isEmpty && board.items.isEmpty
+    }
+
     var selectedItem: BoardItem? {
         guard let id = selectedItemID else { return nil }
         return activeBoard?.items.first { $0.id == id }

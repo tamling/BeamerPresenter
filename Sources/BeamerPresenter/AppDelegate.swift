@@ -12,6 +12,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     private var settingsWindow: NSWindow?
     private var statusItem: NSStatusItem?
     private weak var statusInfoItem: NSMenuItem?
+    private var deckMenuItems: [NSMenuItem] = []   // Presentation/Tools/Whiteboard menus
     private var keyMonitor: Any?
     private var cancellables = Set<AnyCancellable>()
 
@@ -27,10 +28,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         NotificationCenter.default.addObserver(
             self, selector: #selector(applyBackgroundMode),
             name: .backgroundModePrefChanged, object: nil)
-        // Returning to the home screen (unload) hides the audience window.
+        // Returning to the home screen (unload) hides the audience window and the
+        // deck-specific menus.
         state.$isLoaded
             .dropFirst()
-            .sink { [weak self] loaded in if !loaded { self?.audienceWindow?.orderOut(nil) } }
+            .sink { [weak self] loaded in
+                if !loaded { self?.audienceWindow?.orderOut(nil) }
+                self?.updateDeckMenusVisibility()
+            }
             .store(in: &cancellables)
         buildPresenterWindow()
         applyBackgroundMode()
@@ -178,6 +183,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
 
         // Presentation menu — navigation + audience controls.
         let presoMenu = addSubmenu(to: mainMenu, "Presentation")
+        let presoItem = mainMenu.items.last!
         add(to: presoMenu, "Next Slide", #selector(nextSlide(_:)), "]")
         add(to: presoMenu, "Previous Slide", #selector(previousSlide(_:)), "[")
         add(to: presoMenu, "First Slide", #selector(firstSlide(_:)))
@@ -203,6 +209,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
 
         // Tools menu — pen / laser / colours / ink.
         let toolsMenu = addSubmenu(to: mainMenu, "Tools")
+        let toolsItem = mainMenu.items.last!
         add(to: toolsMenu, "Pen", #selector(togglePen(_:)), "p")
         add(to: toolsMenu, "Laser Pointer", #selector(toggleLaser(_:)), "l")
         toolsMenu.addItem(.separator())
@@ -216,6 +223,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
 
         // Whiteboard menu — boards, items, and export.
         let boardMenu = addSubmenu(to: mainMenu, "Whiteboard")
+        let boardItem = mainMenu.items.last!
         add(to: boardMenu, "Toggle Whiteboard", #selector(toggleWhiteboard(_:)))
         add(to: boardMenu, "New Whiteboard", #selector(newBoard(_:)))
         add(to: boardMenu, "Next Board", #selector(nextBoard(_:)))
@@ -229,7 +237,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         add(to: boardMenu, "Save Whiteboard as PDF…", #selector(saveWhiteboard(_:)), "s")
         add(to: boardMenu, "Insert into PDF (Copy)…", #selector(insertWhiteboard(_:)), "i")
 
+        // These deck-specific menus are hidden on the home screen.
+        deckMenuItems = [presoItem, toolsItem, boardItem]
+        updateDeckMenusVisibility()
+
         NSApp.mainMenu = mainMenu
+    }
+
+    private func updateDeckMenusVisibility() {
+        deckMenuItems.forEach { $0.isHidden = !state.isLoaded }
     }
 
     private func addSubmenu(to mainMenu: NSMenu, _ title: String) -> NSMenu {
@@ -283,9 +299,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
 
         case #selector(nextBoard(_:)), #selector(previousBoard(_:)),
              #selector(deleteBoard(_:)), #selector(addText(_:)),
-             #selector(addTable(_:)), #selector(addQR(_:)),
-             #selector(saveWhiteboard(_:)), #selector(insertWhiteboard(_:)):
+             #selector(addTable(_:)), #selector(addQR(_:)):
             return state.isBoardActive
+        case #selector(saveWhiteboard(_:)), #selector(insertWhiteboard(_:)):
+            return state.isBoardActive && !state.activeBoardIsEmpty
 
         default:
             return true
@@ -552,6 +569,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         presenter.isReleasedWhenClosed = false   // we hold a strong ref; avoid an ARC over-release crash
         presenter.contentView = NSHostingView(rootView: root)
         presenter.contentMinSize = NSSize(width: 560, height: 380)   // allow shrinking
+        // Green button zooms (maximises) instead of entering full screen.
+        presenter.collectionBehavior = [.fullScreenAuxiliary]
         presenter.delegate = self
         presenter.center()
         // Stays hidden behind the launch splash; shown once the splash fades.
@@ -573,6 +592,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         if multiScreen {
             audience.level = .mainMenu
             audience.collectionBehavior = [.fullScreenAuxiliary, .canJoinAllSpaces]
+        } else {
+            audience.collectionBehavior = [.fullScreenAuxiliary]   // green zooms, not full screen
         }
         audienceWindow = audience
     }
