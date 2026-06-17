@@ -306,6 +306,8 @@ struct BoardBar: View {
     let onSave: @MainActor () -> Void
     let onInsert: @MainActor () -> Void
 
+    @State private var showingTablePicker = false
+
     private var boardIndex: Int { state.activeBoardIndex ?? 0 }
 
     var body: some View {
@@ -322,7 +324,15 @@ struct BoardBar: View {
 
             group {
                 barButton("textformat", "Text") { state.addItem(.text) }
-                barButton("tablecells", "Table") { state.addItem(.table) }
+                Button { showingTablePicker = true } label: { barLabel("tablecells", "Table") }
+                    .buttonStyle(.plain)
+                    .help("Choose rows × columns, then insert")
+                    .popover(isPresented: $showingTablePicker, arrowEdge: .bottom) {
+                        TableSizePicker { rows, cols in
+                            state.addTable(rows: rows, columns: cols)
+                            showingTablePicker = false
+                        }
+                    }
                 barButton("qrcode", "QR") { state.addItem(.qr) }
             }
 
@@ -355,17 +365,54 @@ struct BoardBar: View {
 
     private func barButton(_ icon: String, _ title: String? = nil,
                            disabled: Bool = false, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: 4) {
-                Image(systemName: icon)
-                if let title { Text(title).font(.subheadline) }
-            }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .contentShape(RoundedRectangle(cornerRadius: 6))
+        Button(action: action) { barLabel(icon, title) }
+            .buttonStyle(.plain)
+            .disabled(disabled)
+    }
+
+    private func barLabel(_ icon: String, _ title: String?) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: icon)
+            if let title { Text(title).font(.subheadline) }
         }
-        .buttonStyle(.plain)
-        .disabled(disabled)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .contentShape(RoundedRectangle(cornerRadius: 6))
+    }
+}
+
+/// Apple Notes-style grid picker: hover to size the table, click to insert.
+struct TableSizePicker: View {
+    let onPick: (_ rows: Int, _ columns: Int) -> Void
+
+    private let maxRows = 8
+    private let maxCols = 8
+    private let cell: CGFloat = 16
+    @State private var rows = 0
+    @State private var cols = 0
+
+    var body: some View {
+        VStack(spacing: 8) {
+            Text(rows > 0 ? "\(rows) × \(cols)" : "Insert Table")
+                .font(.caption.monospacedDigit())
+                .foregroundStyle(.secondary)
+
+            VStack(spacing: 3) {
+                ForEach(1...maxRows, id: \.self) { r in
+                    HStack(spacing: 3) {
+                        ForEach(1...maxCols, id: \.self) { c in
+                            RoundedRectangle(cornerRadius: 3)
+                                .fill((r <= rows && c <= cols) ? Color.accentColor
+                                                               : Color.secondary.opacity(0.18))
+                                .frame(width: cell, height: cell)
+                                .onHover { inside in if inside { rows = r; cols = c } }
+                                .onTapGesture { onPick(r, c) }
+                        }
+                    }
+                }
+            }
+        }
+        .padding(12)
     }
 }
 
