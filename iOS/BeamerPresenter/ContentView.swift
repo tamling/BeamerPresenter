@@ -132,6 +132,22 @@ struct PresenterView: View {
             .foregroundStyle(showNotes ? Color.accentColor
                              : (model.hasNotes ? .primary : .secondary))
 
+            Menu {
+                Button(model.blackout ? "Show slide" : "Black out audience") {
+                    model.toggleBlackout()
+                }
+                Toggle("Show clock", isOn: $model.blackoutShowClock)
+                Picker("Message", selection: $model.blackoutMessage) {
+                    Text("None").tag("")
+                    ForEach(BlackoutView.presets, id: \.self) { Text($0).tag($0) }
+                }
+            } label: {
+                Image(systemName: model.blackout ? "eye.slash.fill" : "eye.slash")
+            } primaryAction: {
+                model.toggleBlackout()
+            }
+            .foregroundStyle(model.blackout ? Color.accentColor : .primary)
+
             if external.isConnected {
                 Image(systemName: "tv.fill")
                     .foregroundStyle(.green)

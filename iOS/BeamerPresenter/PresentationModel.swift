@@ -36,6 +36,13 @@ final class PresentationModel: ObservableObject {
     @Published private(set) var splitNotes = false   // double-wide "notes on second screen" deck
     @Published private(set) var notesSourceName: String?
 
+    // Black-out (audience screen)
+    @Published var blackout = false
+    @Published var blackoutMessage = ""
+    @Published var blackoutShowClock = true
+
+    func toggleBlackout() { blackout.toggle() }
+
     // Presentation timer (stopwatch)
     @Published private(set) var timerRunning = false
     private var timerStartedAt: Date?

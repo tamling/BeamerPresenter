@@ -17,6 +17,18 @@ struct SlideView: View {
                 if let p = model.laserPoint {
                     LaserDot(point: p, in: size)
                 }
+                if model.blackout {
+                    Color.black.opacity(0.35).allowsHitTesting(false)
+                    VStack {
+                        Label("Audience screen blacked out", systemImage: "eye.slash.fill")
+                            .font(.callout.weight(.semibold))
+                            .padding(.horizontal, 14).padding(.vertical, 8)
+                            .background(.ultraThinMaterial, in: Capsule())
+                            .padding(.top, 16)
+                        Spacer()
+                    }
+                    .allowsHitTesting(false)
+                }
             }
             .contentShape(Rectangle())
             .gesture(slideGesture(size))
@@ -95,6 +107,9 @@ struct AudienceSlideView: View {
                 .allowsHitTesting(false)
                 if let p = model.laserPoint {
                     LaserDot(point: p, in: size)
+                }
+                if model.blackout {
+                    BlackoutView(model: model)
                 }
             }
         }

@@ -38,7 +38,10 @@ Target device: **iPad Pro 2021** (USB‑C, external display capable), iPadOS 16+
        **Load notes (.tex)…** to attach one explicitly.
 5. [x] **Timer + clock** — a centred stopwatch (play / pause / reset) and the
        wall clock in the toolbar, ticking once a second via `TimelineView`.
-6. [ ] **Black‑out** the audience (+ optional message / clock)
+6. [x] **Black‑out** the audience — `eye.slash` toolbar button (tap to toggle,
+       long-press for options) blacks the external/audience screen with an
+       optional centred message (presets) and a clock. The presenter keeps the
+       slide, dimmed, with a "blacked out" badge.
 7. [ ] **Whiteboard** scratch slides (ink, text, table, QR) — port the macOS
        `Whiteboard` model & rendering (mostly portable; swap `NSImage`→`UIImage`)
 8. [ ] **Export** the annotated deck (ink + boards) to a new PDF (share sheet)
