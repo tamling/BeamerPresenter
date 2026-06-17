@@ -69,6 +69,7 @@ struct StartView: View {
 /// The presenter console: a toolbar, the current slide, and a thumbnail strip.
 struct PresenterView: View {
     @EnvironmentObject var model: PresentationModel
+    @EnvironmentObject var external: ExternalDisplayManager
     let openPicker: () -> Void
 
     private let colors: [(String, Color)] = [("Red", .red), ("Green", .green),
@@ -98,6 +99,12 @@ struct PresenterView: View {
                 .font(.headline.monospacedDigit()).frame(minWidth: 90)
             Button { model.next() } label: { Image(systemName: "chevron.right") }
                 .disabled(model.index + 1 >= model.pageCount)
+
+            if external.isConnected {
+                Image(systemName: "tv.fill")
+                    .foregroundStyle(.green)
+                    .help("Slide is showing on the external display")
+            }
 
             Spacer()
 

@@ -15,9 +15,13 @@ Target device: **iPad Pro 2021** (USB‑C, external display capable), iPadOS 16+
 - [x] Recent files
 
 ## ⏭️ Next, in order
-1. [ ] **External display (audience)** — show the slide on a connected screen
-       (USB‑C / AirPlay) via `UIWindowScene` for external displays; keep the
-       iPad as the presenter console.
+1. [x] **External display (audience)** — the slide (with ink) mirrors onto a
+       connected screen (USB‑C / AirPlay) while the iPad keeps the presenter
+       console; a green `tv` badge appears when a display is attached.
+       *Implemented with the `UIScreen` connect/disconnect API* — deprecated on
+       iOS 16 but the most contained, reliable option. A future modernisation
+       to scene-based external displays (`UIWindowScene` / `requestGeometryUpdate`)
+       is noted here for when we adopt the multi-scene lifecycle.
 2. [ ] **Pen colours + laser pointer** (mirrored to the audience)
 3. [ ] **Overview grid** — tap a slide to jump
 4. [ ] **Speaker notes** — split (notes‑on‑second‑screen) PDFs *and* `\note{}`
