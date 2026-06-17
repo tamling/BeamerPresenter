@@ -7,7 +7,8 @@ struct InkStroke: Identifiable {
     let id = UUID()
     var points: [CGPoint]
     var color: Color
-    var width: CGFloat   // fraction of slide width
+    var width: CGFloat               // base width, fraction of slide width
+    var pointWidths: [CGFloat] = []  // per-point width from Apple Pencil pressure (empty = uniform)
 }
 
 /// Shared state for the presenter: the open document, the current slide, and the
@@ -25,6 +26,7 @@ final class PresentationModel: ObservableObject {
     @Published var penWidth: CGFloat = 0.004   // fraction of slide width
     @Published var strokes: [Int: [InkStroke]] = [:]
     @Published var currentStroke: [CGPoint] = []
+    @Published var currentWidths: [CGFloat] = []
 
     // Laser pointer — a transient dot in unit coords, mirrored to the audience.
     // It is not persisted (not part of `strokes`).
@@ -41,6 +43,7 @@ final class PresentationModel: ObservableObject {
     @Published var activeBoardIndex: Int?
     @Published var selectedItemID: UUID?
     @Published var boardStroke: [CGPoint] = []
+    @Published var boardStrokeWidths: [CGFloat] = []
 
     var isBoardActive: Bool { activeBoardIndex != nil }
     var hasBoardInk: Bool { !(activeBoard?.strokes.isEmpty ?? true) }
@@ -100,12 +103,17 @@ final class PresentationModel: ObservableObject {
     }
 
     // Board ink
-    func boardBeginStroke(at p: CGPoint) { boardStroke = [p] }
-    func boardExtendStroke(to p: CGPoint) { boardStroke.append(p) }
+    func boardBeginStroke(at p: CGPoint, width: CGFloat? = nil) {
+        boardStroke = [p]; boardStrokeWidths = [width ?? penWidth]
+    }
+    func boardExtendStroke(to p: CGPoint, width: CGFloat? = nil) {
+        boardStroke.append(p); boardStrokeWidths.append(width ?? penWidth)
+    }
     func boardEndStroke() {
-        defer { boardStroke = [] }
+        defer { boardStroke = []; boardStrokeWidths = [] }
         guard let i = activeBoardIndex, boardStroke.count > 1 else { return }
-        boards[i].strokes.append(InkStroke(points: boardStroke, color: penColor, width: penWidth))
+        boards[i].strokes.append(InkStroke(
+            points: boardStroke, color: penColor, width: penWidth, pointWidths: boardStrokeWidths))
     }
     func boardUndoInk() {
         guard let i = activeBoardIndex, !boards[i].strokes.isEmpty else { return }
@@ -268,12 +276,17 @@ final class PresentationModel: ObservableObject {
 
     // MARK: - Ink
 
-    func beginStroke(at p: CGPoint) { currentStroke = [p] }
-    func extendStroke(to p: CGPoint) { currentStroke.append(p) }
+    func beginStroke(at p: CGPoint, width: CGFloat? = nil) {
+        currentStroke = [p]; currentWidths = [width ?? penWidth]
+    }
+    func extendStroke(to p: CGPoint, width: CGFloat? = nil) {
+        currentStroke.append(p); currentWidths.append(width ?? penWidth)
+    }
     func endStroke() {
-        defer { currentStroke = [] }
+        defer { currentStroke = []; currentWidths = [] }
         guard currentStroke.count > 1 else { return }
-        strokes[index, default: []].append(InkStroke(points: currentStroke, color: penColor, width: penWidth))
+        strokes[index, default: []].append(InkStroke(
+            points: currentStroke, color: penColor, width: penWidth, pointWidths: currentWidths))
     }
     func undoInk() {
         guard var s = strokes[index], !s.isEmpty else { return }

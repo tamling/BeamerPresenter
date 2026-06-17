@@ -51,7 +51,11 @@ Target device: **iPad Pro 2021** (USB‑C, external display capable), iPadOS 16+
        slide and inserts each whiteboard after the slide it was made on, into a
        new vector PDF (Core Graphics), then opens the share sheet (Files /
        AirDrop / Mail). Ported from the macOS `BoardExporter`.
-9. [ ] **Apple Pencil** pressure / palm rejection (PencilKit option)
+9. [x] **Apple Pencil** — a UIKit inking overlay (active while the pen tool is
+       on) tells Pencil from finger, samples coalesced touches for smooth lines,
+       and reads pressure to vary the stroke width (per-point, rendered & exported
+       as variable-width). An **Apple Pencil only** toggle (pen menu) gives palm
+       rejection by ignoring finger touches.
 10. [ ] **Settings** (black‑screen message/image, defaults)
 11. [ ] **Bluetooth presenter remote** support (page up/down)
 

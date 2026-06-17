@@ -59,6 +59,7 @@ struct BoardCanvas: View {
     var liveStroke: [CGPoint] = []
     var liveColor: Color = .red
     var liveWidth: CGFloat = 0.004
+    var liveWidths: [CGFloat] = []
 
     var body: some View {
         GeometryReader { geo in
@@ -67,15 +68,11 @@ struct BoardCanvas: View {
                 Color.white
                 Canvas { ctx, sz in
                     for stroke in board.strokes {
-                        ctx.stroke(path(stroke.points, in: sz),
-                                   with: .color(stroke.color),
-                                   style: lineStyle(stroke.width * sz.width))
+                        drawStroke(ctx, points: stroke.points, widths: stroke.pointWidths,
+                                   baseWidth: stroke.width, color: stroke.color, in: sz)
                     }
-                    if liveStroke.count > 1 {
-                        ctx.stroke(path(liveStroke, in: sz),
-                                   with: .color(liveColor),
-                                   style: lineStyle(liveWidth * sz.width))
-                    }
+                    drawStroke(ctx, points: liveStroke, widths: liveWidths,
+                               baseWidth: liveWidth, color: liveColor, in: sz)
                 }
                 ForEach(board.items) { item in
                     BoardItemView(item: item, boardSize: size)

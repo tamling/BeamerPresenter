@@ -75,6 +75,7 @@ struct PresenterView: View {
     @State private var importingNotes = false
     @State private var exportURL: URL?
     @State private var showShare = false
+    @AppStorage("pencilOnly") private var pencilOnly = false
     let openPicker: () -> Void
 
     private var texTypes: [UTType] {
@@ -222,15 +223,18 @@ struct PresenterView: View {
                 }
             }
             Menu {
-                ForEach(widths, id: \.0) { name, w in
-                    Button {
-                        model.penWidth = w
-                        model.penActive = true
-                        model.laserActive = false
-                    } label: {
-                        Label(name, systemImage: model.penWidth == w ? "checkmark" : "scribble")
+                Section("Line weight") {
+                    ForEach(widths, id: \.0) { name, w in
+                        Button {
+                            model.penWidth = w
+                            model.penActive = true
+                            model.laserActive = false
+                        } label: {
+                            Label(name, systemImage: model.penWidth == w ? "checkmark" : "scribble")
+                        }
                     }
                 }
+                Toggle("Apple Pencil only", isOn: $pencilOnly)
             } label: { Image(systemName: "lineweight") }
 
             Button {

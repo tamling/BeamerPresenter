@@ -5,6 +5,7 @@ import SwiftUI
 /// swipe) when it's off.
 struct SlideView: View {
     @EnvironmentObject var model: PresentationModel
+    @AppStorage("pencilOnly") private var pencilOnly = false
 
     var body: some View {
         GeometryReader { geo in
@@ -12,9 +13,17 @@ struct SlideView: View {
             ZStack {
                 if model.isBoardActive, let board = model.activeBoard {
                     BoardCanvas(board: board, liveStroke: model.boardStroke,
-                                liveColor: model.penColor, liveWidth: model.penWidth)
-                        .contentShape(Rectangle())
-                        .gesture(boardGesture(size))
+                                liveColor: model.penColor, liveWidth: model.penWidth,
+                                liveWidths: model.boardStrokeWidths)
+                    // Pen → Apple-Pencil-aware overlay; otherwise laser / item handling.
+                    if model.penActive {
+                        InkingOverlay(pencilOnly: pencilOnly, baseWidth: model.penWidth,
+                            onBegin: { p, w in model.boardBeginStroke(at: p, width: w) },
+                            onMove: { p, w in model.boardExtendStroke(to: p, width: w) },
+                            onEnd: { model.boardEndStroke() })
+                    } else {
+                        Color.clear.contentShape(Rectangle()).gesture(boardGesture(size))
+                    }
                     boardHandles(size)
                     if let p = model.laserPoint { LaserDot(point: p, in: size) }
                 } else {
@@ -25,7 +34,14 @@ struct SlideView: View {
                     if let p = model.laserPoint {
                         LaserDot(point: p, in: size)
                     }
-                    Color.clear.contentShape(Rectangle()).gesture(slideGesture(size))
+                    if model.penActive {
+                        InkingOverlay(pencilOnly: pencilOnly, baseWidth: model.penWidth,
+                            onBegin: { p, w in model.beginStroke(at: p, width: w) },
+                            onMove: { p, w in model.extendStroke(to: p, width: w) },
+                            onEnd: { model.endStroke() })
+                    } else {
+                        Color.clear.contentShape(Rectangle()).gesture(slideGesture(size))
+                    }
                 }
                 if model.blackout {
                     Color.black.opacity(0.35).allowsHitTesting(false)
@@ -45,21 +61,15 @@ struct SlideView: View {
 
     // MARK: - Board interaction
 
-    /// Pen / laser drawing on the board; tapping empty space deselects.
+    /// Laser on the board (pen is handled by the overlay); tapping empty space
+    /// deselects the current item.
     private func boardGesture(_ size: CGSize) -> some Gesture {
         DragGesture(minimumDistance: 0)
             .onChanged { value in
-                let p = unit(value.location, size)
-                if model.penActive {
-                    if model.boardStroke.isEmpty { model.boardBeginStroke(at: p) }
-                    else { model.boardExtendStroke(to: p) }
-                } else if model.laserActive {
-                    model.moveLaser(to: p)
-                }
+                if model.laserActive { model.moveLaser(to: unit(value.location, size)) }
             }
             .onEnded { _ in
-                if model.penActive { model.boardEndStroke() }
-                else if model.laserActive { model.endLaser() }
+                if model.laserActive { model.endLaser() }
                 else { model.selectedItemID = nil }
             }
     }
@@ -112,36 +122,24 @@ struct SlideView: View {
     private var inkCanvas: some View {
         Canvas { ctx, sz in
             for stroke in model.strokes[model.index] ?? [] {
-                ctx.stroke(path(stroke.points, in: sz),
-                           with: .color(stroke.color),
-                           style: lineStyle(stroke.width * sz.width))
+                drawStroke(ctx, points: stroke.points, widths: stroke.pointWidths,
+                           baseWidth: stroke.width, color: stroke.color, in: sz)
             }
-            if model.currentStroke.count > 1 {
-                ctx.stroke(path(model.currentStroke, in: sz),
-                           with: .color(model.penColor),
-                           style: lineStyle(model.penWidth * sz.width))
-            }
+            drawStroke(ctx, points: model.currentStroke, widths: model.currentWidths,
+                       baseWidth: model.penWidth, color: model.penColor, in: sz)
         }
         .allowsHitTesting(false)
     }
 
-    /// One gesture for both modes: draw with the pen, otherwise swipe / tap-edge
-    /// to move between slides.
+    /// Navigation / laser when the pen is off (pen is handled by the overlay):
+    /// swipe or tap an edge to move between slides.
     private func slideGesture(_ size: CGSize) -> some Gesture {
         DragGesture(minimumDistance: 0)
             .onChanged { value in
-                let p = unit(value.location, size)
-                if model.penActive {
-                    if model.currentStroke.isEmpty { model.beginStroke(at: p) }
-                    else { model.extendStroke(to: p) }
-                } else if model.laserActive {
-                    model.moveLaser(to: p)
-                }
+                if model.laserActive { model.moveLaser(to: unit(value.location, size)) }
             }
             .onEnded { value in
-                if model.penActive {
-                    model.endStroke()
-                } else if model.laserActive {
+                if model.laserActive {
                     model.endLaser()
                 } else if value.translation.width < -40 {
                     model.next()
@@ -176,9 +174,8 @@ struct AudienceSlideView: View {
                                 displayBox: model.slideBox)
                     Canvas { ctx, sz in
                         for stroke in model.strokes[model.index] ?? [] {
-                            ctx.stroke(path(stroke.points, in: sz),
-                                       with: .color(stroke.color),
-                                       style: lineStyle(stroke.width * sz.width))
+                            drawStroke(ctx, points: stroke.points, widths: stroke.pointWidths,
+                                       baseWidth: stroke.width, color: stroke.color, in: sz)
                         }
                     }
                     .allowsHitTesting(false)
@@ -229,4 +226,24 @@ func path(_ points: [CGPoint], in size: CGSize) -> Path {
 
 func lineStyle(_ width: CGFloat) -> StrokeStyle {
     StrokeStyle(lineWidth: max(1, width), lineCap: .round, lineJoin: .round)
+}
+
+/// Draws an ink stroke into a `GraphicsContext`. With per-point widths (Apple
+/// Pencil pressure) each segment is stroked at the mean of its endpoints'
+/// widths; otherwise the whole polyline is stroked at `baseWidth`.
+func drawStroke(_ ctx: GraphicsContext, points: [CGPoint], widths: [CGFloat],
+                baseWidth: CGFloat, color: Color, in size: CGSize) {
+    guard points.count > 1 else { return }
+    if widths.count == points.count {
+        for i in 1..<points.count {
+            var seg = Path()
+            seg.move(to: CGPoint(x: points[i - 1].x * size.width, y: points[i - 1].y * size.height))
+            seg.addLine(to: CGPoint(x: points[i].x * size.width, y: points[i].y * size.height))
+            ctx.stroke(seg, with: .color(color),
+                       style: lineStyle((widths[i - 1] + widths[i]) / 2 * size.width))
+        }
+    } else {
+        ctx.stroke(path(points, in: size), with: .color(color),
+                   style: lineStyle(baseWidth * size.width))
+    }
 }

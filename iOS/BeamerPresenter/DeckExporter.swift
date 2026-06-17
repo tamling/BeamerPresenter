@@ -95,13 +95,25 @@ enum DeckExporter {
         ctx.setLineJoin(.round)
         for stroke in strokes {
             ctx.setStrokeColor(UIColor(stroke.color).cgColor)
-            ctx.setLineWidth(max(0.5, stroke.width * box.width))
-            for (k, pt) in stroke.points.enumerated() {
-                // PDF origin is bottom-left, so flip y from the unit (top-left) coords.
-                let p = CGPoint(x: pt.x * box.width, y: (1 - pt.y) * box.height)
-                if k == 0 { ctx.move(to: p) } else { ctx.addLine(to: p) }
+            // PDF origin is bottom-left, so flip y from the unit (top-left) coords.
+            func point(_ pt: CGPoint) -> CGPoint {
+                CGPoint(x: pt.x * box.width, y: (1 - pt.y) * box.height)
             }
-            ctx.strokePath()
+            if stroke.pointWidths.count == stroke.points.count, stroke.points.count > 1 {
+                // Per-point pressure: stroke each segment at its mean width.
+                for i in 1..<stroke.points.count {
+                    ctx.setLineWidth(max(0.5, (stroke.pointWidths[i - 1] + stroke.pointWidths[i]) / 2 * box.width))
+                    ctx.move(to: point(stroke.points[i - 1]))
+                    ctx.addLine(to: point(stroke.points[i]))
+                    ctx.strokePath()
+                }
+            } else {
+                ctx.setLineWidth(max(0.5, stroke.width * box.width))
+                for (k, pt) in stroke.points.enumerated() {
+                    if k == 0 { ctx.move(to: point(pt)) } else { ctx.addLine(to: point(pt)) }
+                }
+                ctx.strokePath()
+            }
         }
         ctx.restoreGState()
     }
