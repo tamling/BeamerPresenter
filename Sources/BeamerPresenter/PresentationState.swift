@@ -87,7 +87,7 @@ final class PresentationState: ObservableObject {
         selectedItemID = nil
         boardStroke = []
         index = 0
-        blackout = false
+        blackout = true     // start with a blacked-out audience screen
         showOverview = false
         startDate = Date()
         isLoaded = true
@@ -265,6 +265,17 @@ final class PresentationState: ObservableObject {
                 board.items[k].width = min(max(0.05, board.items[k].width * factor), 1)
                 board.items[k].fontScale = min(max(0.02, board.items[k].fontScale * factor), 0.2)
             }
+        }
+    }
+
+    /// Sets an item's width (e.g. from a drag handle), scaling its font to match.
+    func setItemWidth(_ id: UUID, _ width: CGFloat) {
+        mutateActiveBoard { board in
+            guard let k = board.items.firstIndex(where: { $0.id == id }) else { return }
+            let old = max(board.items[k].width, 0.0001)
+            let w = min(max(width, 0.05), 1)
+            board.items[k].width = w
+            board.items[k].fontScale = min(max(board.items[k].fontScale * (w / old), 0.02), 0.2)
         }
     }
 
