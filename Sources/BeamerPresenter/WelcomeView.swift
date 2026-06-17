@@ -3,33 +3,36 @@ import AppKit
 import UniformTypeIdentifiers
 
 /// Start screen ("home menu") shown before a presentation is loaded: branding and
-/// actions on the left; a sidebar listing a browsable folder, favourite folders,
-/// and recent files on the right.
+/// actions on the left, favourites + recents on the right, and a small dashboard
+/// (usage stats + version) across the bottom.
 struct WelcomeView: View {
     let onOpen: () -> Void
     let onOpenURL: (URL) -> Void
 
-    @AppStorage(Prefs.browseFolder) private var browseFolderPath = ""
     @State private var recents: [URL] = RecentFiles.load()
     @State private var favorites: [URL] = Favorites.load()
     @State private var dropTargeted = false
-
-    private var browseFolder: URL { Prefs.browseFolderURL }
+    @State private var statsTick = 0
 
     var body: some View {
-        HStack(spacing: 0) {
-            sidebarBranding
-                .padding(28)
-                .frame(width: 360)
-
+        VStack(spacing: 0) {
+            HStack(spacing: 0) {
+                sidebarBranding
+                    .padding(28)
+                    .frame(width: 360)
+                Divider()
+                library
+                    .frame(maxWidth: .infinity)
+            }
             Divider()
-
-            library
-                .frame(maxWidth: .infinity)
+            dashboard
         }
-        .frame(minWidth: 820, minHeight: 480)
+        .frame(minWidth: 820, minHeight: 520)
         .onReceive(NotificationCenter.default.publisher(for: Favorites.didChange)) { _ in
             favorites = Favorites.load()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: Stats.didChange)) { _ in
+            statsTick += 1
         }
     }
 
@@ -57,14 +60,9 @@ struct WelcomeView: View {
 
             Spacer()
 
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Tip: keep the .tex with \\note{…} next to the PDF — or just open the .tex.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Text("\(AppInfo.versionLine)  ·  by \(AppInfo.author)")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-            }
+            Text("Tip: keep the .tex with \\note{…} next to the PDF — or just open the .tex.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
     }
 
@@ -72,23 +70,6 @@ struct WelcomeView: View {
 
     private var library: some View {
         List {
-            Section {
-                let pdfs = Favorites.pdfs(in: browseFolder)
-                if pdfs.isEmpty {
-                    Text("No PDFs in this folder").foregroundStyle(.secondary)
-                } else {
-                    ForEach(pdfs, id: \.self) { pdfRow($0) }
-                }
-            } header: {
-                HStack {
-                    Label(browseFolder.lastPathComponent, systemImage: "folder")
-                    Spacer()
-                    Button { chooseBrowseFolder() } label: { Image(systemName: "folder.badge.gearshape") }
-                        .buttonStyle(.borderless)
-                        .help("Choose the folder shown here (also in Settings)")
-                }
-            }
-
             Section {
                 if favorites.isEmpty {
                     Text("No favorite folders yet").foregroundStyle(.secondary)
@@ -173,18 +154,39 @@ struct WelcomeView: View {
         .buttonStyle(.plain)
     }
 
-    // MARK: - Actions
+    // MARK: - Bottom dashboard
 
-    private func chooseBrowseFolder() {
-        let panel = NSOpenPanel()
-        panel.canChooseFiles = false
-        panel.canChooseDirectories = true
-        panel.allowsMultipleSelection = false
-        panel.prompt = "Choose"
-        if panel.runModal() == .OK, let url = panel.url {
-            browseFolderPath = url.path
+    private var dashboard: some View {
+        HStack(spacing: 22) {
+            statTile("rectangle.on.rectangle", "\(Stats.count)", "Presentations")
+            statTile("stopwatch", Stats.format(Stats.averageSeconds), "Avg. session")
+            statTile("clock", Stats.format(Stats.totalSeconds), "Total time")
+
+            Spacer()
+
+            VStack(alignment: .trailing, spacing: 1) {
+                Text("\(AppInfo.name) \(AppInfo.version)").font(.caption).bold()
+                Text("\(AppInfo.releaseDate)  ·  by \(AppInfo.author)")
+                    .font(.caption2).foregroundStyle(.secondary)
+            }
+        }
+        .padding(.horizontal, 24)
+        .padding(.vertical, 12)
+        .background(Color(nsColor: .underPageBackgroundColor))
+        .id(statsTick)   // refresh when stats change
+    }
+
+    private func statTile(_ icon: String, _ value: String, _ title: String) -> some View {
+        HStack(spacing: 9) {
+            Image(systemName: icon).font(.title3).foregroundStyle(.tint)
+            VStack(alignment: .leading, spacing: 0) {
+                Text(value).font(.headline.monospacedDigit())
+                Text(title).font(.caption2).foregroundStyle(.secondary)
+            }
         }
     }
+
+    // MARK: - Actions
 
     private func addFavoriteFolder() {
         let panel = NSOpenPanel()

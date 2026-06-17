@@ -1,15 +1,17 @@
 import AppKit
 import SwiftUI
+import Combine
 import UniformTypeIdentifiers
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     let state = PresentationState()
     private var presenterWindow: NSWindow?
     private var audienceWindow: NSWindow?
     private var splashWindow: NSWindow?
     private var settingsWindow: NSWindow?
     private var keyMonitor: Any?
+    private var cancellables = Set<AnyCancellable>()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         setupMenu()
@@ -17,6 +19,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NotificationCenter.default.addObserver(
             self, selector: #selector(screensChanged),
             name: NSApplication.didChangeScreenParametersNotification, object: nil)
+        // Returning to the home screen (unload) hides the audience window.
+        state.$isLoaded
+            .dropFirst()
+            .sink { [weak self] loaded in if !loaded { self?.audienceWindow?.orderOut(nil) } }
+            .store(in: &cancellables)
         buildPresenterWindow()
         showSplash()
         NSApp.activate(ignoringOtherApps: true)
@@ -44,14 +51,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             try? await Task.sleep(nanoseconds: 1_600_000_000)
             guard let window = splashWindow else { return }
             window.animator().alphaValue = 0
+            presenterWindow?.makeKeyAndOrderFront(nil)   // reveal home screen behind the fade
             try? await Task.sleep(nanoseconds: 400_000_000)
             window.orderOut(nil)
             splashWindow = nil
-            presenterWindow?.makeKeyAndOrderFront(nil)
         }
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        state.recordCurrentSession()
+        state.saveScratch()
+    }
+
+    /// Closing the presenter window also closes the audience window (so the app
+    /// can quit cleanly and the projector view doesn't linger).
+    func windowWillClose(_ notification: Notification) {
+        guard notification.object as? NSWindow === presenterWindow else { return }
+        audienceWindow?.close()
+        audienceWindow = nil
+    }
 
     // MARK: - Menu
 
@@ -357,8 +377,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             backing: .buffered, defer: false)
         presenter.title = "BeamerPresenter"
         presenter.contentView = NSHostingView(rootView: root)
+        presenter.delegate = self
         presenter.center()
-        presenter.makeKeyAndOrderFront(nil)
+        // Stays hidden behind the launch splash; shown once the splash fades.
         presenterWindow = presenter
     }
 
