@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import UniformTypeIdentifiers
 
 struct ContentView: View {
@@ -122,6 +123,7 @@ struct PresenterView: View {
     @State private var importingBlackImage = false
     @State private var showCustomMessage = false
     @State private var customMessage = ""
+    @AppStorage("doNotDisturb") private var doNotDisturb = false
     @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var landscape = false
     let openPicker: () -> Void
@@ -186,6 +188,9 @@ struct PresenterView: View {
             if let url = exportURL { ShareSheet(items: [url]) }
         }
         .sheet(isPresented: $showSettings) { SettingsView() }
+        .onAppear { UIApplication.shared.isIdleTimerDisabled = doNotDisturb }
+        .onDisappear { UIApplication.shared.isIdleTimerDisabled = false }
+        .onChange(of: doNotDisturb) { UIApplication.shared.isIdleTimerDisabled = $0 }
         .fileImporter(isPresented: $importingBlackImage, allowedContentTypes: [.image]) { result in
             if case .success(let url) = result { importBlackImage(url) }
         }
@@ -242,6 +247,11 @@ struct PresenterView: View {
 
             blackoutButton
             boardMenu
+
+            Button { doNotDisturb.toggle() } label: {
+                Image(systemName: doNotDisturb ? "moon.fill" : "moon")
+            }
+            .foregroundStyle(doNotDisturb ? Color.accentColor : .primary)
 
             if external.isConnected {
                 Image(systemName: "tv.fill").foregroundStyle(.green)
@@ -306,6 +316,8 @@ struct PresenterView: View {
                 }
                 .foregroundStyle(model.isBoardActive ? Color.accentColor : .primary)
             }
+            captionedButton("Keep Awake", doNotDisturb ? "moon.fill" : "moon",
+                            active: doNotDisturb) { doNotDisturb.toggle() }
             if external.isConnected {
                 captioned("Display") { Image(systemName: "tv.fill").foregroundStyle(.green) }
             }
