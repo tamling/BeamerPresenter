@@ -277,7 +277,7 @@ private struct ControlBar: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            tool("Exit", "power") { NSApplication.shared.terminate(nil) }
+            tool("Exit", "rectangle.portrait.and.arrow.right") { state.unload() }
 
             sep
 

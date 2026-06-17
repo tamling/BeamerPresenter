@@ -29,11 +29,16 @@ struct SplashView: View {
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
 
-            HStack(spacing: 8) {
-                ProgressView().controlSize(.small)
-                Text("Version \(version)")
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(.secondary)
+            VStack(spacing: 5) {
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text(version)
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                }
+                Text("by \(AppInfo.author)")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
             }
             .padding(.top, 2)
         }

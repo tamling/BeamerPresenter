@@ -8,6 +8,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var presenterWindow: NSWindow?
     private var audienceWindow: NSWindow?
     private var splashWindow: NSWindow?
+    private var settingsWindow: NSWindow?
     private var keyMonitor: Any?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -26,7 +27,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Shows a brief launch splash with the icon and version, then fades it out
     /// and brings the presenter window forward.
     private func showSplash() {
-        let splash = SplashView(icon: NSApp.applicationIconImage, version: AppInfo.version)
+        let splash = SplashView(icon: NSApp.applicationIconImage, version: AppInfo.versionLine)
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 440, height: 280),
                               styleMask: [.borderless], backing: .buffered, defer: false)
         window.isOpaque = false
@@ -63,6 +64,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let appMenu = NSMenu(title: AppInfo.name)
         appItem.submenu = appMenu
         add(to: appMenu, "About \(AppInfo.name)", #selector(showAbout(_:)))
+        appMenu.addItem(.separator())
+        add(to: appMenu, "Settings…", #selector(showSettings(_:)), ",")
         appMenu.addItem(.separator())
         appMenu.addItem(withTitle: "Hide \(AppInfo.name)",
                         action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
@@ -178,13 +181,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func showAbout(_ sender: Any?) {
+        let credits = "Present LaTeX Beamer PDFs with speaker notes.\n\n"
+            + "By \(AppInfo.author)   ·   \(AppInfo.copyright)"
         NSApp.orderFrontStandardAboutPanel(options: [
             .applicationName: AppInfo.name,
-            .applicationVersion: AppInfo.version,
+            .applicationVersion: AppInfo.versionLine,
             .credits: NSAttributedString(
-                string: "Present LaTeX Beamer PDFs with speaker notes.",
-                attributes: [.font: NSFont.systemFont(ofSize: 11)])
+                string: credits,
+                attributes: [.font: NSFont.systemFont(ofSize: 11),
+                             .paragraphStyle: { let p = NSMutableParagraphStyle(); p.alignment = .center; return p }()])
         ])
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    @objc private func showSettings(_ sender: Any?) {
+        if settingsWindow == nil {
+            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 480, height: 340),
+                                  styleMask: [.titled, .closable], backing: .buffered, defer: false)
+            window.title = "Settings"
+            window.contentView = NSHostingView(rootView: SettingsView())
+            window.isReleasedWhenClosed = false
+            window.center()
+            settingsWindow = window
+        }
+        settingsWindow?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
 

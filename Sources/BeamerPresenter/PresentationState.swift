@@ -87,7 +87,8 @@ final class PresentationState: ObservableObject {
         selectedItemID = nil
         boardStroke = []
         index = 0
-        blackout = true     // start with a blacked-out audience screen
+        // Start blacked out unless the user turned it off in Settings.
+        blackout = UserDefaults.standard.object(forKey: "startBlackedOut") as? Bool ?? true
         showOverview = false
         startDate = Date()
         isLoaded = true
