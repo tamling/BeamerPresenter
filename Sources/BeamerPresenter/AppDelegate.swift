@@ -60,16 +60,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         let background = UserDefaults.standard.bool(forKey: Prefs.backgroundMode)
         let show = background || (UserDefaults.standard.object(forKey: Prefs.showStatusItem) as? Bool ?? true)
         if show {
-            guard statusItem == nil else { return }
-            let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-            item.button?.image = NSImage(systemSymbolName: "rectangle.on.rectangle.angled",
-                                         accessibilityDescription: AppInfo.name)
-            item.menu = buildStatusMenu()
-            statusItem = item
+            installStatusItem()
         } else if let item = statusItem {
             NSStatusBar.system.removeStatusItem(item)
             statusItem = nil
         }
+    }
+
+    private func installStatusItem() {
+        guard statusItem == nil else { return }
+        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        item.button?.image = NSImage(systemSymbolName: "rectangle.on.rectangle.angled",
+                                     accessibilityDescription: AppInfo.name)
+        item.menu = buildStatusMenu()
+        statusItem = item
     }
 
     private func buildStatusMenu() -> NSMenu {
@@ -146,12 +150,41 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         state.saveScratch()
     }
 
-    /// Closing the presenter window also closes the audience window (so the app
-    /// can quit cleanly and the projector view doesn't linger).
-    func windowWillClose(_ notification: Notification) {
-        guard notification.object as? NSWindow === presenterWindow else { return }
-        audienceWindow?.close()
-        audienceWindow = nil
+    /// The red button confirms, optionally saves, and hides to the menu bar
+    /// instead of closing — the app keeps running there.
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        guard sender === presenterWindow else { return true }
+
+        let alert = NSAlert()
+        alert.messageText = "Hide \(AppInfo.name) to the menu bar?"
+        alert.informativeText = "It keeps running in the menu bar — click its icon to come back, "
+            + "or Quit (⌘Q) to exit."
+        alert.addButton(withTitle: "Save & Hide")
+        alert.addButton(withTitle: "Hide")
+        alert.addButton(withTitle: "Cancel")
+
+        switch alert.runModal() {
+        case .alertFirstButtonReturn:           // Save & Hide
+            state.saveScratch()
+            hideToMenuBar()
+        case .alertSecondButtonReturn:          // Hide
+            hideToMenuBar()
+        default:                                // Cancel
+            break
+        }
+        return false   // never actually close via the red button
+    }
+
+    private func hideToMenuBar() {
+        audienceWindow?.orderOut(nil)
+        presenterWindow?.orderOut(nil)
+        installStatusItem()   // ensure there's a way back even if the icon is off
+    }
+
+    /// Clicking the Dock icon (when no window is visible) brings the presenter back.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if !flag { showPresenter(nil) }
+        return true
     }
 
     // MARK: - Menu
