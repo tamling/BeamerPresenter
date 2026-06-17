@@ -26,7 +26,9 @@ Target device: **iPad Pro 2021** (USB‑C, external display capable), iPadOS 16+
        and a laser pointer (glowing red dot) that, like the ink, is mirrored
        live onto the external/audience display. Pen and laser are mutually
        exclusive tools.
-3. [ ] **Overview grid** — tap a slide to jump
+3. [x] **Overview grid** — a full-screen grid of every slide (`square.grid.2x2`
+       in the toolbar); tap a thumbnail to jump to it. The current slide is
+       highlighted and scrolled into view.
 4. [ ] **Speaker notes** — split (notes‑on‑second‑screen) PDFs *and* `\note{}`
        parsed from a sibling `.tex` (reuse the macOS `TexNotes` logic — it is
        pure Foundation and portable)

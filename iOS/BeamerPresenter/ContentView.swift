@@ -70,6 +70,7 @@ struct StartView: View {
 struct PresenterView: View {
     @EnvironmentObject var model: PresentationModel
     @EnvironmentObject var external: ExternalDisplayManager
+    @State private var showOverview = false
     let openPicker: () -> Void
 
     private let colors: [(String, Color)] = [("Red", .red), ("Orange", .orange),
@@ -88,6 +89,9 @@ struct PresenterView: View {
                 .frame(height: 96)
         }
         .background(Color.black.ignoresSafeArea())
+        .sheet(isPresented: $showOverview) {
+            OverviewGrid(isPresented: $showOverview)
+        }
     }
 
     private var toolbar: some View {
@@ -103,6 +107,8 @@ struct PresenterView: View {
                 .font(.headline.monospacedDigit()).frame(minWidth: 90)
             Button { model.next() } label: { Image(systemName: "chevron.right") }
                 .disabled(model.index + 1 >= model.pageCount)
+
+            Button { showOverview = true } label: { Image(systemName: "square.grid.2x2") }
 
             if external.isConnected {
                 Image(systemName: "tv.fill")
