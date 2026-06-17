@@ -49,14 +49,18 @@ enum Favorites {
     }
 }
 
-/// App identity for the About panel and menus.
+/// App identity for the About panel, splash, and menus.
 enum AppInfo {
     static let name = "BeamerPresenter"
+    static let author = "Timo Amling"
+    static let releaseDate = "2026-06-17"
 
     static var version: String {
-        let info = Bundle.main.infoDictionary
-        let short = info?["CFBundleShortVersionString"] as? String ?? "0.1"
-        let build = info?["CFBundleVersion"] as? String
-        return build.map { "\(short) (\($0))" } ?? short
+        (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "1.0"
     }
+
+    /// e.g. "Version 1.0 · 2026-06-17"
+    static var versionLine: String { "Version \(version) · \(releaseDate)" }
+
+    static var copyright: String { "© 2026 \(author)" }
 }

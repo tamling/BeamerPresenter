@@ -9,21 +9,26 @@ timer.
 It works directly off a compiled PDF; if a matching `.tex` is alongside it, the
 app can also pull `\note{}` speaker notes straight from the source.
 
+**Version 1.0** (2026-06-17) — by Timo Amling.
+
 ## GUI
 
 - **Launch splash** — a brief startup screen with the app icon, name, and version.
 - **Menu bar** — every command lives here: *File* (Open, Add Folder to Favorites,
   Close), *Presentation* (next/previous/first/last, overview, blackout, reset
   timer), *Tools* (pen, laser, pen colours, undo/clear ink), *Whiteboard* (toggle,
-  boards, add text/table/QR, save/insert). *App* holds About + version.
-- **Welcome screen** — open button, drag-and-drop a PDF, **favorite folders**
-  (expand to the PDFs inside; add with the `+`), and a recent-files list.
+  boards, add text/table/QR, save/insert). *App* holds About + Settings (⌘,).
+- **Welcome screen** — open button, drag-and-drop a PDF/`.tex`, a **browsable
+  folder** (Documents by default, set in Settings), **favorite folders** (expand
+  to the PDFs inside; add with the `+`), and a recent-files list.
+- **Settings (⌘,)** — choose the start-screen folder, toggle the default black
+  audience screen, and set the black-screen message.
 - **Presenter console** — a control bar with every live tool, each a captioned
   symbol (exit, prev/next + slide counter, overview, blackout, whiteboard, pen,
   laser, the pen-colour swatches, undo/clear ink, reset timer, elapsed + clock),
-  large current slide, next slide, notes pane. The slide/sidebar split and the
-  next/notes split are **draggable**, and the sizes persist. The same commands
-  are also in the menu bar.
+  large current slide, next slide, notes pane. **Exit** returns to the home
+  screen. The slide/sidebar split and the next/notes split are **draggable**, and
+  the sizes persist. The same commands are also in the menu bar.
 - **Thumbnail strip** — click any slide to jump; auto-scrolls to the current one.
 - **Overview grid** — press `G` for a full grid of every slide; click to jump.
 - **Ink & laser** — draw freehand on a slide (pen, 4 colours, undo/clear) or use
@@ -126,7 +131,8 @@ Bluetooth presenter remotes emit Page Up / Page Down, so they work out of the bo
 | `WhiteboardView.swift` | Board rendering, item editing, toolbar, and PDF export |
 | `RecentFiles.swift` | Recently-opened list persisted in UserDefaults |
 | `Favorites.swift` | Favorite folders + app version info, persisted in UserDefaults |
-| `WelcomeView.swift` | Start screen: open, drag-and-drop, recents |
+| `WelcomeView.swift` | Home screen: open, drag-and-drop, browse folder, favorites, recents |
+| `SettingsView.swift` | Settings window (start-screen folder, black-screen options) |
 | `SplashView.swift` | Brief launch splash with icon + version |
 | `PresenterView.swift` | Root switch + presenter console + control bar |
 | `ThumbnailStrip.swift` | Clickable thumbnail navigation row |
