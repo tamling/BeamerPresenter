@@ -6,6 +6,7 @@ import PDFKit
 struct PDFPageView: UIViewRepresentable {
     let document: PDFDocument?
     let pageIndex: Int
+    var displayBox: PDFDisplayBox = .cropBox
 
     func makeUIView(context: Context) -> PDFView {
         let view = PDFView()
@@ -19,6 +20,7 @@ struct PDFPageView: UIViewRepresentable {
 
     func updateUIView(_ view: PDFView, context: Context) {
         if view.document !== document { view.document = document }
+        if view.displayBox != displayBox { view.displayBox = displayBox }
         guard let document,
               pageIndex >= 0, pageIndex < document.pageCount,
               let page = document.page(at: pageIndex) else { return }

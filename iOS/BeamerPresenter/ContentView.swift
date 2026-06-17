@@ -71,7 +71,13 @@ struct PresenterView: View {
     @EnvironmentObject var model: PresentationModel
     @EnvironmentObject var external: ExternalDisplayManager
     @State private var showOverview = false
+    @State private var showNotes = false
+    @State private var importingNotes = false
     let openPicker: () -> Void
+
+    private var texTypes: [UTType] {
+        [UTType(filenameExtension: "tex"), .plainText, .text].compactMap { $0 }
+    }
 
     private let colors: [(String, Color)] = [("Red", .red), ("Orange", .orange),
                                              ("Yellow", .yellow), ("Green", .green),
@@ -83,14 +89,24 @@ struct PresenterView: View {
     var body: some View {
         VStack(spacing: 0) {
             toolbar
-            SlideView()
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            HStack(spacing: 0) {
+                SlideView()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                if showNotes {
+                    NotesPanel(loadTex: { importingNotes = true })
+                        .frame(width: 340)
+                        .transition(.move(edge: .trailing))
+                }
+            }
             ThumbnailStrip()
                 .frame(height: 96)
         }
         .background(Color.black.ignoresSafeArea())
         .sheet(isPresented: $showOverview) {
             OverviewGrid(isPresented: $showOverview)
+        }
+        .fileImporter(isPresented: $importingNotes, allowedContentTypes: texTypes) { result in
+            if case .success(let url) = result { model.loadTexNotes(url: url) }
         }
     }
 
@@ -109,6 +125,12 @@ struct PresenterView: View {
                 .disabled(model.index + 1 >= model.pageCount)
 
             Button { showOverview = true } label: { Image(systemName: "square.grid.2x2") }
+
+            Button { withAnimation(.easeInOut(duration: 0.2)) { showNotes.toggle() } } label: {
+                Image(systemName: showNotes ? "note.text.badge.plus" : "note.text")
+            }
+            .foregroundStyle(showNotes ? Color.accentColor
+                             : (model.hasNotes ? .primary : .secondary))
 
             if external.isConnected {
                 Image(systemName: "tv.fill")

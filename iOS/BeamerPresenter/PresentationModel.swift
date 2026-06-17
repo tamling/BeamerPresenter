@@ -31,10 +31,22 @@ final class PresentationModel: ObservableObject {
     @Published var laserActive = false
     @Published var laserPoint: CGPoint?
 
+    // Speaker notes
+    @Published private(set) var notesByPage: [Int: String] = [:]
+    @Published private(set) var splitNotes = false   // double-wide "notes on second screen" deck
+    @Published private(set) var notesSourceName: String?
+
     @Published private(set) var recents: [URL] = RecentStore.load()
 
     private var scopedURL: URL?
     private var thumbCache: [Int: UIImage] = [:]
+
+    /// Whether the current deck has any notes to show (parsed `.tex` or a split deck).
+    var hasNotes: Bool { splitNotes || !notesByPage.isEmpty }
+
+    /// The note text for a page, if any (split decks carry their notes as the
+    /// right-hand image, so they return nil here).
+    func note(for i: Int) -> String? { notesByPage[i] }
 
     // MARK: - Loading
 
@@ -54,8 +66,53 @@ final class PresentationModel: ObservableObject {
         strokes = [:]
         currentStroke = []
         thumbCache = [:]
+        notesByPage = [:]
+        notesSourceName = nil
+
+        detectSplitNotes(doc)
+        if !splitNotes {
+            // Best-effort: a sibling `.tex` is only reachable when the PDF was
+            // opened in place with folder access; otherwise the user can attach
+            // one via `loadTexNotes(url:)`.
+            let parsed = TexNotes.load(forPDF: url, pageCount: doc.pageCount)
+            if !parsed.isEmpty {
+                notesByPage = parsed
+                notesSourceName = "\(url.deletingPathExtension().lastPathComponent).tex"
+            }
+        }
+
         RecentStore.add(url)
         recents = RecentStore.load()
+    }
+
+    /// A Beamer "show notes on second screen" deck has double-wide pages (slide on
+    /// the left, notes on the right). Detect it from the first page's aspect ratio
+    /// and carve the left/right halves into the bleed/trim boxes so PDFView can
+    /// display each half independently.
+    private func detectSplitNotes(_ doc: PDFDocument) {
+        splitNotes = false
+        guard let first = doc.page(at: 0) else { return }
+        let b = first.bounds(for: .cropBox)
+        guard b.height > 0, b.width / b.height > 2.3 else { return }
+        splitNotes = true
+        notesSourceName = "Embedded notes (split PDF)"
+        for i in 0..<doc.pageCount {
+            guard let page = doc.page(at: i) else { continue }
+            let c = page.bounds(for: .cropBox)
+            page.setBounds(CGRect(x: c.minX, y: c.minY, width: c.width / 2, height: c.height), for: .bleedBox)
+            page.setBounds(CGRect(x: c.midX, y: c.minY, width: c.width / 2, height: c.height), for: .trimBox)
+        }
+    }
+
+    /// Attach speaker notes from a `.tex` the user picks explicitly (handles the
+    /// sandbox case where the sibling file isn't reachable automatically).
+    func loadTexNotes(url: URL) {
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+        let parsed = TexNotes.load(forPDF: url, pageCount: max(pageCount, 1))
+        guard !parsed.isEmpty else { return }
+        notesByPage = parsed
+        notesSourceName = url.lastPathComponent
     }
 
     func close() {
@@ -66,6 +123,9 @@ final class PresentationModel: ObservableObject {
         title = ""
         strokes = [:]
         thumbCache = [:]
+        notesByPage = [:]
+        splitNotes = false
+        notesSourceName = nil
     }
 
     // MARK: - Navigation
@@ -79,9 +139,12 @@ final class PresentationModel: ObservableObject {
         index = clamped
     }
 
+    /// The display box used for the on-screen slide — the left half for split decks.
+    var slideBox: PDFDisplayBox { splitNotes ? .bleedBox : .cropBox }
+
     func aspect(of page: Int) -> CGFloat {
         guard let p = document?.page(at: page) else { return 16.0 / 9.0 }
-        let box = p.bounds(for: .cropBox)
+        let box = p.bounds(for: slideBox)
         return box.width / max(box.height, 1)
     }
 
@@ -123,9 +186,9 @@ final class PresentationModel: ObservableObject {
     func thumbnail(_ i: Int, height: CGFloat = 90) -> UIImage? {
         guard let page = document?.page(at: i) else { return nil }
         if let cached = thumbCache[i] { return cached }
-        let box = page.bounds(for: .cropBox)
+        let box = page.bounds(for: slideBox)
         let size = CGSize(width: height * (box.width / max(box.height, 1)), height: height)
-        let image = page.thumbnail(of: size, for: .cropBox)
+        let image = page.thumbnail(of: size, for: slideBox)
         thumbCache[i] = image
         return image
     }

@@ -11,7 +11,8 @@ struct SlideView: View {
             let size = geo.size
             ZStack {
                 Color.black
-                PDFPageView(document: model.document, pageIndex: model.index)
+                PDFPageView(document: model.document, pageIndex: model.index,
+                            displayBox: model.slideBox)
                 inkCanvas
                 if let p = model.laserPoint {
                     LaserDot(point: p, in: size)
@@ -82,7 +83,8 @@ struct AudienceSlideView: View {
             let size = geo.size
             ZStack {
                 Color.black
-                PDFPageView(document: model.document, pageIndex: model.index)
+                PDFPageView(document: model.document, pageIndex: model.index,
+                            displayBox: model.slideBox)
                 Canvas { ctx, sz in
                     for stroke in model.strokes[model.index] ?? [] {
                         ctx.stroke(path(stroke.points, in: sz),
