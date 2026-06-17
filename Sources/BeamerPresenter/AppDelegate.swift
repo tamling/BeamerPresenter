@@ -7,6 +7,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let state = PresentationState()
     private var presenterWindow: NSWindow?
     private var audienceWindow: NSWindow?
+    private var splashWindow: NSWindow?
     private var keyMonitor: Any?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -16,7 +17,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self, selector: #selector(screensChanged),
             name: NSApplication.didChangeScreenParametersNotification, object: nil)
         buildPresenterWindow()
+        showSplash()
         NSApp.activate(ignoringOtherApps: true)
+    }
+
+    // MARK: - Launch splash
+
+    /// Shows a brief launch splash with the icon and version, then fades it out
+    /// and brings the presenter window forward.
+    private func showSplash() {
+        let splash = SplashView(icon: NSApp.applicationIconImage, version: AppInfo.version)
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 440, height: 280),
+                              styleMask: [.borderless], backing: .buffered, defer: false)
+        window.isOpaque = false
+        window.backgroundColor = .clear
+        window.hasShadow = true
+        window.level = .floating
+        window.isMovableByWindowBackground = true
+        window.contentView = NSHostingView(rootView: splash)
+        window.center()
+        window.orderFrontRegardless()
+        splashWindow = window
+
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 1_600_000_000)
+            guard let window = splashWindow else { return }
+            window.animator().alphaValue = 0
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            window.orderOut(nil)
+            splashWindow = nil
+            presenterWindow?.makeKeyAndOrderFront(nil)
+        }
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }

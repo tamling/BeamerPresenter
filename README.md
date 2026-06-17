@@ -11,6 +11,7 @@ app can also pull `\note{}` speaker notes straight from the source.
 
 ## GUI
 
+- **Launch splash** — a brief startup screen with the app icon, name, and version.
 - **Menu bar** — every command lives here: *File* (Open, Add Folder to Favorites,
   Close), *Presentation* (next/previous/first/last, overview, blackout, reset
   timer), *Tools* (pen, laser, pen colours, undo/clear ink), *Whiteboard* (toggle,
@@ -118,6 +119,7 @@ Bluetooth presenter remotes emit Page Up / Page Down, so they work out of the bo
 | `RecentFiles.swift` | Recently-opened list persisted in UserDefaults |
 | `Favorites.swift` | Favorite folders + app version info, persisted in UserDefaults |
 | `WelcomeView.swift` | Start screen: open, drag-and-drop, recents |
+| `SplashView.swift` | Brief launch splash with icon + version |
 | `PresenterView.swift` | Root switch + presenter console + control bar |
 | `ThumbnailStrip.swift` | Clickable thumbnail navigation row |
 | `OverviewGrid.swift` | Full-window slide overview overlay |
