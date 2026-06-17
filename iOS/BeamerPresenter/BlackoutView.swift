@@ -6,28 +6,41 @@ import SwiftUI
 struct BlackoutView: View {
     @ObservedObject var model: PresentationModel
 
+    @AppStorage("blackoutMessage") private var message = ""
+    @AppStorage("blackoutShowClock") private var showClock = true
+    @AppStorage("blackoutImagePath") private var imagePath = ""
+
     var body: some View {
         ZStack {
             Color.black
+            if let image = backgroundImage {
+                Image(uiImage: image).resizable().scaledToFit()
+            }
             VStack(spacing: 24) {
-                if !model.blackoutMessage.isEmpty {
-                    Text(model.blackoutMessage)
+                if !message.isEmpty {
+                    Text(message)
                         .font(.system(size: 64, weight: .semibold))
                         .multilineTextAlignment(.center)
                         .foregroundStyle(.white)
                         .padding(.horizontal, 40)
+                        .shadow(radius: 8)
                 }
-                if model.blackoutShowClock {
+                if showClock {
                     TimelineView(.periodic(from: .now, by: 1)) { _ in
                         Text(Self.clock())
-                            .font(.system(size: model.blackoutMessage.isEmpty ? 96 : 44,
+                            .font(.system(size: message.isEmpty ? 96 : 44,
                                           weight: .light).monospacedDigit())
                             .foregroundStyle(.white.opacity(0.85))
+                            .shadow(radius: 8)
                     }
                 }
             }
         }
         .ignoresSafeArea()
+    }
+
+    private var backgroundImage: UIImage? {
+        imagePath.isEmpty ? nil : UIImage(contentsOfFile: imagePath)
     }
 
     static func clock() -> String {

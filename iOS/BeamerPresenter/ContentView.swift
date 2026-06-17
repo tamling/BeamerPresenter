@@ -22,10 +22,17 @@ struct ContentView: View {
 /// Start screen: branding, an open button, and recent files.
 struct StartView: View {
     @EnvironmentObject var model: PresentationModel
+    @State private var showSettings = false
     let open: () -> Void
 
     var body: some View {
         VStack(spacing: 22) {
+            HStack {
+                Spacer()
+                Button { showSettings = true } label: {
+                    Image(systemName: "gearshape").font(.title2)
+                }
+            }
             Image(systemName: "rectangle.on.rectangle.angled")
                 .font(.system(size: 60)).foregroundStyle(.tint)
             Text("BeamerPresenter").font(.largeTitle.bold())
@@ -63,6 +70,7 @@ struct StartView: View {
         }
         .padding(40)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .sheet(isPresented: $showSettings) { SettingsView() }
     }
 }
 
@@ -75,16 +83,17 @@ struct PresenterView: View {
     @State private var importingNotes = false
     @State private var exportURL: URL?
     @State private var showShare = false
+    @State private var showSettings = false
     @AppStorage("pencilOnly") private var pencilOnly = false
+    @AppStorage("blackoutMessage") private var blackoutMessage = ""
+    @AppStorage("blackoutShowClock") private var blackoutShowClock = true
     let openPicker: () -> Void
 
     private var texTypes: [UTType] {
         [UTType(filenameExtension: "tex"), .plainText, .text].compactMap { $0 }
     }
 
-    private let colors: [(String, Color)] = [("Red", .red), ("Orange", .orange),
-                                             ("Yellow", .yellow), ("Green", .green),
-                                             ("Blue", .blue), ("White", .white)]
+    private var colors: [(String, Color)] { AppColors.palette.map { ($0.name, $0.color) } }
 
     private let widths: [(String, CGFloat)] = [("Thin", 0.0025), ("Medium", 0.004),
                                               ("Thick", 0.007)]
@@ -115,6 +124,7 @@ struct PresenterView: View {
         .sheet(isPresented: $showShare) {
             if let url = exportURL { ShareSheet(items: [url]) }
         }
+        .sheet(isPresented: $showSettings) { SettingsView() }
     }
 
     /// Bake ink + boards into a new PDF in the temp dir and present the share sheet.
@@ -132,6 +142,7 @@ struct PresenterView: View {
         HStack(spacing: 16) {
             Button { model.close() } label: { Image(systemName: "house") }
             Button(action: openPicker) { Image(systemName: "folder") }
+            Button { showSettings = true } label: { Image(systemName: "gearshape") }
 
             Divider().frame(height: 20)
 
@@ -154,8 +165,8 @@ struct PresenterView: View {
                 Button(model.blackout ? "Show slide" : "Black out audience") {
                     model.toggleBlackout()
                 }
-                Toggle("Show clock", isOn: $model.blackoutShowClock)
-                Picker("Message", selection: $model.blackoutMessage) {
+                Toggle("Show clock", isOn: $blackoutShowClock)
+                Picker("Message", selection: $blackoutMessage) {
                     Text("None").tag("")
                     ForEach(BlackoutView.presets, id: \.self) { Text($0).tag($0) }
                 }

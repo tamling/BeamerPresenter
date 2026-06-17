@@ -124,10 +124,9 @@ final class PresentationModel: ObservableObject {
         boards[i].strokes.removeAll()
     }
 
-    // Black-out (audience screen)
+    // Black-out (audience screen). The message / clock / image are user defaults
+    // edited in Settings and read by `BlackoutView` via @AppStorage.
     @Published var blackout = false
-    @Published var blackoutMessage = ""
-    @Published var blackoutShowClock = true
 
     func toggleBlackout() { blackout.toggle() }
 
@@ -203,8 +202,20 @@ final class PresentationModel: ObservableObject {
             }
         }
 
+        applyDefaults()
         RecentStore.add(url)
         recents = RecentStore.load()
+    }
+
+    /// Apply the user's Settings defaults when a deck opens.
+    private func applyDefaults() {
+        let d = UserDefaults.standard
+        blackout = d.bool(forKey: "startBlackedOut")
+        if let name = d.string(forKey: "defaultPenColorName") {
+            penColor = AppColors.color(name)
+        }
+        let w = d.double(forKey: "defaultPenWidth")
+        if w > 0 { penWidth = w }
     }
 
     /// A Beamer "show notes on second screen" deck has double-wide pages (slide on
