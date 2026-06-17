@@ -62,9 +62,10 @@ the slide it was created on. It defaults to the source folder (next to the
   export any of them to its own PDF, or **insert** one after the current slide
   into a *copy* of the deck PDF (the original is untouched). The board toolbar is
   a compact, Safari-like rounded bar.
-- **Audience window** — full-bleed slide, fullscreen on the external display.
-  Starts **blacked out** by default; the black screen shows an optional centered
-  message (*Presentation ▸ Set Black-Screen Message…*) or, when empty, the clock.
+- **Audience window** — full-bleed slide; fills the external display by default,
+  or switch it to a normal resizable window via *Presentation ▸ Audience Full
+  Screen* (or Settings). Starts **blacked out** by default; the black screen shows
+  an optional centered message or, when empty, the clock.
 
 ## How notes work
 

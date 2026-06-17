@@ -29,6 +29,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         NotificationCenter.default.addObserver(
             self, selector: #selector(applyBackgroundMode),
             name: .backgroundModePrefChanged, object: nil)
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(rebuildAudienceWindow),
+            name: .audienceModeChanged, object: nil)
         // Returning to the home screen (unload) hides the audience window and the
         // deck-specific menus.
         state.$isLoaded
@@ -229,6 +232,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         presoMenu.addItem(.separator())
         add(to: presoMenu, "Toggle Overview", #selector(toggleOverview(_:)), "1")
         add(to: presoMenu, "Black Out Audience", #selector(toggleBlackout(_:)), "b")
+        add(to: presoMenu, "Audience Full Screen", #selector(toggleAudienceFullscreen(_:)))
 
         let blackMenu = addSubmenu(to: presoMenu, "Black Screen")
         for preset in BlackScreen.presets {
@@ -326,6 +330,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         case #selector(toggleWhiteboard(_:)):
             item.state = state.isBoardActive ? .on : .off
             return state.isLoaded
+        case #selector(toggleAudienceFullscreen(_:)):
+            item.state = (UserDefaults.standard.object(forKey: Prefs.audienceFullscreen) as? Bool ?? true) ? .on : .off
+            return state.isLoaded && NSScreen.screens.count > 1
         case #selector(togglePen(_:)):
             item.state = state.tool == .pen ? .on : .off
             return state.isLoaded
@@ -679,45 +686,76 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         presenterWindow = presenter
     }
 
+    /// Whether the audience window fills the external display (borderless) or is a
+    /// normal, resizable window. Defaults to full screen on a second display.
+    private var audienceFillsExternal: Bool {
+        (UserDefaults.standard.object(forKey: Prefs.audienceFullscreen) as? Bool ?? true)
+            && NSScreen.screens.count > 1
+    }
+
     private func buildAudienceWindowIfNeeded() {
         guard audienceWindow == nil else { return }
-        let multiScreen = NSScreen.screens.count > 1
-        let style: NSWindow.StyleMask = multiScreen ? [.borderless] : [.titled, .closable, .resizable]
+        let fill = audienceFillsExternal
+        let style: NSWindow.StyleMask = fill
+            ? [.borderless]
+            : [.titled, .closable, .resizable, .miniaturizable]
 
         let audience = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 1280, height: 720),
             styleMask: style, backing: .buffered, defer: false)
         audience.title = "Audience"
         audience.isReleasedWhenClosed = false   // held in a strong ref; avoid an ARC over-release crash
-        audience.contentMinSize = NSSize(width: 320, height: 200)   // freely resizable on a single screen
+        audience.contentMinSize = NSSize(width: 320, height: 200)
         audience.contentView = NSHostingView(rootView: AudienceView().environmentObject(state))
-        if multiScreen {
+        if fill {
             audience.level = .mainMenu
             audience.collectionBehavior = [.fullScreenAuxiliary, .canJoinAllSpaces]
         } else {
-            audience.collectionBehavior = [.fullScreenNone]   // green zooms, not full screen
+            audience.collectionBehavior = [.fullScreenNone]   // a normal, resizable window
         }
         audienceWindow = audience
     }
 
+    /// Recreates the audience window after its full-screen/windowed mode changes.
+    @objc private func rebuildAudienceWindow() {
+        guard state.isLoaded else { return }
+        audienceWindow?.close()
+        audienceWindow = nil
+        buildAudienceWindowIfNeeded()
+        positionWindows()
+        audienceWindow?.orderFront(nil)
+        presenterWindow?.makeKeyAndOrderFront(nil)
+    }
+
+    @objc private func toggleAudienceFullscreen(_ sender: Any?) {
+        let current = UserDefaults.standard.object(forKey: Prefs.audienceFullscreen) as? Bool ?? true
+        UserDefaults.standard.set(!current, forKey: Prefs.audienceFullscreen)
+        rebuildAudienceWindow()
+    }
+
     @objc private func screensChanged() { positionWindows() }
 
-    /// Audience window fills the external display; presenter window stays on the
-    /// built-in display.
+    /// Positions the windows: a full-screen audience fills the external display; a
+    /// windowed audience opens large on it; the presenter stays on the main one.
     private func positionWindows() {
         let screens = NSScreen.screens
-        guard !screens.isEmpty else { return }
+        guard screens.count > 1 else { return }   // single screen: leave windows put
 
-        if screens.count > 1 {
+        if audienceFillsExternal {
             audienceWindow?.setFrame(screens[1].frame, display: true)
-            if let p = presenterWindow {
-                let visible = (NSScreen.main ?? screens[0]).visibleFrame
-                let size = p.frame.size
-                p.setFrameOrigin(NSPoint(x: visible.midX - size.width / 2,
-                                         y: visible.midY - size.height / 2))
-            }
+        } else if let audience = audienceWindow {
+            let visible = screens[1].visibleFrame
+            let size = NSSize(width: visible.width * 0.85, height: visible.height * 0.85)
+            audience.setFrame(NSRect(x: visible.midX - size.width / 2,
+                                     y: visible.midY - size.height / 2,
+                                     width: size.width, height: size.height), display: true)
         }
-        // Single-screen: leave the (titled) audience window where the user puts it.
+        if let presenter = presenterWindow {
+            let visible = (NSScreen.main ?? screens[0]).visibleFrame
+            let size = presenter.frame.size
+            presenter.setFrameOrigin(NSPoint(x: visible.midX - size.width / 2,
+                                             y: visible.midY - size.height / 2))
+        }
     }
 
     // MARK: - Keyboard
@@ -778,4 +816,6 @@ extension Notification.Name {
     static let statusItemPrefChanged = Notification.Name("statusItemPrefChanged")
     /// Posted by Settings when the "run in background" preference changes.
     static let backgroundModePrefChanged = Notification.Name("backgroundModePrefChanged")
+    /// Posted when the audience full-screen/windowed preference changes.
+    static let audienceModeChanged = Notification.Name("audienceModeChanged")
 }
