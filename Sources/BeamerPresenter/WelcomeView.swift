@@ -14,6 +14,7 @@ struct WelcomeView: View {
     @State private var dropTargeted = false
     @State private var statsTick = 0
     @State private var latexEngine: String?
+    @State private var hasLibreOffice = false
     @State private var checkedDeps = false
 
     var body: some View {
@@ -52,7 +53,7 @@ struct WelcomeView: View {
             }
 
             Button(action: onOpen) {
-                Label("Open PDF or .tex…", systemImage: "folder")
+                Label("Open PDF, .tex or .pptx…", systemImage: "folder")
                     .frame(maxWidth: .infinity)
             }
             .controlSize(.large)
@@ -71,24 +72,30 @@ struct WelcomeView: View {
             guard !checkedDeps else { return }
             checkedDeps = true
             latexEngine = Dependencies.latexEngine()?.name
+            hasLibreOffice = Dependencies.soffice() != nil
         }
     }
 
     /// Green/yellow startup status of optional dependencies.
     private var systemStatus: some View {
-        HStack(spacing: 8) {
-            Circle()
-                .fill(latexEngine != nil ? Color.green : Color.yellow)
-                .frame(width: 9, height: 9)
-            if let engine = latexEngine {
-                Text("LaTeX ready — \(engine)")
-            } else {
-                Text("LaTeX not found — install MacTeX to compile .tex")
-            }
-            Spacer()
+        VStack(alignment: .leading, spacing: 4) {
+            statusRow(ok: latexEngine != nil,
+                      okText: "LaTeX ready — \(latexEngine ?? "")",
+                      missingText: "LaTeX not found — install MacTeX to compile .tex")
+            statusRow(ok: hasLibreOffice,
+                      okText: "LibreOffice ready — .pptx supported",
+                      missingText: "LibreOffice not found — needed to open .pptx")
         }
         .font(.caption)
         .foregroundStyle(.secondary)
+    }
+
+    private func statusRow(ok: Bool, okText: String, missingText: String) -> some View {
+        HStack(spacing: 8) {
+            Circle().fill(ok ? Color.green : Color.yellow).frame(width: 9, height: 9)
+            Text(ok ? okText : missingText)
+            Spacer()
+        }
     }
 
     // MARK: - Right (sidebar list)
@@ -233,7 +240,7 @@ struct WelcomeView: View {
             .overlay(
                 VStack(spacing: 8) {
                     Image(systemName: "square.and.arrow.down").font(.title2)
-                    Text("Drop a PDF or .tex to open").font(.callout)
+                    Text("Drop a PDF, .tex or .pptx to open").font(.callout)
                     Text("…or drop a folder to add it to favorites")
                         .font(.caption)
                 }
@@ -253,7 +260,7 @@ struct WelcomeView: View {
                                 Favorites.add(url)            // a folder → favorite
                             } else {
                                 let ext = url.pathExtension.lowercased()
-                                if ext == "pdf" || ext == "tex" { onOpenURL(url) }
+                                if ["pdf", "tex", "pptx", "ppt", "odp"].contains(ext) { onOpenURL(url) }
                             }
                         }
                     }

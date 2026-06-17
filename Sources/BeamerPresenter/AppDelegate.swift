@@ -336,7 +336,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             item.state = state.isBoardActive ? .on : .off
             return state.isLoaded
         case #selector(toggleAudienceFullscreen(_:)):
-            item.state = (UserDefaults.standard.object(forKey: Prefs.audienceFullscreen) as? Bool ?? true) ? .on : .off
+            let fullscreen = UserDefaults.standard.object(forKey: Prefs.audienceFullscreen) as? Bool ?? true
+            item.title = fullscreen ? "Exit Audience Full Screen" : "Enter Audience Full Screen"
             return state.isLoaded && NSScreen.screens.count > 1
         case #selector(togglePen(_:)):
             item.state = state.tool == .pen ? .on : .off
@@ -569,29 +570,85 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
 
     @objc func openDocument(_ sender: Any?) {
         let panel = NSOpenPanel()
-        panel.message = "Choose a PDF — or its .tex source, and the matching PDF is opened."
-        panel.allowedContentTypes = [.pdf, UTType(filenameExtension: "tex") ?? .plainText]
+        panel.message = "Choose a PDF, a .tex (compiled on the fly), or a PowerPoint (.pptx)."
+        panel.allowedContentTypes = [.pdf]
+            + ["tex", "pptx", "ppt", "odp"].compactMap { UTType(filenameExtension: $0) }
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = false
         guard panel.runModal() == .OK, let url = panel.url else { return }
         load(url: url)
     }
 
-    /// Opens a picked file. A `.pdf` is presented directly; a `.tex` uses its
-    /// sibling PDF, or is compiled on the fly, or — failing that — offered up in
-    /// an external editor.
+    /// Opens a picked file: a `.pdf` directly; a `.tex` via its sibling PDF or by
+    /// compiling it; a PowerPoint/ODP by converting it with LibreOffice.
     private func load(url rawURL: URL) {
-        guard rawURL.pathExtension.lowercased() == "tex" else { loadPDF(rawURL); return }
+        switch rawURL.pathExtension.lowercased() {
+        case "tex":
+            loadOrMake(rawURL, with: latexMaker)
+        case "pptx", "ppt", "odp":
+            loadOrMake(rawURL, with: libreOfficeMaker)
+        default:
+            loadPDF(rawURL)
+        }
+    }
 
-        let sibling = rawURL.deletingPathExtension().appendingPathExtension("pdf")
+    /// Uses a sibling PDF if present, else runs `maker` to produce one.
+    private func loadOrMake(_ source: URL, with maker: (URL) -> Void) {
+        let sibling = source.deletingPathExtension().appendingPathExtension("pdf")
         if FileManager.default.fileExists(atPath: sibling.path) {
             loadPDF(sibling)
-        } else if let engine = Dependencies.latexEngine() {
-            compileTeX(rawURL, engine: engine)
         } else {
-            offerEditor(for: rawURL,
-                        message: "No PDF next to it and no LaTeX install found to compile it.")
+            maker(source)
         }
+    }
+
+    private func latexMaker(_ texURL: URL) {
+        if let engine = Dependencies.latexEngine() {
+            convertToPDF(texURL, title: "Compiling \(texURL.lastPathComponent)…",
+                         detail: "Running LaTeX…",
+                         work: { Dependencies.compile(texURL: texURL, engine: engine) },
+                         onFailure: { self.offerEditor(for: texURL, message: $0) })
+        } else {
+            offerEditor(for: texURL, message: "No PDF next to it and no LaTeX install found to compile it.")
+        }
+    }
+
+    private func libreOfficeMaker(_ url: URL) {
+        if let soffice = Dependencies.soffice() {
+            convertToPDF(url, title: "Converting \(url.lastPathComponent)…",
+                         detail: "Using LibreOffice…",
+                         work: { Dependencies.convertToPDF(url, soffice: soffice) },
+                         onFailure: { self.offerOpenDefault(for: url, message: $0) })
+        } else {
+            offerOpenDefault(for: url,
+                             message: "No PDF next to it and no LibreOffice found to convert it.")
+        }
+    }
+
+    /// Shared compile/convert flow: HUD, run `work` off the main actor, then load
+    /// the PDF or report the failure.
+    private func convertToPDF(_ source: URL, title: String, detail: String,
+                              work: @escaping @Sendable () -> Dependencies.CompileResult,
+                              onFailure: @escaping (String) -> Void) {
+        showCompileHUD(title: title, detail: detail)
+        Task { @MainActor in
+            let result = await Task.detached(operation: work).value
+            hideCompileHUD()
+            switch result {
+            case .success(let pdf): loadPDF(pdf)
+            case .failure(let log): onFailure("Failed.\n\n\(log)")
+            }
+        }
+    }
+
+    /// Offers to open a file in its default app (PowerPoint / Keynote / …).
+    private func offerOpenDefault(for url: URL, message: String) {
+        let alert = NSAlert()
+        alert.messageText = "Couldn't open \(url.lastPathComponent) as a PDF"
+        alert.informativeText = message
+        alert.addButton(withTitle: "Open in Default App")
+        alert.addButton(withTitle: "Cancel")
+        if alert.runModal() == .alertFirstButtonReturn { NSWorkspace.shared.open(url) }
     }
 
     private func loadPDF(_ url: URL) {
@@ -609,30 +666,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         presenterWindow?.makeKeyAndOrderFront(nil)
     }
 
-    // MARK: - LaTeX compilation
+    // MARK: - Compile / convert HUD
 
-    private func compileTeX(_ texURL: URL, engine: (name: String, path: String)) {
-        showCompileHUD(name: texURL.lastPathComponent)
-        Task { @MainActor in
-            let result = await Task.detached { Dependencies.compile(texURL: texURL, engine: engine) }.value
-            hideCompileHUD()
-            switch result {
-            case .success(let pdf):
-                loadPDF(pdf)
-            case .failure(let log):
-                offerEditor(for: texURL, message: "Compilation with \(engine.name) failed.\n\n\(log)")
-            }
-        }
-    }
-
-    private func showCompileHUD(name: String) {
+    private func showCompileHUD(title: String, detail: String) {
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 320, height: 120),
                               styleMask: [.borderless], backing: .buffered, defer: false)
         window.isOpaque = false
         window.backgroundColor = .clear
         window.level = .floating
         window.hasShadow = true
-        window.contentView = NSHostingView(rootView: CompileHUD(name: name))
+        window.contentView = NSHostingView(rootView: CompileHUD(title: title, detail: detail))
         window.center()
         window.orderFrontRegardless()
         compileHUD = window

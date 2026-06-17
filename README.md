@@ -6,8 +6,9 @@ screen shows the slide; your laptop shows a full presenter console: current
 slide, next slide, speaker notes, a thumbnail strip, a slide overview, and a
 timer.
 
-It works directly off a compiled PDF; if a matching `.tex` is alongside it, the
-app can also pull `\note{}` speaker notes straight from the source.
+It works directly off a compiled PDF; it can also compile a `.tex` (via a local
+LaTeX install) or convert a PowerPoint `.pptx` (via LibreOffice) on the fly, and
+pull `\note{}` speaker notes straight from a `.tex`.
 
 **Version 1.0** (2026-06-17) — by Timo Amling.
 
