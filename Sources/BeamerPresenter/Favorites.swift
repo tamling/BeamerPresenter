@@ -56,7 +56,7 @@ enum AppInfo {
     static let releaseDate = "2026-06-17"
 
     static var version: String {
-        (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "1.0"
+        (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "2.0"
     }
 
     /// e.g. "Version 1.0 · 2026-06-17"
