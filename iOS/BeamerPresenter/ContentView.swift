@@ -149,7 +149,13 @@ struct PresenterView: View {
     @AppStorage("pencilOnly") private var pencilOnly = false
     @AppStorage("blackoutMessage") private var blackoutMessage = ""
     @AppStorage("blackoutShowClock") private var blackoutShowClock = true
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    @State private var landscape = false
     let openPicker: () -> Void
+
+    /// The full console (current slide + next + notes + own notes) is used on a
+    /// wide landscape iPad; portrait keeps the big single-slide layout.
+    private var useConsole: Bool { landscape && sizeClass == .regular }
 
     private var texTypes: [UTType] {
         [UTType(filenameExtension: "tex"), .plainText, .text].compactMap { $0 }
@@ -164,14 +170,27 @@ struct PresenterView: View {
         VStack(spacing: 0) {
             toolbar
             if model.isBoardActive { boardInsertBar }
-            HStack(spacing: 0) {
-                SlideView()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                if showNotes {
-                    NotesPanel(loadTex: { importingNotes = true })
-                        .frame(width: 340)
-                        .transition(.move(edge: .trailing))
+            GeometryReader { geo in
+                Group {
+                    if useConsole {
+                        // Wide landscape iPad: the full macOS-style presenter console.
+                        PresenterConsole(loadTex: { importingNotes = true })
+                    } else {
+                        // Portrait / narrow: the big single slide, notes on demand.
+                        HStack(spacing: 0) {
+                            SlideView()
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            if showNotes {
+                                NotesPanel(loadTex: { importingNotes = true })
+                                    .frame(width: 340)
+                                    .transition(.move(edge: .trailing))
+                            }
+                        }
+                    }
                 }
+                .frame(width: geo.size.width, height: geo.size.height)
+                .onAppear { landscape = geo.size.width > geo.size.height }
+                .onChange(of: geo.size) { s in landscape = s.width > s.height }
             }
             ThumbnailStrip()
                 .frame(height: 96)
@@ -227,11 +246,13 @@ struct PresenterView: View {
 
             Button { showOverview = true } label: { Image(systemName: "square.grid.2x2") }
 
-            Button { withAnimation(.easeInOut(duration: 0.2)) { showNotes.toggle() } } label: {
-                Image(systemName: showNotes ? "note.text.badge.plus" : "note.text")
+            if !landscape {
+                Button { withAnimation(.easeInOut(duration: 0.2)) { showNotes.toggle() } } label: {
+                    Image(systemName: showNotes ? "note.text.badge.plus" : "note.text")
+                }
+                .foregroundStyle(showNotes ? Color.accentColor
+                                 : (model.hasNotes ? .primary : .secondary))
             }
-            .foregroundStyle(showNotes ? Color.accentColor
-                             : (model.hasNotes ? .primary : .secondary))
 
             blackoutButton
             boardMenu

@@ -135,6 +135,9 @@ final class PresentationModel: ObservableObject {
     private var timerStartedAt: Date?
     private var timerAccumulated: TimeInterval = 0
 
+    // Your own free-form notes for this deck, autosaved per deck in UserDefaults.
+    @Published var scratch: String = ""
+
     @Published private(set) var recents: [URL] = RecentStore.load()
 
     /// Seconds elapsed on the presentation timer (live while running).
@@ -160,7 +163,21 @@ final class PresentationModel: ObservableObject {
     }
 
     private var scopedURL: URL?
+    private var deckKey: String?
     private var thumbCache: [Int: UIImage] = [:]
+
+    /// Append a quick value (time / deck name / slide number) to the scratch notes.
+    func appendScratch(_ value: String) {
+        scratch += (scratch.isEmpty ? "" : "\n") + value
+        saveScratch()
+    }
+    func saveScratch() {
+        guard let key = deckKey else { return }
+        UserDefaults.standard.set(scratch, forKey: "scratch:\(key)")
+    }
+    private func loadScratch() {
+        scratch = deckKey.flatMap { UserDefaults.standard.string(forKey: "scratch:\($0)") } ?? ""
+    }
 
     /// Whether the current deck has any notes to show (parsed `.tex` or a split deck).
     var hasNotes: Bool { splitNotes || !notesByPage.isEmpty }
@@ -202,6 +219,8 @@ final class PresentationModel: ObservableObject {
             }
         }
 
+        deckKey = url.standardizedFileURL.path
+        loadScratch()
         applyDefaults()
         RecentStore.add(url)
         recents = RecentStore.load()
@@ -263,6 +282,8 @@ final class PresentationModel: ObservableObject {
         activeBoardIndex = nil
         selectedItemID = nil
         boardStroke = []
+        deckKey = nil
+        scratch = ""
     }
 
     // MARK: - Navigation

@@ -8,6 +8,11 @@ Target device: **iPad Pro 2021** (USB‑C, external display capable), iPadOS 16+
 > **Status: all checklist items complete.** ✅ The minimal app plus features
 > 1–11 below are implemented. Future polish (e.g. scene-based external displays)
 > is noted inline.
+>
+> **Landscape console:** in landscape the presenter view becomes a macOS-style
+> console — current slide on the left, with a resizable right column holding the
+> **next** slide, the **speaker notes**, and your **own notes** (autosaved per
+> deck). All dividers are draggable; portrait keeps the big single-slide layout.
 
 ## ✅ Minimal app (done)
 - [x] Open a PDF from Files / iCloud (document picker, security‑scoped access)
