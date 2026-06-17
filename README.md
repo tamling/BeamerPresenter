@@ -19,9 +19,11 @@ app can also pull `\note{}` speaker notes straight from the source.
   overview, blackout, black-screen presets, start/stop + reset timer), *Tools*
   (pen, laser, pen colours, undo/clear ink), *Whiteboard* (toggle, boards, add
   text/table/QR, save/insert). *App* holds About + Settings (⌘,).
-- **Home screen** — open button, drag-and-drop a PDF/`.tex`, **favorite folders**
-  (expand to the PDFs inside; add with the `+`), a recent-files list, and a bottom
-  **dashboard** (presentations run, average + total time, version).
+- **Home screen** — open PDF/`.tex` button, a large drop zone (drop a PDF/`.tex`
+  to open, or a **folder** to add it to favorites), a LaTeX **dependency status**
+  (green/yellow), **favorite folders** (expand to the PDFs inside; add with the
+  `+`), a recent-files list, and a bottom **dashboard** (presentations run,
+  average + total time, version).
 - **Menu bar icon** — a Time Machine-style status item with quick actions (open,
   show presenter, next/previous, blackout, whiteboard, settings, quit).
 - **Settings (⌘,)** — open at login, show/hide the menu bar icon, **run in
@@ -151,6 +153,7 @@ Bluetooth presenter remotes emit Page Up / Page Down, so they work out of the bo
 | `RecentFiles.swift` | Recently-opened list persisted in UserDefaults |
 | `Favorites.swift` | Favorite folders + app version info, persisted in UserDefaults |
 | `Stats.swift` | Usage stats (count / total / average) for the dashboard |
+| `Dependencies.swift` | Startup check for a LaTeX install (optional) |
 | `WelcomeView.swift` | Home screen: open, drag-and-drop, browse folder, favorites, recents |
 | `SettingsView.swift` | Settings window (start-screen folder, black-screen options) |
 | `SplashView.swift` | Brief launch splash with icon + version |

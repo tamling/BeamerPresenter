@@ -13,6 +13,8 @@ struct WelcomeView: View {
     @State private var favorites: [URL] = Favorites.load()
     @State private var dropTargeted = false
     @State private var statsTick = 0
+    @State private var latexEngine: String?
+    @State private var checkedDeps = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -50,20 +52,43 @@ struct WelcomeView: View {
             }
 
             Button(action: onOpen) {
-                Label("Open Presentation…", systemImage: "folder")
+                Label("Open PDF or .tex…", systemImage: "folder")
                     .frame(maxWidth: .infinity)
             }
             .controlSize(.large)
             .keyboardShortcut("o", modifiers: .command)
 
             dropZone
+                .frame(maxHeight: .infinity)
 
-            Spacer()
+            systemStatus
 
             Text("Tip: keep the .tex with \\note{…} next to the PDF — or just open the .tex.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
+        .onAppear {
+            guard !checkedDeps else { return }
+            checkedDeps = true
+            latexEngine = Dependencies.latexEngine()
+        }
+    }
+
+    /// Green/yellow startup status of optional dependencies.
+    private var systemStatus: some View {
+        HStack(spacing: 8) {
+            Circle()
+                .fill(latexEngine != nil ? Color.green : Color.yellow)
+                .frame(width: 9, height: 9)
+            if let engine = latexEngine {
+                Text("LaTeX ready — \(engine)")
+            } else {
+                Text("LaTeX not found — install MacTeX to compile .tex")
+            }
+            Spacer()
+        }
+        .font(.caption)
+        .foregroundStyle(.secondary)
     }
 
     // MARK: - Right (sidebar list)
@@ -84,6 +109,7 @@ struct WelcomeView: View {
                         .buttonStyle(.borderless)
                         .help("Add a folder of presentations")
                 }
+                .padding(.trailing, 10)
             }
 
             Section {
@@ -205,21 +231,32 @@ struct WelcomeView: View {
             .strokeBorder(style: StrokeStyle(lineWidth: 2, dash: [8]))
             .foregroundStyle(dropTargeted ? Color.accentColor : Color.secondary.opacity(0.5))
             .overlay(
-                VStack(spacing: 6) {
-                    Image(systemName: "square.and.arrow.down")
-                    Text("Drop a PDF or .tex here")
+                VStack(spacing: 8) {
+                    Image(systemName: "square.and.arrow.down").font(.title2)
+                    Text("Drop a PDF or .tex to open").font(.callout)
+                    Text("…or drop a folder to add it to favorites")
+                        .font(.caption)
                 }
                 .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(8)
             )
-            .frame(height: 110)
+            .frame(minHeight: 140)
             .onDrop(of: [UTType.fileURL], isTargeted: $dropTargeted) { providers in
-                guard let provider = providers.first else { return false }
-                _ = provider.loadDataRepresentation(forTypeIdentifier: UTType.fileURL.identifier) { data, _ in
-                    guard let data,
-                          let url = URL(dataRepresentation: data, relativeTo: nil) else { return }
-                    let ext = url.pathExtension.lowercased()
-                    guard ext == "pdf" || ext == "tex" else { return }
-                    DispatchQueue.main.async { onOpenURL(url) }
+                for provider in providers {
+                    _ = provider.loadDataRepresentation(forTypeIdentifier: UTType.fileURL.identifier) { data, _ in
+                        guard let data, let url = URL(dataRepresentation: data, relativeTo: nil) else { return }
+                        var isDir: ObjCBool = false
+                        let exists = FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir)
+                        DispatchQueue.main.async {
+                            if exists, isDir.boolValue {
+                                Favorites.add(url)            // a folder → favorite
+                            } else {
+                                let ext = url.pathExtension.lowercased()
+                                if ext == "pdf" || ext == "tex" { onOpenURL(url) }
+                            }
+                        }
+                    }
                 }
                 return true
             }
