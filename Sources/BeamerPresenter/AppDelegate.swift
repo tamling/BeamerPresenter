@@ -165,6 +165,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             + (state.hasAnnotations ? " and exports the ink + whiteboards as a PDF." : ".")
         alert.addButton(withTitle: "Save & Hide")
         alert.addButton(withTitle: "Hide")
+        alert.addButton(withTitle: "Quit")
         alert.addButton(withTitle: "Cancel")
 
         switch alert.runModal() {
@@ -176,6 +177,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             hideToMenuBar()
         case .alertSecondButtonReturn:          // Hide
             hideToMenuBar()
+        case .alertThirdButtonReturn:           // Quit
+            NSApp.terminate(nil)
         default:                                // Cancel
             break
         }
