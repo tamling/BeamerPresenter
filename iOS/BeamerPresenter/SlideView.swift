@@ -10,12 +10,22 @@ struct SlideView: View {
         GeometryReader { geo in
             let size = geo.size
             ZStack {
-                Color.black
-                PDFPageView(document: model.document, pageIndex: model.index,
-                            displayBox: model.slideBox)
-                inkCanvas
-                if let p = model.laserPoint {
-                    LaserDot(point: p, in: size)
+                if model.isBoardActive, let board = model.activeBoard {
+                    BoardCanvas(board: board, liveStroke: model.boardStroke,
+                                liveColor: model.penColor, liveWidth: model.penWidth)
+                        .contentShape(Rectangle())
+                        .gesture(boardGesture(size))
+                    boardHandles(size)
+                    if let p = model.laserPoint { LaserDot(point: p, in: size) }
+                } else {
+                    Color.black
+                    PDFPageView(document: model.document, pageIndex: model.index,
+                                displayBox: model.slideBox)
+                    inkCanvas
+                    if let p = model.laserPoint {
+                        LaserDot(point: p, in: size)
+                    }
+                    Color.clear.contentShape(Rectangle()).gesture(slideGesture(size))
                 }
                 if model.blackout {
                     Color.black.opacity(0.35).allowsHitTesting(false)
@@ -30,8 +40,72 @@ struct SlideView: View {
                     .allowsHitTesting(false)
                 }
             }
-            .contentShape(Rectangle())
-            .gesture(slideGesture(size))
+        }
+    }
+
+    // MARK: - Board interaction
+
+    /// Pen / laser drawing on the board; tapping empty space deselects.
+    private func boardGesture(_ size: CGSize) -> some Gesture {
+        DragGesture(minimumDistance: 0)
+            .onChanged { value in
+                let p = unit(value.location, size)
+                if model.penActive {
+                    if model.boardStroke.isEmpty { model.boardBeginStroke(at: p) }
+                    else { model.boardExtendStroke(to: p) }
+                } else if model.laserActive {
+                    model.moveLaser(to: p)
+                }
+            }
+            .onEnded { _ in
+                if model.penActive { model.boardEndStroke() }
+                else if model.laserActive { model.endLaser() }
+                else { model.selectedItemID = nil }
+            }
+    }
+
+    /// Move / resize / delete handles for items, shown when neither pen nor laser
+    /// is the active tool.
+    @ViewBuilder
+    private func boardHandles(_ size: CGSize) -> some View {
+        if !model.penActive, !model.laserActive, let board = model.activeBoard {
+            ForEach(board.items) { item in
+                let half = item.width * size.width / 2
+                // Move
+                Circle()
+                    .fill(Color.accentColor.opacity(model.selectedItemID == item.id ? 0.95 : 0.55))
+                    .overlay(Image(systemName: "arrow.up.and.down.and.arrow.left.and.right")
+                        .font(.system(size: 11, weight: .bold)).foregroundStyle(.white))
+                    .frame(width: 30, height: 30)
+                    .position(x: item.center.x * size.width, y: item.center.y * size.height)
+                    .gesture(DragGesture(minimumDistance: 0)
+                        .onChanged { v in
+                            model.selectedItemID = item.id
+                            model.moveItem(item.id, to: unit(v.location, size))
+                        })
+                // Delete
+                Button { model.deleteItem(item.id) } label: {
+                    Image(systemName: "xmark").font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(.white).frame(width: 24, height: 24)
+                        .background(Circle().fill(Color.red))
+                }
+                .position(x: item.center.x * size.width + half + 16,
+                          y: item.center.y * size.height - 28)
+                // Resize (selected only)
+                if model.selectedItemID == item.id {
+                    RoundedRectangle(cornerRadius: 5).fill(Color.accentColor.opacity(0.95))
+                        .overlay(Image(systemName: "arrow.left.and.right")
+                            .font(.system(size: 10, weight: .bold)).foregroundStyle(.white))
+                        .frame(width: 26, height: 26)
+                        .position(x: item.center.x * size.width + half + 16,
+                                  y: item.center.y * size.height)
+                        .gesture(DragGesture(minimumDistance: 0)
+                            .onChanged { v in
+                                let dx = abs(v.location.x - item.center.x * size.width)
+                                model.setItemWidth(item.id, (dx * 2) / max(size.width, 1))
+                            })
+                }
+            }
         }
     }
 
@@ -94,17 +168,21 @@ struct AudienceSlideView: View {
         GeometryReader { geo in
             let size = geo.size
             ZStack {
-                Color.black
-                PDFPageView(document: model.document, pageIndex: model.index,
-                            displayBox: model.slideBox)
-                Canvas { ctx, sz in
-                    for stroke in model.strokes[model.index] ?? [] {
-                        ctx.stroke(path(stroke.points, in: sz),
-                                   with: .color(stroke.color),
-                                   style: lineStyle(stroke.width * sz.width))
+                if let board = model.activeBoard {
+                    BoardCanvas(board: board)
+                } else {
+                    Color.black
+                    PDFPageView(document: model.document, pageIndex: model.index,
+                                displayBox: model.slideBox)
+                    Canvas { ctx, sz in
+                        for stroke in model.strokes[model.index] ?? [] {
+                            ctx.stroke(path(stroke.points, in: sz),
+                                       with: .color(stroke.color),
+                                       style: lineStyle(stroke.width * sz.width))
+                        }
                     }
+                    .allowsHitTesting(false)
                 }
-                .allowsHitTesting(false)
                 if let p = model.laserPoint {
                     LaserDot(point: p, in: size)
                 }

@@ -89,6 +89,7 @@ struct PresenterView: View {
     var body: some View {
         VStack(spacing: 0) {
             toolbar
+            if model.isBoardActive { boardInsertBar }
             HStack(spacing: 0) {
                 SlideView()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -148,6 +149,31 @@ struct PresenterView: View {
             }
             .foregroundStyle(model.blackout ? Color.accentColor : .primary)
 
+            Menu {
+                Button { withAnimation { model.addBoard() } } label: {
+                    Label("New board", systemImage: "plus.rectangle")
+                }
+                if model.isBoardActive {
+                    Button { withAnimation { model.closeBoard() } } label: {
+                        Label("Back to slides", systemImage: "rectangle.on.rectangle")
+                    }
+                    Button(role: .destructive) { withAnimation { model.deleteActiveBoard() } } label: {
+                        Label("Delete this board", systemImage: "trash")
+                    }
+                }
+                if !model.boards.isEmpty {
+                    Divider()
+                    ForEach(Array(model.boards.enumerated()), id: \.element.id) { i, board in
+                        Button { withAnimation { model.showBoard(i) } } label: {
+                            Label(board.name, systemImage: model.activeBoardIndex == i ? "checkmark" : "square")
+                        }
+                    }
+                }
+            } label: {
+                Image(systemName: model.isBoardActive ? "rectangle.fill.badge.plus" : "rectangle.badge.plus")
+            }
+            .foregroundStyle(model.isBoardActive ? Color.accentColor : .primary)
+
             if external.isConnected {
                 Image(systemName: "tv.fill")
                     .foregroundStyle(.green)
@@ -189,14 +215,49 @@ struct PresenterView: View {
                 }
             } label: { Image(systemName: "lineweight") }
 
-            Button { model.undoInk() } label: { Image(systemName: "arrow.uturn.backward") }
-                .disabled(!model.hasInk)
-            Button { model.clearInk() } label: { Image(systemName: "trash") }
-                .disabled(!model.hasInk)
+            Button {
+                model.isBoardActive ? model.boardUndoInk() : model.undoInk()
+            } label: { Image(systemName: "arrow.uturn.backward") }
+                .disabled(model.isBoardActive ? !model.hasBoardInk : !model.hasInk)
+            Button {
+                model.isBoardActive ? model.boardClearInk() : model.clearInk()
+            } label: { Image(systemName: "trash") }
+                .disabled(model.isBoardActive ? !model.hasBoardInk : !model.hasInk)
         }
         .font(.title3)
         .padding(.horizontal, 18)
         .padding(.vertical, 10)
         .background(.ultraThinMaterial)
+    }
+
+    /// Secondary row while a board is active: insert items and edit the selection.
+    private var boardInsertBar: some View {
+        HStack(spacing: 14) {
+            Label(model.activeBoard?.name ?? "Board", systemImage: "rectangle")
+                .font(.subheadline).foregroundStyle(.secondary)
+            Divider().frame(height: 18)
+            Button { model.addItem(.text) } label: { Label("Text", systemImage: "textformat") }
+            Button { model.addItem(.table) } label: { Label("Table", systemImage: "tablecells") }
+            Button { model.addItem(.qr) } label: { Label("QR", systemImage: "qrcode") }
+
+            if let item = model.selectedItem() {
+                Divider().frame(height: 18)
+                TextField(item.kind == .qr ? "URL / text to encode"
+                          : (item.kind == .table ? "Rows on lines, columns by |" : "Text"),
+                          text: Binding(
+                            get: { model.selectedItem()?.text ?? "" },
+                            set: { model.updateItemText(item.id, $0) }))
+                    .textFieldStyle(.roundedBorder)
+                    .frame(maxWidth: 320)
+                    .font(item.kind == .table ? .system(.footnote, design: .monospaced) : .body)
+                Button { model.selectedItemID = nil } label: { Image(systemName: "checkmark") }
+            }
+            Spacer()
+        }
+        .font(.subheadline)
+        .padding(.horizontal, 18)
+        .padding(.vertical, 8)
+        .background(Color(white: 0.12))
+        .foregroundStyle(.white)
     }
 }

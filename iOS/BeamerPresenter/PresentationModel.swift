@@ -36,6 +36,86 @@ final class PresentationModel: ObservableObject {
     @Published private(set) var splitNotes = false   // double-wide "notes on second screen" deck
     @Published private(set) var notesSourceName: String?
 
+    // Whiteboard (scratch boards)
+    @Published var boards: [Whiteboard] = []
+    @Published var activeBoardIndex: Int?
+    @Published var selectedItemID: UUID?
+    @Published var boardStroke: [CGPoint] = []
+
+    var isBoardActive: Bool { activeBoardIndex != nil }
+    var hasBoardInk: Bool { !(activeBoard?.strokes.isEmpty ?? true) }
+    var activeBoard: Whiteboard? {
+        guard let i = activeBoardIndex, boards.indices.contains(i) else { return nil }
+        return boards[i]
+    }
+
+    /// Add a blank board (remembering the current slide) and switch to it.
+    func addBoard() {
+        boards.append(Whiteboard(name: "Board \(boards.count + 1)", slideIndex: index))
+        activeBoardIndex = boards.count - 1
+        selectedItemID = nil
+        boardStroke = []
+    }
+    func showBoard(_ i: Int) {
+        guard boards.indices.contains(i) else { return }
+        activeBoardIndex = i; selectedItemID = nil; boardStroke = []
+    }
+    func closeBoard() { activeBoardIndex = nil; selectedItemID = nil; boardStroke = [] }
+    func deleteActiveBoard() {
+        guard let i = activeBoardIndex else { return }
+        boards.remove(at: i)
+        activeBoardIndex = nil; selectedItemID = nil; boardStroke = []
+    }
+
+    // Board items
+    func addItem(_ kind: BoardItem.Kind) {
+        guard let i = activeBoardIndex else { return }
+        let item = BoardItem.makeDefault(kind)
+        boards[i].items.append(item)
+        selectedItemID = item.id
+    }
+    func moveItem(_ id: UUID, to p: CGPoint) {
+        guard let i = activeBoardIndex,
+              let j = boards[i].items.firstIndex(where: { $0.id == id }) else { return }
+        boards[i].items[j].center = CGPoint(x: min(max(0, p.x), 1), y: min(max(0, p.y), 1))
+    }
+    func setItemWidth(_ id: UUID, _ w: CGFloat) {
+        guard let i = activeBoardIndex,
+              let j = boards[i].items.firstIndex(where: { $0.id == id }) else { return }
+        boards[i].items[j].width = min(max(0.05, w), 0.95)
+    }
+    func updateItemText(_ id: UUID, _ text: String) {
+        guard let i = activeBoardIndex,
+              let j = boards[i].items.firstIndex(where: { $0.id == id }) else { return }
+        boards[i].items[j].text = text
+    }
+    func deleteItem(_ id: UUID) {
+        guard let i = activeBoardIndex else { return }
+        boards[i].items.removeAll { $0.id == id }
+        if selectedItemID == id { selectedItemID = nil }
+    }
+    func selectedItem() -> BoardItem? {
+        guard let id = selectedItemID else { return nil }
+        return activeBoard?.items.first { $0.id == id }
+    }
+
+    // Board ink
+    func boardBeginStroke(at p: CGPoint) { boardStroke = [p] }
+    func boardExtendStroke(to p: CGPoint) { boardStroke.append(p) }
+    func boardEndStroke() {
+        defer { boardStroke = [] }
+        guard let i = activeBoardIndex, boardStroke.count > 1 else { return }
+        boards[i].strokes.append(InkStroke(points: boardStroke, color: penColor, width: penWidth))
+    }
+    func boardUndoInk() {
+        guard let i = activeBoardIndex, !boards[i].strokes.isEmpty else { return }
+        boards[i].strokes.removeLast()
+    }
+    func boardClearInk() {
+        guard let i = activeBoardIndex else { return }
+        boards[i].strokes.removeAll()
+    }
+
     // Black-out (audience screen)
     @Published var blackout = false
     @Published var blackoutMessage = ""
@@ -160,6 +240,10 @@ final class PresentationModel: ObservableObject {
         notesByPage = [:]
         splitNotes = false
         notesSourceName = nil
+        boards = []
+        activeBoardIndex = nil
+        selectedItemID = nil
+        boardStroke = []
     }
 
     // MARK: - Navigation

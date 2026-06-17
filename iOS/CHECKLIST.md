@@ -42,8 +42,11 @@ Target device: **iPad Pro 2021** (USB‑C, external display capable), iPadOS 16+
        long-press for options) blacks the external/audience screen with an
        optional centred message (presets) and a clock. The presenter keeps the
        slide, dimmed, with a "blacked out" badge.
-7. [ ] **Whiteboard** scratch slides (ink, text, table, QR) — port the macOS
-       `Whiteboard` model & rendering (mostly portable; swap `NSImage`→`UIImage`)
+7. [x] **Whiteboard** scratch boards — ported the macOS `Whiteboard` model &
+       rendering (`NSImage`→`UIImage`, `CIFilter`→`CIFilterBuiltins`). A boards
+       menu adds/switches/deletes blank white boards shown instead of the deck
+       (and on the audience screen). Draw ink, and insert movable/resizable
+       **text**, **table** (`a | b` rows), and **QR** items with a delete ✕.
 8. [ ] **Export** the annotated deck (ink + boards) to a new PDF (share sheet)
 9. [ ] **Apple Pencil** pressure / palm rejection (PencilKit option)
 10. [ ] **Settings** (black‑screen message/image, defaults)
