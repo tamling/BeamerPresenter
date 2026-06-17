@@ -25,8 +25,9 @@ app can also pull `\note{}` speaker notes straight from the source.
 - **Presenter console** — a control bar with every live tool, each a captioned
   symbol (exit, prev/next + slide counter, overview, blackout, whiteboard, pen,
   laser, the pen-colour swatches, undo/clear ink, reset timer, elapsed + clock),
-  large current slide, next slide, notes pane, and a **scratch-notes** field saved
-  as `<pdf>.notes.txt`. **Exit** returns to the home screen; closing the presenter
+  large current slide, next slide, notes pane, and a **scratch-notes** field
+  autosaved as `<pdf>.notes.txt` (or exported to a chosen `.txt` via its button /
+  *File ▸ Save Notes…*). **Exit** returns to the home screen; closing the presenter
   window also closes the audience window. The slide/sidebar and next/notes splits
   are **draggable** and persist. The same commands are also in the menu bar.
 - **Thumbnail strip** — click any slide to jump; auto-scrolls to the current one.
