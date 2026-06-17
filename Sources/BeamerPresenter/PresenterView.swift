@@ -433,11 +433,13 @@ private struct ControlBar: View {
         }
     }
 
-    /// A control stacked above a small caption, so every symbol is labelled.
+    /// A control stacked above a small caption. The content sits in a fixed-height
+    /// band so every symbol lines up on the same horizontal line, captions below.
     private func captioned<Content: View>(_ caption: String,
                                           @ViewBuilder _ content: () -> Content) -> some View {
         VStack(spacing: 3) {
             content()
+                .frame(height: 24)
             Text(caption)
                 .font(.system(size: 9))
                 .foregroundStyle(.secondary)

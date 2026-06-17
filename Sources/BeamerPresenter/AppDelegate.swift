@@ -10,6 +10,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     private var audienceWindow: NSWindow?
     private var splashWindow: NSWindow?
     private var settingsWindow: NSWindow?
+    private var compileHUD: NSWindow?
     private var statusItem: NSStatusItem?
     private weak var statusInfoItem: NSMenuItem?
     private var deckMenuItems: [NSMenuItem] = []   // Presentation/Tools/Whiteboard menus
@@ -520,25 +521,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         load(url: url)
     }
 
-    /// Maps a picked file to the PDF to present: a `.pdf` is used directly; a
-    /// `.tex` resolves to the same-named `.pdf` next to it.
-    private func resolvedPDF(for url: URL) -> URL? {
-        if url.pathExtension.lowercased() == "tex" {
-            let pdf = url.deletingPathExtension().appendingPathExtension("pdf")
-            return FileManager.default.fileExists(atPath: pdf.path) ? pdf : nil
+    /// Opens a picked file. A `.pdf` is presented directly; a `.tex` uses its
+    /// sibling PDF, or is compiled on the fly, or — failing that — offered up in
+    /// an external editor.
+    private func load(url rawURL: URL) {
+        guard rawURL.pathExtension.lowercased() == "tex" else { loadPDF(rawURL); return }
+
+        let sibling = rawURL.deletingPathExtension().appendingPathExtension("pdf")
+        if FileManager.default.fileExists(atPath: sibling.path) {
+            loadPDF(sibling)
+        } else if let engine = Dependencies.latexEngine() {
+            compileTeX(rawURL, engine: engine)
+        } else {
+            offerEditor(for: rawURL,
+                        message: "No PDF next to it and no LaTeX install found to compile it.")
         }
-        return url
     }
 
-    private func load(url rawURL: URL) {
-        guard let url = resolvedPDF(for: rawURL) else {
-            let alert = NSAlert()
-            alert.messageText = "No PDF found for this .tex"
-            alert.informativeText = "Compile \(rawURL.lastPathComponent) first, or keep "
-                + "\(rawURL.deletingPathExtension().lastPathComponent).pdf next to it."
-            alert.runModal()
-            return
-        }
+    private func loadPDF(_ url: URL) {
         guard state.load(url: url) else {
             let alert = NSAlert()
             alert.messageText = "Could not open PDF"
@@ -551,6 +551,63 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         positionWindows()
         audienceWindow?.orderFront(nil)
         presenterWindow?.makeKeyAndOrderFront(nil)
+    }
+
+    // MARK: - LaTeX compilation
+
+    private func compileTeX(_ texURL: URL, engine: (name: String, path: String)) {
+        showCompileHUD(name: texURL.lastPathComponent)
+        Task { @MainActor in
+            let result = await Task.detached { Dependencies.compile(texURL: texURL, engine: engine) }.value
+            hideCompileHUD()
+            switch result {
+            case .success(let pdf):
+                loadPDF(pdf)
+            case .failure(let log):
+                offerEditor(for: texURL, message: "Compilation with \(engine.name) failed.\n\n\(log)")
+            }
+        }
+    }
+
+    private func showCompileHUD(name: String) {
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 320, height: 120),
+                              styleMask: [.borderless], backing: .buffered, defer: false)
+        window.isOpaque = false
+        window.backgroundColor = .clear
+        window.level = .floating
+        window.hasShadow = true
+        window.contentView = NSHostingView(rootView: CompileHUD(name: name))
+        window.center()
+        window.orderFrontRegardless()
+        compileHUD = window
+    }
+
+    private func hideCompileHUD() {
+        compileHUD?.orderOut(nil)
+        compileHUD = nil
+    }
+
+    /// Offers to open a `.tex` in an external editor (Sublime Text if installed,
+    /// then VS Code, else the default app).
+    private func offerEditor(for texURL: URL, message: String) {
+        let alert = NSAlert()
+        alert.messageText = "Couldn't open \(texURL.lastPathComponent)"
+        alert.informativeText = message
+        alert.addButton(withTitle: "Open in Editor")
+        alert.addButton(withTitle: "Cancel")
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+
+        let workspace = NSWorkspace.shared
+        let editors = ["com.sublimetext.4", "com.sublimetext.3",
+                       "com.microsoft.VSCode", "com.apple.TextEdit"]
+        for bundleID in editors {
+            if let app = workspace.urlForApplication(withBundleIdentifier: bundleID) {
+                workspace.open([texURL], withApplicationAt: app,
+                               configuration: NSWorkspace.OpenConfiguration())
+                return
+            }
+        }
+        workspace.open(texURL)
     }
 
     // MARK: - Windows
@@ -569,8 +626,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         presenter.isReleasedWhenClosed = false   // we hold a strong ref; avoid an ARC over-release crash
         presenter.contentView = NSHostingView(rootView: root)
         presenter.contentMinSize = NSSize(width: 560, height: 380)   // allow shrinking
-        // Green button zooms (maximises) instead of entering full screen.
-        presenter.collectionBehavior = [.fullScreenAuxiliary]
+        // Disable full screen so the green button zooms (maximises) and the
+        // window stays freely resizable instead of taking over the screen.
+        presenter.collectionBehavior = [.fullScreenNone]
         presenter.delegate = self
         presenter.center()
         // Stays hidden behind the launch splash; shown once the splash fades.
@@ -593,7 +651,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             audience.level = .mainMenu
             audience.collectionBehavior = [.fullScreenAuxiliary, .canJoinAllSpaces]
         } else {
-            audience.collectionBehavior = [.fullScreenAuxiliary]   // green zooms, not full screen
+            audience.collectionBehavior = [.fullScreenNone]   // green zooms, not full screen
         }
         audienceWindow = audience
     }

@@ -52,3 +52,22 @@ struct SplashView: View {
         )
     }
 }
+
+/// Small HUD shown while a `.tex` is compiled to PDF.
+struct CompileHUD: View {
+    let name: String
+
+    var body: some View {
+        VStack(spacing: 12) {
+            ProgressView()
+            Text("Compiling \(name)…").font(.headline)
+            Text("Running LaTeX…").font(.caption).foregroundStyle(.secondary)
+        }
+        .padding(24)
+        .frame(width: 320, height: 120)
+        .background(.regularMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous)
+            .strokeBorder(.white.opacity(0.08), lineWidth: 1))
+    }
+}
