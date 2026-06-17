@@ -271,7 +271,7 @@ final class PresentationState: ObservableObject {
     }
 
     func addBoard() {
-        boards.append(Whiteboard(name: "Whiteboard \(boards.count + 1)"))
+        boards.append(Whiteboard(name: "Whiteboard \(boards.count + 1)", slideIndex: index))
         activeBoardIndex = boards.count - 1
         selectedItemID = nil
         boardStroke = []

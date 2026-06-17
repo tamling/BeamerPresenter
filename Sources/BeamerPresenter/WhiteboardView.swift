@@ -502,6 +502,81 @@ enum BoardExporter {
         doc.insert(boardPage, at: min(afterIndex + 1, doc.pageCount))
         return doc.write(to: dest)
     }
+
+    /// Result of a full-presentation export.
+    struct ExportSummary {
+        var inkSlides: Int
+        var boardsAfterSlides: [Int]   // 1-based slide numbers each board was placed after
+    }
+
+    /// Renders a new PDF of the whole deck with the freehand ink burned onto each
+    /// slide and the whiteboards inserted after the slide on which they were made.
+    /// Drawn with Core Graphics (vector) so slides and boards stay crisp.
+    @MainActor
+    static func exportPresentation(sourceURL: URL, split: Bool, aspect: CGFloat,
+                                   strokes: [Int: [Stroke]], boards: [Whiteboard],
+                                   to dest: URL) -> ExportSummary? {
+        guard let slides = PDFModel.croppedDocument(url: sourceURL, half: split ? .left : .full),
+              let first = slides.page(at: 0) else { return nil }
+
+        let pageSize = first.bounds(for: .cropBox).size
+
+        // Pre-render board pages, grouped by the slide they follow.
+        var boardPages: [Int: [PDFPage]] = [:]
+        var insertedAfter: [Int] = []
+        for board in boards {
+            guard let data = renderPDFData(board: board, size: pageSize),
+                  let bdoc = PDFDocument(data: data), let bpage = bdoc.page(at: 0) else { continue }
+            boardPages[board.slideIndex, default: []].append(bpage)
+            insertedAfter.append(board.slideIndex + 1)
+        }
+
+        var mediaBox = CGRect(origin: .zero, size: pageSize)
+        guard let consumer = CGDataConsumer(url: dest as CFURL),
+              let ctx = CGContext(consumer: consumer, mediaBox: &mediaBox, nil) else { return nil }
+
+        var inkSlides = 0
+        for i in 0..<slides.pageCount {
+            guard let page = slides.page(at: i) else { continue }
+            let box = page.bounds(for: .cropBox)
+
+            ctx.beginPDFPage(nil)
+            ctx.saveGState()
+            ctx.translateBy(x: -box.minX, y: -box.minY)
+            page.draw(with: .cropBox, to: ctx)
+            ctx.restoreGState()
+
+            if let pageStrokes = strokes[i], !pageStrokes.isEmpty {
+                inkSlides += 1
+                ctx.saveGState()
+                ctx.setLineCap(.round)
+                ctx.setLineJoin(.round)
+                for stroke in pageStrokes {
+                    ctx.setStrokeColor(NSColor(stroke.color).cgColor)
+                    ctx.setLineWidth(max(0.5, stroke.width * box.width))
+                    for (k, pt) in stroke.points.enumerated() {
+                        let p = CGPoint(x: pt.x * box.width, y: (1 - pt.y) * box.height)
+                        if k == 0 { ctx.move(to: p) } else { ctx.addLine(to: p) }
+                    }
+                    ctx.strokePath()
+                }
+                ctx.restoreGState()
+            }
+            ctx.endPDFPage()
+
+            for bpage in boardPages[i] ?? [] {
+                let bb = bpage.bounds(for: .mediaBox)
+                ctx.beginPDFPage(nil)
+                ctx.saveGState()
+                ctx.translateBy(x: -bb.minX, y: -bb.minY)
+                bpage.draw(with: .mediaBox, to: ctx)
+                ctx.restoreGState()
+                ctx.endPDFPage()
+            }
+        }
+        ctx.closePDF()
+        return ExportSummary(inkSlides: inkSlides, boardsAfterSlides: insertedAfter.sorted())
+    }
 }
 
 // MARK: - Shared helpers
