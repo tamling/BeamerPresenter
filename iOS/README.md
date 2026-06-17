@@ -39,7 +39,9 @@ The Info.plist (PDF document type, Files access, orientations) is generated from
 6. Select your iPad and **Run**.
 
 ## What works now
-Open a PDF, present it full-screen, navigate by tapping the left/right edges,
+Tap **Try a sample deck** to present the bundled 6-slide sample immediately, or
+open your own PDF (AirDrop/Files/iCloud). Present it full-screen, navigate by
+tapping the left/right edges,
 swiping, or the on-screen arrows; jump via the thumbnail strip; draw with the
 pen (undo / clear). Recently opened files are listed on the start screen.
 

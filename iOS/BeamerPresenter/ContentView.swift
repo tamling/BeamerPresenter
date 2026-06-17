@@ -37,6 +37,14 @@ struct StartView: View {
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
 
+            if let sample = Bundle.main.url(forResource: "sample", withExtension: "pdf") {
+                Button { model.open(url: sample) } label: {
+                    Label("Try a sample deck", systemImage: "sparkles").frame(maxWidth: 320)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.large)
+            }
+
             if !model.recents.isEmpty {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Recent").font(.headline)
