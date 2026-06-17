@@ -7,6 +7,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let state = PresentationState()
     private var presenterWindow: NSWindow?
     private var audienceWindow: NSWindow?
+    private var splashWindow: NSWindow?
     private var keyMonitor: Any?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -16,7 +17,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self, selector: #selector(screensChanged),
             name: NSApplication.didChangeScreenParametersNotification, object: nil)
         buildPresenterWindow()
+        showSplash()
         NSApp.activate(ignoringOtherApps: true)
+    }
+
+    // MARK: - Launch splash
+
+    /// Shows a brief launch splash with the icon and version, then fades it out
+    /// and brings the presenter window forward.
+    private func showSplash() {
+        let splash = SplashView(icon: NSApp.applicationIconImage, version: AppInfo.version)
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 440, height: 280),
+                              styleMask: [.borderless], backing: .buffered, defer: false)
+        window.isOpaque = false
+        window.backgroundColor = .clear
+        window.hasShadow = true
+        window.level = .floating
+        window.isMovableByWindowBackground = true
+        window.contentView = NSHostingView(rootView: splash)
+        window.center()
+        window.orderFrontRegardless()
+        splashWindow = window
+
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 1_600_000_000)
+            guard let window = splashWindow else { return }
+            window.animator().alphaValue = 0
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            window.orderOut(nil)
+            splashWindow = nil
+            presenterWindow?.makeKeyAndOrderFront(nil)
+        }
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
@@ -39,32 +70,61 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                         action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
 
         // File menu — open, favourites, close.
-        let fileItem = NSMenuItem()
-        mainMenu.addItem(fileItem)
-        let fileMenu = NSMenu(title: "File")
-        fileItem.submenu = fileMenu
+        let fileMenu = addSubmenu(to: mainMenu, "File")
         add(to: fileMenu, "Open…", #selector(openDocument(_:)), "o")
         add(to: fileMenu, "Add Folder to Favorites…", #selector(addFavoriteFolder(_:)), "d")
         fileMenu.addItem(.separator())
         add(to: fileMenu, "Close Presentation", #selector(closePresentation(_:)), "w")
 
-        // View menu — mirrors the in-app navigation/tools (requires a deck).
-        let viewItem = NSMenuItem()
-        mainMenu.addItem(viewItem)
-        let viewMenu = NSMenu(title: "View")
-        viewItem.submenu = viewMenu
-        add(to: viewMenu, "Next Slide", #selector(nextSlide(_:)), "]")
-        add(to: viewMenu, "Previous Slide", #selector(previousSlide(_:)), "[")
-        viewMenu.addItem(.separator())
-        add(to: viewMenu, "Toggle Overview", #selector(toggleOverview(_:)), "1")
-        add(to: viewMenu, "Black Out Audience", #selector(toggleBlackout(_:)), "b")
-        viewMenu.addItem(.separator())
-        add(to: viewMenu, "Toggle Whiteboard", #selector(toggleWhiteboard(_:)))
-        add(to: viewMenu, "Save Whiteboard…", #selector(saveWhiteboard(_:)), "s")
-        viewMenu.addItem(.separator())
-        add(to: viewMenu, "Reset Timer", #selector(resetTimer(_:)), "r")
+        // Presentation menu — navigation + audience controls.
+        let presoMenu = addSubmenu(to: mainMenu, "Presentation")
+        add(to: presoMenu, "Next Slide", #selector(nextSlide(_:)), "]")
+        add(to: presoMenu, "Previous Slide", #selector(previousSlide(_:)), "[")
+        add(to: presoMenu, "First Slide", #selector(firstSlide(_:)))
+        add(to: presoMenu, "Last Slide", #selector(lastSlide(_:)))
+        presoMenu.addItem(.separator())
+        add(to: presoMenu, "Toggle Overview", #selector(toggleOverview(_:)), "1")
+        add(to: presoMenu, "Black Out Audience", #selector(toggleBlackout(_:)), "b")
+        presoMenu.addItem(.separator())
+        add(to: presoMenu, "Reset Timer", #selector(resetTimer(_:)), "r")
+
+        // Tools menu — pen / laser / colours / ink.
+        let toolsMenu = addSubmenu(to: mainMenu, "Tools")
+        add(to: toolsMenu, "Pen", #selector(togglePen(_:)), "p")
+        add(to: toolsMenu, "Laser Pointer", #selector(toggleLaser(_:)), "l")
+        toolsMenu.addItem(.separator())
+        for (name, color) in PenPalette.colors {
+            let item = add(to: toolsMenu, "Pen Colour: \(name)", #selector(setPenColor(_:)))
+            item.representedObject = color
+        }
+        toolsMenu.addItem(.separator())
+        add(to: toolsMenu, "Undo Stroke", #selector(undoInk(_:)), "z")
+        add(to: toolsMenu, "Clear Ink", #selector(clearInk(_:)))
+
+        // Whiteboard menu — boards, items, and export.
+        let boardMenu = addSubmenu(to: mainMenu, "Whiteboard")
+        add(to: boardMenu, "Toggle Whiteboard", #selector(toggleWhiteboard(_:)))
+        add(to: boardMenu, "New Whiteboard", #selector(newBoard(_:)))
+        add(to: boardMenu, "Next Board", #selector(nextBoard(_:)))
+        add(to: boardMenu, "Previous Board", #selector(previousBoard(_:)))
+        add(to: boardMenu, "Delete Board", #selector(deleteBoard(_:)))
+        boardMenu.addItem(.separator())
+        add(to: boardMenu, "Add Text", #selector(addText(_:)))
+        add(to: boardMenu, "Add Table", #selector(addTable(_:)))
+        add(to: boardMenu, "Add QR Code", #selector(addQR(_:)))
+        boardMenu.addItem(.separator())
+        add(to: boardMenu, "Save Whiteboard as PDF…", #selector(saveWhiteboard(_:)), "s")
+        add(to: boardMenu, "Insert into PDF (Copy)…", #selector(insertWhiteboard(_:)), "i")
 
         NSApp.mainMenu = mainMenu
+    }
+
+    private func addSubmenu(to mainMenu: NSMenu, _ title: String) -> NSMenu {
+        let item = NSMenuItem()
+        mainMenu.addItem(item)
+        let menu = NSMenu(title: title)
+        item.submenu = menu
+        return menu
     }
 
     /// Adds an item targeting this delegate so menu validation/handling routes
@@ -77,16 +137,40 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return item
     }
 
-    /// Greys out deck-dependent commands until a presentation is loaded.
+    /// Enables/disables deck- and board-dependent commands and shows checkmarks
+    /// for the current tool, colour, and toggles.
     func validateMenuItem(_ item: NSMenuItem) -> Bool {
         switch item.action {
         case #selector(closePresentation(_:)), #selector(nextSlide(_:)),
-             #selector(previousSlide(_:)), #selector(toggleOverview(_:)),
-             #selector(toggleBlackout(_:)), #selector(resetTimer(_:)),
-             #selector(toggleWhiteboard(_:)):
+             #selector(previousSlide(_:)), #selector(firstSlide(_:)),
+             #selector(lastSlide(_:)), #selector(resetTimer(_:)),
+             #selector(toggleLaser(_:)), #selector(newBoard(_:)):
             return state.isLoaded
-        case #selector(saveWhiteboard(_:)):
+
+        case #selector(toggleOverview(_:)):
+            item.state = state.showOverview ? .on : .off
+            return state.isLoaded
+        case #selector(toggleBlackout(_:)):
+            item.state = state.blackout ? .on : .off
+            return state.isLoaded
+        case #selector(toggleWhiteboard(_:)):
+            item.state = state.isBoardActive ? .on : .off
+            return state.isLoaded
+        case #selector(togglePen(_:)):
+            item.state = state.tool == .pen ? .on : .off
+            return state.isLoaded
+        case #selector(setPenColor(_:)):
+            item.state = (item.representedObject as? Color) == state.penColor ? .on : .off
+            return state.isLoaded
+        case #selector(undoInk(_:)), #selector(clearInk(_:)):
+            return state.isLoaded && state.hasInkOnCurrentSlide
+
+        case #selector(nextBoard(_:)), #selector(previousBoard(_:)),
+             #selector(deleteBoard(_:)), #selector(addText(_:)),
+             #selector(addTable(_:)), #selector(addQR(_:)),
+             #selector(saveWhiteboard(_:)), #selector(insertWhiteboard(_:)):
             return state.isBoardActive
+
         default:
             return true
         }
@@ -121,10 +205,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func nextSlide(_ sender: Any?)      { state.next() }
     @objc private func previousSlide(_ sender: Any?)  { state.previous() }
+    @objc private func firstSlide(_ sender: Any?)     { state.goToFirst() }
+    @objc private func lastSlide(_ sender: Any?)      { state.goToLast() }
     @objc private func toggleOverview(_ sender: Any?) { state.showOverview.toggle() }
     @objc private func toggleBlackout(_ sender: Any?) { state.blackout.toggle() }
-    @objc private func toggleWhiteboard(_ sender: Any?) { state.toggleBoard() }
     @objc private func resetTimer(_ sender: Any?)     { state.resetTimer() }
+
+    // Tools
+    @objc private func togglePen(_ sender: Any?)      { state.toggleTool(.pen) }
+    @objc private func toggleLaser(_ sender: Any?)    { state.toggleTool(.laser) }
+    @objc private func undoInk(_ sender: Any?)        { state.undoStroke() }
+    @objc private func clearInk(_ sender: Any?)       { state.clearStrokes() }
+    @objc private func setPenColor(_ sender: NSMenuItem) {
+        guard let color = sender.representedObject as? Color else { return }
+        state.penColor = color
+        if state.tool != .pen { state.tool = .pen }
+    }
+
+    // Whiteboard
+    @objc private func toggleWhiteboard(_ sender: Any?) { state.toggleBoard() }
+    @objc private func newBoard(_ sender: Any?)       { state.addBoard() }
+    @objc private func nextBoard(_ sender: Any?)      { state.nextBoard() }
+    @objc private func previousBoard(_ sender: Any?)  { state.previousBoard() }
+    @objc private func deleteBoard(_ sender: Any?)    { state.deleteActiveBoard() }
+    @objc private func addText(_ sender: Any?)        { state.addItem(.text) }
+    @objc private func addTable(_ sender: Any?)       { state.addItem(.table) }
+    @objc private func addQR(_ sender: Any?)          { state.addItem(.qr) }
 
     @objc private func saveWhiteboard(_ sender: Any?) {
         guard let board = state.activeBoard else { return }
@@ -141,16 +247,51 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    @objc private func insertWhiteboard(_ sender: Any?) {
+        guard let board = state.activeBoard, let source = state.sourceURL else { return }
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.pdf]
+        panel.nameFieldStringValue = "\(state.title) + \(board.name).pdf"
+        panel.canCreateDirectories = true
+        guard panel.runModal() == .OK, let dest = panel.url else { return }
+        if !BoardExporter.insertIntoCopy(of: source, board: board, afterIndex: state.index,
+                                         aspect: state.slideAspect, to: dest) {
+            let alert = NSAlert()
+            alert.messageText = "Could not insert the whiteboard into the PDF"
+            alert.informativeText = dest.lastPathComponent
+            alert.runModal()
+        }
+    }
+
     @objc func openDocument(_ sender: Any?) {
         let panel = NSOpenPanel()
-        panel.allowedContentTypes = [UTType.pdf]
+        panel.message = "Choose a PDF — or its .tex source, and the matching PDF is opened."
+        panel.allowedContentTypes = [.pdf, UTType(filenameExtension: "tex") ?? .plainText]
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = false
         guard panel.runModal() == .OK, let url = panel.url else { return }
         load(url: url)
     }
 
-    private func load(url: URL) {
+    /// Maps a picked file to the PDF to present: a `.pdf` is used directly; a
+    /// `.tex` resolves to the same-named `.pdf` next to it.
+    private func resolvedPDF(for url: URL) -> URL? {
+        if url.pathExtension.lowercased() == "tex" {
+            let pdf = url.deletingPathExtension().appendingPathExtension("pdf")
+            return FileManager.default.fileExists(atPath: pdf.path) ? pdf : nil
+        }
+        return url
+    }
+
+    private func load(url rawURL: URL) {
+        guard let url = resolvedPDF(for: rawURL) else {
+            let alert = NSAlert()
+            alert.messageText = "No PDF found for this .tex"
+            alert.informativeText = "Compile \(rawURL.lastPathComponent) first, or keep "
+                + "\(rawURL.deletingPathExtension().lastPathComponent).pdf next to it."
+            alert.runModal()
+            return
+        }
         guard state.load(url: url) else {
             let alert = NSAlert()
             alert.messageText = "Could not open PDF"

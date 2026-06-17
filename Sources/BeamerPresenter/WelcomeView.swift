@@ -167,7 +167,7 @@ struct WelcomeView: View {
             .overlay(
                 VStack(spacing: 6) {
                     Image(systemName: "square.and.arrow.down")
-                    Text("Drop a PDF here")
+                    Text("Drop a PDF or .tex here")
                 }
                 .foregroundStyle(.secondary)
             )
@@ -176,8 +176,9 @@ struct WelcomeView: View {
                 guard let provider = providers.first else { return false }
                 _ = provider.loadDataRepresentation(forTypeIdentifier: UTType.fileURL.identifier) { data, _ in
                     guard let data,
-                          let url = URL(dataRepresentation: data, relativeTo: nil),
-                          url.pathExtension.lowercased() == "pdf" else { return }
+                          let url = URL(dataRepresentation: data, relativeTo: nil) else { return }
+                    let ext = url.pathExtension.lowercased()
+                    guard ext == "pdf" || ext == "tex" else { return }
                     DispatchQueue.main.async { onOpenURL(url) }
                 }
                 return true

@@ -11,20 +11,26 @@ app can also pull `\note{}` speaker notes straight from the source.
 
 ## GUI
 
-- **Menu bar** — *App* (About + version), *File* (Open, Add Folder to Favorites,
-  Close Presentation), *View* (next/previous, overview, blackout, reset timer).
+- **Launch splash** — a brief startup screen with the app icon, name, and version.
+- **Menu bar** — every command lives here: *File* (Open, Add Folder to Favorites,
+  Close), *Presentation* (next/previous/first/last, overview, blackout, reset
+  timer), *Tools* (pen, laser, pen colours, undo/clear ink), *Whiteboard* (toggle,
+  boards, add text/table/QR, save/insert). *App* holds About + version.
 - **Welcome screen** — open button, drag-and-drop a PDF, **favorite folders**
   (expand to the PDFs inside; add with the `+`), and a recent-files list.
-- **Presenter console** — control bar (open, home, prev/next, overview, blackout,
-  timer, clock), large current slide, next slide, notes pane. The slide/sidebar
-  split and the next/notes split are **draggable**, and the sizes persist.
+- **Presenter console** — a slim control bar (an exit button, the slide counter,
+  pen-colour swatches, elapsed timer + clock — each symbol captioned; everything
+  else is in the menu bar), large current slide, next slide, notes pane. The
+  slide/sidebar split and the next/notes split are **draggable**, and the sizes
+  persist.
 - **Thumbnail strip** — click any slide to jump; auto-scrolls to the current one.
 - **Overview grid** — press `G` for a full grid of every slide; click to jump.
 - **Ink & laser** — draw freehand on a slide (pen, 4 colours, undo/clear) or use
   a laser pointer; both mirror live onto the audience screen.
 - **Whiteboard** — press `W` for a blank white scratch slide to work through a
   calculation live. Draw on it, drop in text boxes, a small table, or a QR code,
-  keep several boards, and export any of them to its own PDF.
+  keep several boards, export any of them to its own PDF, or **insert** one after
+  the current slide into a *copy* of the deck PDF (the original is untouched).
 - **Audience window** — full-bleed slide, fullscreen on the external display.
 
 ## How notes work
@@ -51,7 +57,9 @@ left half → audience, right half → your notes pane.
 
 You don't have to recompile with the second-screen option. If you open a plain
 PDF and a `.tex` file with the **same base name** sits next to it, the app reads
-your `\note{…}` text directly from the source and shows it in the notes pane:
+your `\note{…}` text directly from the source and shows it in the notes pane.
+You can also do it the other way round — **open (or drop) the `.tex` itself** and
+the app opens the matching `<name>.pdf` beside it:
 
 ```latex
 \begin{frame}{Title}
@@ -114,6 +122,7 @@ Bluetooth presenter remotes emit Page Up / Page Down, so they work out of the bo
 | `RecentFiles.swift` | Recently-opened list persisted in UserDefaults |
 | `Favorites.swift` | Favorite folders + app version info, persisted in UserDefaults |
 | `WelcomeView.swift` | Start screen: open, drag-and-drop, recents |
+| `SplashView.swift` | Brief launch splash with icon + version |
 | `PresenterView.swift` | Root switch + presenter console + control bar |
 | `ThumbnailStrip.swift` | Clickable thumbnail navigation row |
 | `OverviewGrid.swift` | Full-window slide overview overlay |
