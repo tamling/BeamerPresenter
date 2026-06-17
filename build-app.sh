@@ -24,12 +24,17 @@ BIN_DIR="$(swift build -c "$CONFIG" --arch "$ARCH" --show-bin-path)"
 BIN="$BIN_DIR/$APP_NAME"
 [ -x "$BIN" ] || { echo "✗ Binary not found at $BIN"; exit 1; }
 
+echo "▶︎ Building app icon…"
+python3 Tools/make_icon.py
+iconutil -c icns Resources/AppIcon.iconset -o Resources/BeamerPresenter.icns
+
 APP="build/$APP_NAME.app"
 echo "▶︎ Assembling $APP…"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/$APP_NAME"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
+cp Resources/BeamerPresenter.icns "$APP/Contents/Resources/BeamerPresenter.icns"
 printf 'APPL????' > "$APP/Contents/PkgInfo"
 
 if [ -n "$SIGN_IDENTITY" ]; then

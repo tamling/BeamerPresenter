@@ -6,17 +6,25 @@ screen shows the slide; your laptop shows a full presenter console: current
 slide, next slide, speaker notes, a thumbnail strip, a slide overview, and a
 timer.
 
-It works directly off a compiled PDF, so there's no LaTeX parsing involved.
+It works directly off a compiled PDF; if a matching `.tex` is alongside it, the
+app can also pull `\note{}` speaker notes straight from the source.
 
 ## GUI
 
-- **Welcome screen** — open button, drag-and-drop a PDF, and a recent-files list.
+- **Menu bar** — *App* (About + version), *File* (Open, Add Folder to Favorites,
+  Close Presentation), *View* (next/previous, overview, blackout, reset timer).
+- **Welcome screen** — open button, drag-and-drop a PDF, **favorite folders**
+  (expand to the PDFs inside; add with the `+`), and a recent-files list.
 - **Presenter console** — control bar (open, home, prev/next, overview, blackout,
-  timer, clock), large current slide, next slide, notes pane.
+  timer, clock), large current slide, next slide, notes pane. The slide/sidebar
+  split and the next/notes split are **draggable**, and the sizes persist.
 - **Thumbnail strip** — click any slide to jump; auto-scrolls to the current one.
 - **Overview grid** — press `G` for a full grid of every slide; click to jump.
 - **Ink & laser** — draw freehand on a slide (pen, 4 colours, undo/clear) or use
   a laser pointer; both mirror live onto the audience screen.
+- **Whiteboard** — press `W` for a blank white scratch slide to work through a
+  calculation live. Draw on it, drop in text boxes, a small table, or a QR code,
+  keep several boards, and export any of them to its own PDF.
 - **Audience window** — full-bleed slide, fullscreen on the external display.
 
 ## How notes work
@@ -37,8 +45,27 @@ your `\note{}` text on the right half:
 ```
 
 The app detects the double-width layout automatically and splits each page:
-left half → audience, right half → your notes pane. A plain PDF (no notes
-layout) still presents fine — the notes pane just shows a hint instead.
+left half → audience, right half → your notes pane.
+
+### Notes straight from the `.tex`
+
+You don't have to recompile with the second-screen option. If you open a plain
+PDF and a `.tex` file with the **same base name** sits next to it, the app reads
+your `\note{…}` text directly from the source and shows it in the notes pane:
+
+```latex
+\begin{frame}{Title}
+  Slide content here.
+  \note{These are my speaker notes for this slide.}
+\end{frame}
+```
+
+If there's no `.tex` with the same base name (or it has no notes), the app falls
+back to any other `.tex` in the same folder. Page mapping is exact when the
+matching Beamer `.nav` file is also present (it encodes each frame's page range,
+so overlays line up); otherwise each frame is treated as one page. A plain PDF
+with neither notes layout nor a `.tex` still presents fine — the notes pane just
+shows a hint instead.
 
 ## Run it (development)
 
@@ -61,6 +88,7 @@ fullscreen on your external display (or the only display if there's just one).
 | Home / End | First / last slide |
 | `G` | Toggle the slide overview |
 | `B` | Black out the audience screen |
+| `W` | Toggle the whiteboard scratch slide |
 | `R` | Reset the elapsed timer |
 | `P` | Pen tool |
 | `L` | Laser pointer |
@@ -78,9 +106,13 @@ Bluetooth presenter remotes emit Page Up / Page Down, so they work out of the bo
 | `AppDelegate.swift` | Windows, screen placement, menu, keyboard |
 | `PresentationState.swift` | Shared state (index, timer, blackout, overview, thumbnails) |
 | `PDFModel.swift` | Loads the PDF and crops each page into halves |
+| `TexNotes.swift` | Parses `\note{}` from a sibling `.tex` (+ `.nav` page ranges) |
 | `PDFPageView.swift` | Renders one non-interactive page (SwiftUI ↔ PDFKit) |
 | `SlideView.swift` | Aspect-correct slide + ink/laser annotation layer |
+| `Whiteboard.swift` | Whiteboard model, items, and QR-code generation |
+| `WhiteboardView.swift` | Board rendering, item editing, toolbar, and PDF export |
 | `RecentFiles.swift` | Recently-opened list persisted in UserDefaults |
+| `Favorites.swift` | Favorite folders + app version info, persisted in UserDefaults |
 | `WelcomeView.swift` | Start screen: open, drag-and-drop, recents |
 | `PresenterView.swift` | Root switch + presenter console + control bar |
 | `ThumbnailStrip.swift` | Clickable thumbnail navigation row |
@@ -90,7 +122,8 @@ Bluetooth presenter remotes emit Page Up / Page Down, so they work out of the bo
 ## Build a real `.app`
 
 `swift run` is for iterating. To get a double-clickable bundle, run the included
-script — it builds a release `arm64` binary and wraps it with `Info.plist`:
+script — it builds a release `arm64` binary, generates the app icon, and wraps
+everything with `Info.plist`:
 
 ```bash
 ./build-app.sh
@@ -107,10 +140,24 @@ Then notarize with `xcrun notarytool submit build/BeamerPresenter.app --wait …
 and `xcrun stapler staple`. (You can also drop these sources into a regular
 Xcode macOS App target if you prefer the Xcode toolchain.)
 
+## App icon
+
+The icon is drawn programmatically — no design tools or binaries needed. Edit the
+shapes/colours in `Tools/make_icon.py` and run:
+
+```bash
+./make-icon.sh
+```
+
+It renders `Resources/AppIcon.iconset` (and a 1024px `Resources/AppIcon.png`
+preview), then, on macOS, compiles `Resources/BeamerPresenter.icns` with the
+built-in `iconutil`. `build-app.sh` does this automatically when assembling the
+bundle.
+
 ## Roadmap ideas
 
 - Embedded links and videos in the PDF
 - Persisting ink between sessions / exporting an annotated PDF
 - Larger / scrollable / markdown notes via the `pdfpc` embedded-notes format
 - Per-slide timing and a rehearsal mode
-- App icon + notarized release build
+- Notarized release build
