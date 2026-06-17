@@ -40,6 +40,7 @@ final class PresentationState: ObservableObject {
     @Published var index: Int = 0
     @Published var blackout: Bool = false
     @Published var showOverview: Bool = false
+    @Published var scratch: String = ""          // free-form notes, saved next to the PDF as .txt
     @Published private(set) var startDate = Date()
 
     // Annotation / laser
@@ -64,6 +65,7 @@ final class PresentationState: ObservableObject {
     func load(url: URL) -> Bool {
         guard let probe = PDFDocument(url: url), probe.pageCount > 0 else { return false }
         let split = PDFModel.isNotesLayout(probe)
+        if isLoaded { recordCurrentSession(); saveScratch() }   // finish the previous deck first
         sourceURL = url
 
         slideDoc = PDFModel.croppedDocument(url: url, half: split ? .left : .full)
@@ -77,6 +79,7 @@ final class PresentationState: ObservableObject {
         // PDF, fall back to `\note{}` text from a sibling `.tex` if one exists.
         textNotes = split ? [:] : TexNotes.load(forPDF: url, pageCount: doc.pageCount)
         title = url.deletingPathExtension().lastPathComponent
+        loadScratch()
         thumbCache.removeAll()
         strokes.removeAll()
         currentStroke = []
@@ -96,6 +99,9 @@ final class PresentationState: ObservableObject {
     }
 
     func unload() {
+        recordCurrentSession()
+        saveScratch()
+        scratch = ""
         sourceURL = nil
         slideDoc = nil
         notesDoc = nil
@@ -115,6 +121,37 @@ final class PresentationState: ObservableObject {
         blackout = false
         showOverview = false
         isLoaded = false
+    }
+
+    // MARK: - Scratch notes & session stats
+
+    /// Free-form scratch notes are stored as `<pdf-name>.notes.txt` next to the PDF.
+    private var scratchURL: URL? {
+        sourceURL?.deletingPathExtension().appendingPathExtension("notes").appendingPathExtension("txt")
+    }
+
+    private func loadScratch() {
+        if let url = scratchURL, let text = try? String(contentsOf: url, encoding: .utf8) {
+            scratch = text
+        } else {
+            scratch = ""
+        }
+    }
+
+    func saveScratch() {
+        guard let url = scratchURL else { return }
+        if scratch.isEmpty {
+            try? FileManager.default.removeItem(at: url)
+        } else {
+            try? scratch.write(to: url, atomically: true, encoding: .utf8)
+        }
+    }
+
+    /// Records the elapsed time of the current deck into the usage stats.
+    func recordCurrentSession() {
+        guard isLoaded else { return }
+        Stats.record(seconds: Date().timeIntervalSince(startDate))
+        startDate = Date()   // so a later call doesn't double-count
     }
 
     // MARK: - Navigation

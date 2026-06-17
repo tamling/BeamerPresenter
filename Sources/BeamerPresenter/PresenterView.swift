@@ -81,9 +81,11 @@ struct PresenterView: View {
     private var sideColumn: some View {
         GeometryReader { geo in
             let handle: CGFloat = 10
-            let total = geo.size.height
-            let notesH = max(0, (total - handle) * notesFraction)
-            let nextH = max(0, total - handle - notesH)
+            let scratchH: CGFloat = 132
+            let gap: CGFloat = 8
+            let avail = max(0, geo.size.height - handle - scratchH - gap)
+            let notesH = avail * notesFraction
+            let nextH = avail - notesH
 
             VStack(spacing: 0) {
                 slidePane(title: "Next", index: state.index + 1, interactive: false)
@@ -95,7 +97,7 @@ struct PresenterView: View {
                 ResizeHandle(axis: .vertical) { translation in
                     let start = notesDragStart ?? notesFraction
                     notesDragStart = start
-                    let span = max(total - handle, 1)
+                    let span = max(avail, 1)
                     notesFraction = (start - Double(translation) / Double(span)).clamped(to: notesRange)
                 } onEnded: {
                     notesDragStart = nil
@@ -103,7 +105,30 @@ struct PresenterView: View {
 
                 notesPane
                     .frame(height: notesH)
+
+                scratchPane
+                    .frame(height: scratchH)
+                    .padding(.top, gap)
             }
+        }
+    }
+
+    /// A small free-form notes editor, autosaved as `<pdf>.notes.txt`.
+    private var scratchPane: some View {
+        VStack(spacing: 4) {
+            HStack {
+                Text("Scratch notes").font(.caption).foregroundStyle(.secondary)
+                Spacer()
+                Image(systemName: "square.and.pencil").font(.caption2).foregroundStyle(.secondary)
+            }
+            TextEditor(text: $state.scratch)
+                .font(.callout)
+                .scrollContentBackground(.hidden)
+                .padding(6)
+                .background(Color(nsColor: .textBackgroundColor))
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .overlay(RoundedRectangle(cornerRadius: 6).stroke(.gray.opacity(0.3)))
+                .onChange(of: state.scratch) { _ in state.saveScratch() }
         }
     }
 
