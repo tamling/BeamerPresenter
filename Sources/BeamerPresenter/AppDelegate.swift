@@ -158,7 +158,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         let alert = NSAlert()
         alert.messageText = "Hide \(AppInfo.name) to the menu bar?"
         alert.informativeText = "It keeps running in the menu bar — click its icon to come back, "
-            + "or Quit (⌘Q) to exit."
+            + "or Quit (⌘Q) to exit.\n\nSave & Hide also saves your notes"
+            + (state.hasAnnotations ? " and exports the ink + whiteboards as a PDF." : ".")
         alert.addButton(withTitle: "Save & Hide")
         alert.addButton(withTitle: "Hide")
         alert.addButton(withTitle: "Cancel")
@@ -166,6 +167,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         switch alert.runModal() {
         case .alertFirstButtonReturn:           // Save & Hide
             state.saveScratch()
+            if state.hasAnnotations {           // export ink + boards as a new PDF
+                runPresentationExport(showSummary: false)
+            }
             hideToMenuBar()
         case .alertSecondButtonReturn:          // Hide
             hideToMenuBar()
@@ -391,13 +395,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     /// baked in. Defaults to the source folder (next to the .tex/.pdf) and reports
     /// where each board was inserted.
     @objc private func savePresentationAs(_ sender: Any?) {
-        guard state.isLoaded, let source = state.sourceURL else { return }
+        runPresentationExport(showSummary: true)
+    }
+
+    @discardableResult
+    private func runPresentationExport(showSummary: Bool) -> Bool {
+        guard state.isLoaded, let source = state.sourceURL else { return false }
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.pdf]
         panel.nameFieldStringValue = "\(state.title) annotated.pdf"
         panel.directoryURL = source.deletingLastPathComponent()
         panel.canCreateDirectories = true
-        guard panel.runModal() == .OK, let dest = panel.url else { return }
+        guard panel.runModal() == .OK, let dest = panel.url else { return false }
 
         guard let summary = BoardExporter.exportPresentation(
                 sourceURL: source, split: state.notesDoc != nil, aspect: state.slideAspect,
@@ -406,9 +415,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             alert.messageText = "Could not export the presentation"
             alert.informativeText = dest.lastPathComponent
             alert.runModal()
-            return
+            return false
         }
 
+        guard showSummary else { return true }
         let alert = NSAlert()
         alert.messageText = "Saved \(dest.lastPathComponent)"
         var info = "Folder: \(dest.deletingLastPathComponent().path)\n"
@@ -421,6 +431,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         }
         alert.informativeText = info
         alert.runModal()
+        return true
     }
 
     @objc private func saveNotes(_ sender: Any?) {

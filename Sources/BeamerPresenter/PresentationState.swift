@@ -254,6 +254,11 @@ final class PresentationState: ObservableObject {
         return board.strokes.isEmpty && board.items.isEmpty
     }
 
+    /// True when the deck has any ink or whiteboards worth exporting.
+    var hasAnnotations: Bool {
+        !boards.isEmpty || strokes.values.contains { !$0.isEmpty }
+    }
+
     var selectedItem: BoardItem? {
         guard let id = selectedItemID else { return nil }
         return activeBoard?.items.first { $0.id == id }
