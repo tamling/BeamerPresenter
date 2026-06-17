@@ -356,8 +356,9 @@ private struct ControlBar: View {
         HStack(alignment: .top, spacing: 12) {
             tool("Exit", "rectangle.portrait.and.arrow.right") { state.unload() }
 
-            sep
+            Spacer(minLength: 8)
 
+            // Centered cluster: navigation + audience + drawing tools.
             tool("Prev", "chevron.left", disabled: state.index == 0) { state.previous() }
             captioned("Slide") {
                 Text("\(state.index + 1) / \(state.pageCount)")
@@ -395,12 +396,13 @@ private struct ControlBar: View {
             tool("Undo", "arrow.uturn.backward", disabled: !state.hasInkOnCurrentSlide) { state.undoStroke() }
             tool("Clear", "trash", disabled: !state.hasInkOnCurrentSlide) { state.clearStrokes() }
 
-            sep
-
-            tool("Reset", "arrow.counterclockwise") { state.resetTimer() }
-
             Spacer(minLength: 8)
 
+            // Right cluster: the timer (start/stop, reset) and clocks.
+            tool(state.timerRunning ? "Pause" : "Start",
+                 state.timerRunning ? "pause" : "play",
+                 active: !state.timerRunning) { state.toggleTimer() }
+            tool("Reset", "arrow.counterclockwise") { state.resetTimer() }
             captioned("Elapsed") {
                 Label(elapsed, systemImage: "stopwatch")
                     .font(.headline.monospacedDigit())
@@ -445,7 +447,8 @@ private struct ControlBar: View {
     }
 
     private var elapsed: String {
-        let secs = max(0, Int(now.timeIntervalSince(state.startDate)))
+        _ = now   // re-render every tick
+        let secs = max(0, Int(state.elapsedSeconds))
         return String(format: "%02d:%02d", secs / 60, secs % 60)
     }
 }
