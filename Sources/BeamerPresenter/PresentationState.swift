@@ -246,6 +246,18 @@ final class PresentationState: ObservableObject {
         selectedItemID = item.id
     }
 
+    /// Adds an empty table of the chosen size (rows × columns), like the grid
+    /// picker in Apple Notes.
+    func addTable(rows: Int, columns: Int) {
+        let r = max(1, rows), c = max(1, columns)
+        let line = Array(repeating: "", count: c).joined(separator: " | ")
+        let text = Array(repeating: line, count: r).joined(separator: "\n")
+        let width = min(0.9, max(0.3, CGFloat(c) * 0.14))
+        let item = BoardItem(kind: .table, center: CGPoint(x: 0.5, y: 0.4), width: width, text: text)
+        mutateActiveBoard { $0.items.append(item) }
+        selectedItemID = item.id
+    }
+
     func updateItemText(_ id: UUID, _ text: String) {
         mutateActiveBoard { board in
             if let k = board.items.firstIndex(where: { $0.id == id }) { board.items[k].text = text }
