@@ -265,9 +265,10 @@ private extension Double {
     }
 }
 
-/// Slim in-app bar: an exit button, the live slide counter, the pen-colour
-/// swatches, and the clocks — each shown as a symbol with a caption beneath it.
-/// Every other command lives in the macOS menu bar (and on the keyboard).
+/// In-app bar with all the live controls — exit, navigation, overview/blackout/
+/// whiteboard, pen/laser, the pen-colour swatches, ink undo/clear, and the
+/// clocks — each shown as a symbol with a caption beneath it. The same commands
+/// also live in the macOS menu bar (and on the keyboard).
 private struct ControlBar: View {
     @EnvironmentObject var state: PresentationState
 
@@ -275,43 +276,53 @@ private struct ControlBar: View {
     private let tick = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var body: some View {
-        HStack(alignment: .top, spacing: 18) {
-            captioned("Exit") {
-                Button { NSApplication.shared.terminate(nil) } label: {
-                    Image(systemName: "power").font(.title3)
-                }
-                .buttonStyle(.borderless)
-                .help("Quit BeamerPresenter")
-            }
+        HStack(alignment: .top, spacing: 12) {
+            tool("Exit", "power") { NSApplication.shared.terminate(nil) }
 
-            Divider().frame(height: 30)
+            sep
 
+            tool("Prev", "chevron.left", disabled: state.index == 0) { state.previous() }
             captioned("Slide") {
                 Text("\(state.index + 1) / \(state.pageCount)")
                     .font(.headline.monospacedDigit())
             }
+            tool("Next", "chevron.right", disabled: state.index + 1 >= state.pageCount) { state.next() }
 
-            Spacer()
+            sep
 
-            HStack(alignment: .top, spacing: 12) {
-                ForEach(PenPalette.colors, id: \.name) { name, color in
-                    captioned(name) {
-                        Button {
-                            state.penColor = color
-                            if state.tool != .pen { state.tool = .pen }   // picking a colour readies the pen
-                        } label: {
-                            Circle().fill(color)
-                                .frame(width: 20, height: 20)
-                                .overlay(Circle().strokeBorder(
-                                    .primary.opacity(state.penColor == color ? 0.9 : 0.2),
-                                    lineWidth: state.penColor == color ? 2.5 : 1))
-                        }
-                        .buttonStyle(.borderless)
+            tool("Overview", "square.grid.2x2", active: state.showOverview) { state.showOverview.toggle() }
+            tool("Blackout", state.blackout ? "eye.slash.fill" : "eye.slash", active: state.blackout) { state.blackout.toggle() }
+            tool("Board", "square.and.pencil", active: state.isBoardActive) { state.toggleBoard() }
+
+            sep
+
+            tool("Pen", "pencil.tip", active: state.tool == .pen) { state.toggleTool(.pen) }
+            tool("Laser", "dot.circle.and.cursorarrow", active: state.tool == .laser) { state.toggleTool(.laser) }
+
+            ForEach(PenPalette.colors, id: \.name) { name, color in
+                captioned(name) {
+                    Button {
+                        state.penColor = color
+                        if state.tool != .pen { state.tool = .pen }   // picking a colour readies the pen
+                    } label: {
+                        Circle().fill(color)
+                            .frame(width: 20, height: 20)
+                            .overlay(Circle().strokeBorder(
+                                .primary.opacity(state.penColor == color ? 0.9 : 0.2),
+                                lineWidth: state.penColor == color ? 2.5 : 1))
                     }
+                    .buttonStyle(.borderless)
                 }
             }
 
-            Spacer()
+            tool("Undo", "arrow.uturn.backward", disabled: !state.hasInkOnCurrentSlide) { state.undoStroke() }
+            tool("Clear", "trash", disabled: !state.hasInkOnCurrentSlide) { state.clearStrokes() }
+
+            sep
+
+            tool("Reset", "arrow.counterclockwise") { state.resetTimer() }
+
+            Spacer(minLength: 8)
 
             captioned("Elapsed") {
                 Label(elapsed, systemImage: "stopwatch")
@@ -327,6 +338,22 @@ private struct ControlBar: View {
         .padding(.vertical, 7)
         .background(Color(nsColor: .underPageBackgroundColor))
         .onReceive(tick) { now = $0 }
+    }
+
+    private var sep: some View { Divider().frame(height: 34) }
+
+    /// A captioned icon button; tinted when `active`, greyed when `disabled`.
+    private func tool(_ caption: String, _ systemImage: String,
+                      active: Bool = false, disabled: Bool = false,
+                      action: @escaping () -> Void) -> some View {
+        captioned(caption) {
+            Button(action: action) {
+                Image(systemName: systemImage).font(.title3)
+            }
+            .buttonStyle(.borderless)
+            .foregroundStyle(active ? Color.accentColor : .primary)
+            .disabled(disabled)
+        }
     }
 
     /// A control stacked above a small caption, so every symbol is labelled.
