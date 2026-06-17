@@ -23,9 +23,41 @@ enum Dependencies {
         return nil
     }
 
+    /// LibreOffice's `soffice` binary, used to convert PowerPoint/ODP to PDF.
+    static func soffice() -> String? {
+        let candidates = [
+            "/Applications/LibreOffice.app/Contents/MacOS/soffice",
+            "/opt/homebrew/bin/soffice", "/usr/local/bin/soffice",
+            "/Applications/OpenOffice.app/Contents/MacOS/soffice",
+        ]
+        return candidates.first { FileManager.default.isExecutableFile(atPath: $0) }
+    }
+
     enum CompileResult {
         case success(URL)     // the produced PDF
         case failure(String)  // a (truncated) log to show
+    }
+
+    /// Converts a presentation file (`.pptx`, `.ppt`, `.odp`, …) to PDF in its own
+    /// folder using LibreOffice. Runs synchronously — call it off the main actor.
+    static func convertToPDF(_ input: URL, soffice: String) -> CompileResult {
+        let dir = input.deletingLastPathComponent()
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: soffice)
+        process.arguments = ["--headless", "--convert-to", "pdf", "--outdir", dir.path, input.path]
+
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = pipe
+        do { try process.run() } catch {
+            return .failure("Could not start LibreOffice: \(error.localizedDescription)")
+        }
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+
+        let pdf = dir.appendingPathComponent(input.deletingPathExtension().lastPathComponent + ".pdf")
+        if FileManager.default.fileExists(atPath: pdf.path) { return .success(pdf) }
+        return .failure(String((String(data: data, encoding: .utf8) ?? "").suffix(1500)))
     }
 
     /// Compiles `texURL` with the given engine, in the file's own folder. Runs

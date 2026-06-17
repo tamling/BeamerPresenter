@@ -53,15 +53,16 @@ struct SplashView: View {
     }
 }
 
-/// Small HUD shown while a `.tex` is compiled to PDF.
+/// Small HUD shown while a file is compiled/converted to PDF.
 struct CompileHUD: View {
-    let name: String
+    let title: String
+    let detail: String
 
     var body: some View {
         VStack(spacing: 12) {
             ProgressView()
-            Text("Compiling \(name)…").font(.headline)
-            Text("Running LaTeX…").font(.caption).foregroundStyle(.secondary)
+            Text(title).font(.headline)
+            Text(detail).font(.caption).foregroundStyle(.secondary)
         }
         .padding(24)
         .frame(width: 320, height: 120)
