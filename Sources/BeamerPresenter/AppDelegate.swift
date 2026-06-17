@@ -4,12 +4,14 @@ import Combine
 import UniformTypeIdentifiers
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDelegate {
     let state = PresentationState()
     private var presenterWindow: NSWindow?
     private var audienceWindow: NSWindow?
     private var splashWindow: NSWindow?
     private var settingsWindow: NSWindow?
+    private var statusItem: NSStatusItem?
+    private weak var statusInfoItem: NSMenuItem?
     private var keyMonitor: Any?
     private var cancellables = Set<AnyCancellable>()
 
@@ -19,13 +21,69 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         NotificationCenter.default.addObserver(
             self, selector: #selector(screensChanged),
             name: NSApplication.didChangeScreenParametersNotification, object: nil)
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(updateStatusItem),
+            name: .statusItemPrefChanged, object: nil)
         // Returning to the home screen (unload) hides the audience window.
         state.$isLoaded
             .dropFirst()
             .sink { [weak self] loaded in if !loaded { self?.audienceWindow?.orderOut(nil) } }
             .store(in: &cancellables)
         buildPresenterWindow()
+        updateStatusItem()
         showSplash()
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    // MARK: - Menu bar status item
+
+    /// Adds or removes the Time Machine-style menu bar icon based on the setting.
+    @objc private func updateStatusItem() {
+        let show = UserDefaults.standard.object(forKey: Prefs.showStatusItem) as? Bool ?? true
+        if show {
+            guard statusItem == nil else { return }
+            let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+            item.button?.image = NSImage(systemSymbolName: "rectangle.on.rectangle.angled",
+                                         accessibilityDescription: AppInfo.name)
+            item.menu = buildStatusMenu()
+            statusItem = item
+        } else if let item = statusItem {
+            NSStatusBar.system.removeStatusItem(item)
+            statusItem = nil
+        }
+    }
+
+    private func buildStatusMenu() -> NSMenu {
+        let menu = NSMenu()
+        menu.delegate = self
+        let info = menu.addItem(withTitle: AppInfo.name, action: nil, keyEquivalent: "")
+        info.isEnabled = false
+        statusInfoItem = info
+        menu.addItem(.separator())
+        add(to: menu, "Open…", #selector(openDocument(_:)))
+        add(to: menu, "Show Presenter Window", #selector(showPresenter(_:)))
+        menu.addItem(.separator())
+        add(to: menu, "Next Slide", #selector(nextSlide(_:)))
+        add(to: menu, "Previous Slide", #selector(previousSlide(_:)))
+        add(to: menu, "Black Out Audience", #selector(toggleBlackout(_:)))
+        add(to: menu, "Toggle Whiteboard", #selector(toggleWhiteboard(_:)))
+        menu.addItem(.separator())
+        add(to: menu, "Settings…", #selector(showSettings(_:)))
+        menu.addItem(withTitle: "Quit \(AppInfo.name)",
+                     action: #selector(NSApplication.terminate(_:)), keyEquivalent: "")
+        return menu
+    }
+
+    /// Keeps the status menu's header line in sync when it opens.
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        guard menu === statusItem?.menu else { return }
+        statusInfoItem?.title = state.isLoaded
+            ? "\(state.title) — \(state.index + 1)/\(state.pageCount)"
+            : "No presentation open"
+    }
+
+    @objc private func showPresenter(_ sender: Any?) {
+        presenterWindow?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
 
@@ -479,4 +537,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
         return true
     }
+}
+
+extension Notification.Name {
+    /// Posted by Settings when the "show menu bar icon" preference changes.
+    static let statusItemPrefChanged = Notification.Name("statusItemPrefChanged")
 }
