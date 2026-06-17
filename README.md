@@ -47,7 +47,8 @@ the slide it was created on. It defaults to the source folder (next to the
   still flip slides while the notes field is focused. **Exit** returns to the home
   screen; closing the presenter
   window also closes the audience window. The slide/sidebar and next/notes splits
-  are **draggable** and persist. The same commands are also in the menu bar.
+  are **draggable** and persist. The same commands are also in the menu bar. The
+  red close button asks first, then hides the app to the menu bar (Quit with ⌘Q).
 - **Thumbnail strip** — click any slide to jump; auto-scrolls to the current one.
 - **Overview grid** — press `G` for a full grid of every slide; click to jump.
 - **Ink & laser** — draw freehand on a slide (pen, 4 colours, undo/clear) or use
