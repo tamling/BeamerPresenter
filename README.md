@@ -18,7 +18,8 @@ app can also pull `\note{}` speaker notes straight from the source.
   with ink & boards, Save Notes, Close), *Presentation* (next/previous/first/last,
   overview, blackout, black-screen presets, start/stop + reset timer), *Tools*
   (pen, laser, pen colours, undo/clear ink), *Whiteboard* (toggle, boards, add
-  text/table/QR, save/insert). *App* holds About + Settings (⌘,).
+  text/table/QR, save/insert). *App* holds About + Settings (⌘,). The
+  *Presentation/Tools/Whiteboard* menus appear only while a deck is open.
 - **Home screen** — open PDF/`.tex` button, a large drop zone (drop a PDF/`.tex`
   to open, or a **folder** to add it to favorites), a LaTeX **dependency status**
   (green/yellow), **favorite folders** (expand to the PDFs inside; add with the

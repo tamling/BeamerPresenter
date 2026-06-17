@@ -358,7 +358,7 @@ private struct ControlBar: View {
 
             Spacer(minLength: 8)
 
-            // Centered cluster: navigation + audience + drawing tools.
+            // Navigation, then the audience and drawing groups, spread apart.
             tool("Prev", "chevron.left", disabled: state.index == 0) { state.previous() }
             captioned("Slide") {
                 Text("\(state.index + 1) / \(state.pageCount)")
@@ -366,13 +366,13 @@ private struct ControlBar: View {
             }
             tool("Next", "chevron.right", disabled: state.index + 1 >= state.pageCount) { state.next() }
 
-            sep
+            Spacer(minLength: 22)
 
             tool("Overview", "square.grid.2x2", active: state.showOverview) { state.showOverview.toggle() }
             tool("Blackout", state.blackout ? "eye.slash.fill" : "eye.slash", active: state.blackout) { state.blackout.toggle() }
             tool("Board", "square.and.pencil", active: state.isBoardActive) { state.toggleBoard() }
 
-            sep
+            Spacer(minLength: 22)
 
             tool("Pen", "pencil.tip", active: state.tool == .pen) { state.toggleTool(.pen) }
             tool("Laser", "dot.circle.and.cursorarrow", active: state.tool == .laser) { state.toggleTool(.laser) }
@@ -418,8 +418,6 @@ private struct ControlBar: View {
         .background(Color(nsColor: .underPageBackgroundColor))
         .onReceive(tick) { now = $0 }
     }
-
-    private var sep: some View { Divider().frame(height: 34) }
 
     /// A captioned icon button; tinted when `active`, greyed when `disabled`.
     private func tool(_ caption: String, _ systemImage: String,
