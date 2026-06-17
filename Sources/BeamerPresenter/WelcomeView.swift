@@ -70,7 +70,7 @@ struct WelcomeView: View {
         .onAppear {
             guard !checkedDeps else { return }
             checkedDeps = true
-            latexEngine = Dependencies.latexEngine()
+            latexEngine = Dependencies.latexEngine()?.name
         }
     }
 
