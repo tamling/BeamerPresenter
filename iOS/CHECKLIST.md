@@ -36,7 +36,8 @@ Target device: **iPad Pro 2021** (USB‑C, external display capable), iPadOS 16+
        sibling `.tex` via the ported, pure-Foundation `TexNotes` (`.nav`-aware).
        When the sibling `.tex` isn't reachable in the sandbox, the pane offers
        **Load notes (.tex)…** to attach one explicitly.
-5. [ ] **Timer + clock** with start/stop/reset
+5. [x] **Timer + clock** — a centred stopwatch (play / pause / reset) and the
+       wall clock in the toolbar, ticking once a second via `TimelineView`.
 6. [ ] **Black‑out** the audience (+ optional message / clock)
 7. [ ] **Whiteboard** scratch slides (ink, text, table, QR) — port the macOS
        `Whiteboard` model & rendering (mostly portable; swap `NSImage`→`UIImage`)

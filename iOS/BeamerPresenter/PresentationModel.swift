@@ -36,7 +36,34 @@ final class PresentationModel: ObservableObject {
     @Published private(set) var splitNotes = false   // double-wide "notes on second screen" deck
     @Published private(set) var notesSourceName: String?
 
+    // Presentation timer (stopwatch)
+    @Published private(set) var timerRunning = false
+    private var timerStartedAt: Date?
+    private var timerAccumulated: TimeInterval = 0
+
     @Published private(set) var recents: [URL] = RecentStore.load()
+
+    /// Seconds elapsed on the presentation timer (live while running).
+    var elapsed: TimeInterval {
+        timerAccumulated + (timerStartedAt.map { Date().timeIntervalSince($0) } ?? 0)
+    }
+
+    func toggleTimer() {
+        if timerRunning {
+            timerAccumulated = elapsed
+            timerStartedAt = nil
+        } else {
+            timerStartedAt = Date()
+        }
+        timerRunning.toggle()
+    }
+
+    /// Reset to zero; keeps running if it was running.
+    func resetTimer() {
+        timerAccumulated = 0
+        timerStartedAt = timerRunning ? Date() : nil
+        objectWillChange.send()
+    }
 
     private var scopedURL: URL?
     private var thumbCache: [Int: UIImage] = [:]

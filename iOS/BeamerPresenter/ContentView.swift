@@ -140,6 +140,10 @@ struct PresenterView: View {
 
             Spacer()
 
+            TimerControls()
+
+            Spacer()
+
             Button { model.toggleLaser() } label: { Image(systemName: "dot.radiowaves.left.and.right") }
                 .foregroundStyle(model.laserActive ? .red : .primary)
 
