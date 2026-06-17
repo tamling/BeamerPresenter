@@ -115,6 +115,13 @@ struct PresenterView: View {
                 .frame(height: 96)
         }
         .background(Color.black.ignoresSafeArea())
+        .background(
+            KeyCommandView(
+                onNext: { model.next() },
+                onPrevious: { model.previous() },
+                onBlackout: { model.toggleBlackout() },
+                onEscape: { if model.isBoardActive { model.closeBoard() } })
+        )
         .sheet(isPresented: $showOverview) {
             OverviewGrid(isPresented: $showOverview)
         }

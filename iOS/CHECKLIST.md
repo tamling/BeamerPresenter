@@ -5,6 +5,10 @@ commit) presents a PDF; everything below is implemented in order afterwards.
 
 Target device: **iPad Pro 2021** (USB‑C, external display capable), iPadOS 16+.
 
+> **Status: all checklist items complete.** ✅ The minimal app plus features
+> 1–11 below are implemented. Future polish (e.g. scene-based external displays)
+> is noted inline.
+
 ## ✅ Minimal app (done)
 - [x] Open a PDF from Files / iCloud (document picker, security‑scoped access)
 - [x] Present a slide full‑screen
@@ -60,7 +64,10 @@ Target device: **iPad Pro 2021** (USB‑C, external display capable), iPadOS 16+
         with persisted (`@AppStorage`) defaults: Apple-Pencil-only, default pen
         colour & line weight, and black-out options (start blacked out, clock,
         preset/custom message, and a background image copied into app support).
-11. [ ] **Bluetooth presenter remote** support (page up/down)
+11. [x] **Bluetooth presenter remote** — a `UIKeyCommand` responder maps the keys
+        clickers emit: Page Down / → / ↓ / space = next, Page Up / ← / ↑ =
+        previous, `b` / `.` = black-out, Esc = close board. Works with any paired
+        keyboard too (iPadOS 16-compatible, unlike SwiftUI `onKeyPress`).
 
 ## Notes / platform limits
 - **No on‑device LaTeX / PowerPoint compilation** — iOS can't spawn subprocesses.

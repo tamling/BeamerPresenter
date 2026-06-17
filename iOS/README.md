@@ -40,9 +40,17 @@ The Info.plist (PDF document type, Files access, orientations) is generated from
 
 ## What works now
 Tap **Try a sample deck** to present the bundled 6-slide sample immediately, or
-open your own PDF (AirDrop/Files/iCloud). Present it full-screen, navigate by
-tapping the left/right edges,
-swiping, or the on-screen arrows; jump via the thumbnail strip; draw with the
-pen (undo / clear). Recently opened files are listed on the start screen.
+open your own PDF (AirDrop/Files/iCloud). The full feature checklist in
+`CHECKLIST.md` is now implemented:
 
-Everything else is on the roadmap in `CHECKLIST.md`.
+- **Navigate** by tapping edges, swiping, the on-screen arrows, the thumbnail
+  strip, or an **overview grid**.
+- **External display:** plug in USB-C/AirPlay and the audience sees just the
+  slide (with ink); the iPad stays the presenter console.
+- **Ink** with six colours, three weights, and a **laser pointer** — all
+  mirrored to the audience. **Apple Pencil** pressure + palm rejection.
+- **Speaker notes:** auto-detected split PDFs *or* `\note{}` from a sibling
+  `.tex` (or one you attach).
+- **Timer + clock**, **black-out** (message / clock / image), **whiteboard**
+  scratch boards (ink, text, table, QR), and **export** to an annotated PDF.
+- **Settings** for defaults, and **Bluetooth remote** / keyboard control.
