@@ -31,12 +31,16 @@ struct PresenterView: View {
     @AppStorage("presenterSidebarWidth") private var sidebarWidth: Double = 360
     /// Share of the side column's height given to the notes pane (0…1).
     @AppStorage("presenterNotesFraction") private var notesFraction: Double = 0.5
+    /// Height of the scratch-notes pane, in points.
+    @AppStorage("presenterScratchHeight") private var scratchHeight: Double = 132
 
     @State private var sidebarDragStart: Double?
     @State private var notesDragStart: Double?
+    @State private var scratchDragStart: Double?
 
     private let sidebarRange = 260.0...820.0
     private let notesRange = 0.15...0.85
+    private let scratchRange = 80.0...460.0
 
     var body: some View {
         ZStack {
@@ -81,9 +85,9 @@ struct PresenterView: View {
     private var sideColumn: some View {
         GeometryReader { geo in
             let handle: CGFloat = 10
-            let scratchH: CGFloat = 132
-            let gap: CGFloat = 8
-            let avail = max(0, geo.size.height - handle - scratchH - gap)
+            let total = geo.size.height
+            let scratchH = min(CGFloat(scratchHeight), max(80, total * 0.6))
+            let avail = max(0, total - 2 * handle - scratchH)
             let notesH = avail * notesFraction
             let nextH = avail - notesH
 
@@ -106,9 +110,17 @@ struct PresenterView: View {
                 notesPane
                     .frame(height: notesH)
 
+                // Drag up/down to resize the scratch pane (below it).
+                ResizeHandle(axis: .vertical) { translation in
+                    let start = scratchDragStart ?? scratchHeight
+                    scratchDragStart = start
+                    scratchHeight = (start - Double(translation)).clamped(to: scratchRange)
+                } onEnded: {
+                    scratchDragStart = nil
+                }
+
                 scratchPane
                     .frame(height: scratchH)
-                    .padding(.top, gap)
             }
         }
     }
@@ -120,6 +132,17 @@ struct PresenterView: View {
             HStack {
                 Text("Scratch notes").font(.caption).foregroundStyle(.secondary)
                 Spacer()
+                Menu {
+                    Button("Time") { appendScratch(Date().formatted(date: .omitted, time: .shortened)) }
+                    Button("Deck name") { appendScratch(state.title) }
+                    Button("Slide number") { appendScratch("Slide \(state.index + 1)/\(state.pageCount)") }
+                } label: {
+                    Image(systemName: "bolt")
+                }
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .fixedSize()
+                .help("Insert the time, deck name, or slide number")
                 Button { saveScratchToFile() } label: {
                     Image(systemName: "square.and.arrow.down")
                 }
@@ -135,6 +158,12 @@ struct PresenterView: View {
                 .overlay(RoundedRectangle(cornerRadius: 6).stroke(.gray.opacity(0.3)))
                 .onChange(of: state.scratch) { _ in state.saveScratch() }
         }
+    }
+
+    /// Appends a quick value (time / deck name / slide number) to the notes.
+    private func appendScratch(_ value: String) {
+        state.scratch += (state.scratch.isEmpty ? "" : "\n") + value
+        state.saveScratch()
     }
 
     /// Saves the scratch notes to a user-chosen `.txt` file.
@@ -351,7 +380,7 @@ private struct ControlBar: View {
                 captioned(name) {
                     Button {
                         state.penColor = color
-                        if state.tool != .pen { state.tool = .pen }   // picking a colour readies the pen
+                        if state.tool == .none { state.tool = .pen }   // keep the laser if it's active
                     } label: {
                         Circle().fill(color)
                             .frame(width: 20, height: 20)

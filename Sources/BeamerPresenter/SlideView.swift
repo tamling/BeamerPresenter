@@ -47,8 +47,8 @@ struct AnnotationLayer: View {
                             let c = CGPoint(x: laser.x * sz.width, y: laser.y * sz.height)
                             let rect = CGRect(x: c.x - r, y: c.y - r, width: 2 * r, height: 2 * r)
                             ctx.fill(Path(ellipseIn: rect.insetBy(dx: r * 0.5, dy: r * 0.5)),
-                                     with: .color(.red))
-                            ctx.fill(Path(ellipseIn: rect), with: .color(.red.opacity(0.35)))
+                                     with: .color(state.penColor))
+                            ctx.fill(Path(ellipseIn: rect), with: .color(state.penColor.opacity(0.35)))
                         }
                     }
                 }

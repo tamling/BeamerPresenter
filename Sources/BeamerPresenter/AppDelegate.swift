@@ -167,7 +167,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         presoMenu.addItem(.separator())
         add(to: presoMenu, "Toggle Overview", #selector(toggleOverview(_:)), "1")
         add(to: presoMenu, "Black Out Audience", #selector(toggleBlackout(_:)), "b")
-        add(to: presoMenu, "Set Black-Screen Message…", #selector(setBlackScreenMessage(_:)))
+
+        let blackMenu = addSubmenu(to: presoMenu, "Black Screen")
+        for preset in BlackScreen.presets {
+            add(to: blackMenu, preset, #selector(setMessagePreset(_:))).representedObject = preset
+        }
+        blackMenu.addItem(.separator())
+        add(to: blackMenu, "Custom Message…", #selector(setBlackScreenMessage(_:)))
+        add(to: blackMenu, "Clear Message", #selector(clearBlackMessage(_:)))
+        blackMenu.addItem(.separator())
+        add(to: blackMenu, "Choose Background Image…", #selector(chooseBlackImage(_:)))
+        add(to: blackMenu, "Clear Background Image", #selector(clearBlackImage(_:)))
+
         presoMenu.addItem(.separator())
         add(to: presoMenu, "Reset Timer", #selector(resetTimer(_:)), "r")
 
@@ -204,6 +215,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
 
     private func addSubmenu(to mainMenu: NSMenu, _ title: String) -> NSMenu {
         let item = NSMenuItem()
+        item.title = title          // shown for nested items (top-level uses the submenu title)
         mainMenu.addItem(item)
         let menu = NSMenu(title: title)
         item.submenu = menu
@@ -330,17 +342,46 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     @objc private func setBlackScreenMessage(_ sender: Any?) {
         let alert = NSAlert()
         alert.messageText = "Black-Screen Message"
-        alert.informativeText = "Shown centered on the blacked-out audience screen. "
-            + "Leave it empty to show the clock instead."
+        alert.informativeText = "Shown centered on the blacked-out audience screen "
+            + "(the clock stays, smaller, beneath it)."
         alert.addButton(withTitle: "Save")
+        alert.addButton(withTitle: "Clear")
         alert.addButton(withTitle: "Cancel")
         let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 24))
-        field.stringValue = UserDefaults.standard.string(forKey: "blackScreenMessage") ?? ""
+        field.stringValue = UserDefaults.standard.string(forKey: Prefs.blackScreenMessage) ?? ""
         field.placeholderString = "e.g. Back in 5 minutes"
         alert.accessoryView = field
-        if alert.runModal() == .alertFirstButtonReturn {
-            UserDefaults.standard.set(field.stringValue, forKey: "blackScreenMessage")
+        switch alert.runModal() {
+        case .alertFirstButtonReturn:
+            UserDefaults.standard.set(field.stringValue, forKey: Prefs.blackScreenMessage)
+        case .alertSecondButtonReturn:
+            UserDefaults.standard.set("", forKey: Prefs.blackScreenMessage)
+        default:
+            break
         }
+    }
+
+    @objc private func setMessagePreset(_ sender: NSMenuItem) {
+        UserDefaults.standard.set(sender.representedObject as? String ?? "", forKey: Prefs.blackScreenMessage)
+    }
+
+    @objc private func clearBlackMessage(_ sender: Any?) {
+        UserDefaults.standard.set("", forKey: Prefs.blackScreenMessage)
+    }
+
+    @objc private func chooseBlackImage(_ sender: Any?) {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.image]
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.prompt = "Choose"
+        if panel.runModal() == .OK, let url = panel.url {
+            UserDefaults.standard.set(url.path, forKey: Prefs.blackScreenImage)
+        }
+    }
+
+    @objc private func clearBlackImage(_ sender: Any?) {
+        UserDefaults.standard.set("", forKey: Prefs.blackScreenImage)
     }
 
     // Tools
@@ -351,7 +392,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     @objc private func setPenColor(_ sender: NSMenuItem) {
         guard let color = sender.representedObject as? Color else { return }
         state.penColor = color
-        if state.tool != .pen { state.tool = .pen }
+        if state.tool == .none { state.tool = .pen }   // keep the laser if it's active
     }
 
     // Whiteboard
@@ -513,7 +554,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         guard state.isLoaded else { return false }
         let modifiers: NSEvent.ModifierFlags = [.command, .control, .option]
         guard event.modifierFlags.isDisjoint(with: modifiers) else { return false }
-        if NSApp.keyWindow?.firstResponder is NSTextView { return false }
+
+        // While typing in a text field (e.g. the scratch notes), still let the
+        // arrow / page keys drive the slides; everything else edits the text.
+        if NSApp.keyWindow?.firstResponder is NSTextView {
+            switch event.keyCode {
+            case 124, 121: state.next()       // → / page down
+            case 123, 116: state.previous()   // ← / page up
+            default:       return false
+            }
+            return true
+        }
+
         switch event.keyCode {
         case 124, 49, 121: state.next()              // → / space / page down
         case 123, 116:     state.previous()          // ← / page up

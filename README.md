@@ -23,20 +23,23 @@ app can also pull `\note{}` speaker notes straight from the source.
   **dashboard** (presentations run, average + total time, version).
 - **Menu bar icon** — a Time Machine-style status item with quick actions (open,
   show presenter, next/previous, blackout, whiteboard, settings, quit).
-- **Settings (⌘,)** — open at login, show/hide the menu bar icon, toggle the
-  default black audience screen, and set its message.
+- **Settings (⌘,)** — open at login, show/hide the menu bar icon, the default
+  black audience screen, its message (with presets + clear) and a background image.
 - **Presenter console** — a control bar with every live tool, each a captioned
   symbol (exit, prev/next + slide counter, overview, blackout, whiteboard, pen,
   laser, the pen-colour swatches, undo/clear ink, reset timer, elapsed + clock),
   large current slide, next slide, notes pane, and a **scratch-notes** field
-  autosaved as `<pdf>.notes.txt` (or exported to a chosen `.txt` via its button /
-  *File ▸ Save Notes…*). **Exit** returns to the home screen; closing the presenter
+  autosaved as `<pdf>.notes.txt` (resizable, with quick-insert of time/deck/slide,
+  or exported to a chosen `.txt` via its button / *File ▸ Save Notes…*). Arrow keys
+  still flip slides while the notes field is focused. **Exit** returns to the home
+  screen; closing the presenter
   window also closes the audience window. The slide/sidebar and next/notes splits
   are **draggable** and persist. The same commands are also in the menu bar.
 - **Thumbnail strip** — click any slide to jump; auto-scrolls to the current one.
 - **Overview grid** — press `G` for a full grid of every slide; click to jump.
 - **Ink & laser** — draw freehand on a slide (pen, 4 colours, undo/clear) or use
-  a laser pointer; both mirror live onto the audience screen.
+  a laser pointer (which uses the selected colour); both mirror live onto the
+  audience screen.
 - **Whiteboard** — press `W` for a blank white scratch slide to work through a
   calculation live. Draw on it, drop in text boxes, a clean Safari-style table
   (pick rows × columns from an Apple Notes-style grid), a QR code, or **quick
