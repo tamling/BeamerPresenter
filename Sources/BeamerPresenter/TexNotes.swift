@@ -8,16 +8,39 @@ import Foundation
 /// (exact and overlay-aware); otherwise each frame is assumed to be a single
 /// page, in document order.
 enum TexNotes {
-    /// Looks for `<name>.tex` next to the PDF and returns a page-index → note map.
-    /// Returns an empty map when there is no sibling `.tex` or it carries no notes.
+    /// Returns a page-index → note map for the PDF. It prefers a `.tex` with the
+    /// same base name next to the PDF; if that is missing or carries no notes, it
+    /// falls back to any other `.tex` in the same folder, using the first that has
+    /// `\note{}` content. Returns an empty map when nothing usable is found.
     static func load(forPDF pdfURL: URL, pageCount: Int) -> [Int: String] {
-        let texURL = pdfURL.deletingPathExtension().appendingPathExtension("tex")
+        for texURL in candidateTexURLs(for: pdfURL) {
+            let notes = notes(fromTex: texURL, pageCount: pageCount)
+            if !notes.isEmpty { return notes }
+        }
+        return [:]
+    }
+
+    /// `.tex` files worth trying, same-name first, then the rest of the folder
+    /// in a stable alphabetical order.
+    private static func candidateTexURLs(for pdfURL: URL) -> [URL] {
+        let sameName = pdfURL.deletingPathExtension().appendingPathExtension("tex")
+        let dir = pdfURL.deletingLastPathComponent()
+        let others = (try? FileManager.default.contentsOfDirectory(
+            at: dir, includingPropertiesForKeys: nil))?
+            .filter { $0.pathExtension.lowercased() == "tex" && $0 != sameName }
+            .sorted { $0.lastPathComponent < $1.lastPathComponent } ?? []
+        return [sameName] + others
+    }
+
+    /// Parses one `.tex` file into a page-index → note map, using the sibling
+    /// `.nav` (same base name) for exact page ranges when available.
+    private static func notes(fromTex texURL: URL, pageCount: Int) -> [Int: String] {
         guard let source = readText(texURL) else { return [:] }
 
         let notes = framesWithNotes(in: source)        // frameIndex → cleaned note
         guard !notes.isEmpty else { return [:] }
 
-        let navURL = pdfURL.deletingPathExtension().appendingPathExtension("nav")
+        let navURL = texURL.deletingPathExtension().appendingPathExtension("nav")
         let ranges = readText(navURL).map(framePages) ?? []
 
         var byPage: [Int: String] = [:]

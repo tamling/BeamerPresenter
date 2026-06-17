@@ -54,10 +54,12 @@ your `\note{…}` text directly from the source and shows it in the notes pane:
 \end{frame}
 ```
 
-Page mapping is exact when the Beamer `.nav` file is also present (it encodes
-each frame's page range, so overlays line up); otherwise each frame is treated
-as one page. A plain PDF with neither notes layout nor a `.tex` still presents
-fine — the notes pane just shows a hint instead.
+If there's no `.tex` with the same base name (or it has no notes), the app falls
+back to any other `.tex` in the same folder. Page mapping is exact when the
+matching Beamer `.nav` file is also present (it encodes each frame's page range,
+so overlays line up); otherwise each frame is treated as one page. A plain PDF
+with neither notes layout nor a `.tex` still presents fine — the notes pane just
+shows a hint instead.
 
 ## Run it (development)
 
