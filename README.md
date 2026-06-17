@@ -11,7 +11,10 @@ app can also pull `\note{}` speaker notes straight from the source.
 
 ## GUI
 
-- **Welcome screen** — open button, drag-and-drop a PDF, and a recent-files list.
+- **Menu bar** — *App* (About + version), *File* (Open, Add Folder to Favorites,
+  Close Presentation), *View* (next/previous, overview, blackout, reset timer).
+- **Welcome screen** — open button, drag-and-drop a PDF, **favorite folders**
+  (expand to the PDFs inside; add with the `+`), and a recent-files list.
 - **Presenter console** — control bar (open, home, prev/next, overview, blackout,
   timer, clock), large current slide, next slide, notes pane. The slide/sidebar
   split and the next/notes split are **draggable**, and the sizes persist.
@@ -103,6 +106,7 @@ Bluetooth presenter remotes emit Page Up / Page Down, so they work out of the bo
 | `PDFPageView.swift` | Renders one non-interactive page (SwiftUI ↔ PDFKit) |
 | `SlideView.swift` | Aspect-correct slide + ink/laser annotation layer |
 | `RecentFiles.swift` | Recently-opened list persisted in UserDefaults |
+| `Favorites.swift` | Favorite folders + app version info, persisted in UserDefaults |
 | `WelcomeView.swift` | Start screen: open, drag-and-drop, recents |
 | `PresenterView.swift` | Root switch + presenter console + control bar |
 | `ThumbnailStrip.swift` | Clickable thumbnail navigation row |
