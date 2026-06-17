@@ -328,7 +328,7 @@ struct PresenterView: View {
             captioned("Blackout") {
                 Menu { blackoutMenuContent } label: {
                     Image(systemName: model.blackout ? "eye.slash.fill" : "eye.slash")
-                } primaryAction: { model.toggleBlackout() }
+                }
                 .foregroundStyle(model.blackout ? Color.accentColor : .primary)
             }
             captioned("Board") {
@@ -440,8 +440,6 @@ struct PresenterView: View {
             blackoutMenuContent
         } label: {
             Image(systemName: model.blackout ? "eye.slash.fill" : "eye.slash")
-        } primaryAction: {
-            model.toggleBlackout()
         }
         .foregroundStyle(model.blackout ? Color.accentColor : .primary)
     }
