@@ -85,6 +85,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         presoMenu.addItem(.separator())
         add(to: presoMenu, "Toggle Overview", #selector(toggleOverview(_:)), "1")
         add(to: presoMenu, "Black Out Audience", #selector(toggleBlackout(_:)), "b")
+        add(to: presoMenu, "Set Black-Screen Message…", #selector(setBlackScreenMessage(_:)))
         presoMenu.addItem(.separator())
         add(to: presoMenu, "Reset Timer", #selector(resetTimer(_:)), "r")
 
@@ -210,6 +211,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func toggleOverview(_ sender: Any?) { state.showOverview.toggle() }
     @objc private func toggleBlackout(_ sender: Any?) { state.blackout.toggle() }
     @objc private func resetTimer(_ sender: Any?)     { state.resetTimer() }
+
+    @objc private func setBlackScreenMessage(_ sender: Any?) {
+        let alert = NSAlert()
+        alert.messageText = "Black-Screen Message"
+        alert.informativeText = "Shown centered on the blacked-out audience screen. "
+            + "Leave it empty to show the clock instead."
+        alert.addButton(withTitle: "Save")
+        alert.addButton(withTitle: "Cancel")
+        let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 24))
+        field.stringValue = UserDefaults.standard.string(forKey: "blackScreenMessage") ?? ""
+        field.placeholderString = "e.g. Back in 5 minutes"
+        alert.accessoryView = field
+        if alert.runModal() == .alertFirstButtonReturn {
+            UserDefaults.standard.set(field.stringValue, forKey: "blackScreenMessage")
+        }
+    }
 
     // Tools
     @objc private func togglePen(_ sender: Any?)      { state.toggleTool(.pen) }

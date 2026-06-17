@@ -72,11 +72,17 @@ struct BoardItemView: View {
     }
 }
 
-/// A simple grid table. Rows are separated by newlines, columns by `|`.
+/// A clean, Safari-style grid table: shaded header row, alternating row tints,
+/// hairline separators, and rounded clipped corners. Rows are separated by
+/// newlines, columns by `|`.
 struct TableItemView: View {
     let text: String
     let width: CGFloat
     let fontSize: CGFloat
+
+    private let border = Color(white: 0.80)
+    private let header = Color(white: 0.93)
+    private let stripe = Color(white: 0.975)
 
     private var rows: [[String]] {
         text.split(separator: "\n", omittingEmptySubsequences: false)
@@ -85,22 +91,37 @@ struct TableItemView: View {
 
     var body: some View {
         let cols = max(1, rows.map(\.count).max() ?? 1)
-        Grid(horizontalSpacing: 0, verticalSpacing: 0) {
+        let radius = fontSize * 0.45
+        VStack(spacing: 0) {
             ForEach(rows.indices, id: \.self) { r in
-                GridRow {
+                HStack(spacing: 0) {
                     ForEach(0..<cols, id: \.self) { c in
                         Text(c < rows[r].count ? rows[r][c] : "")
-                            .font(.system(size: fontSize))
+                            .font(.system(size: fontSize, weight: r == 0 ? .semibold : .regular))
                             .foregroundStyle(.black)
-                            .padding(.horizontal, fontSize * 0.4)
-                            .padding(.vertical, fontSize * 0.25)
-                            .frame(maxWidth: .infinity, minHeight: fontSize + 6)
-                            .border(Color.black.opacity(0.6), width: 1)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, fontSize * 0.5)
+                            .padding(.vertical, fontSize * 0.32)
+                            .overlay(alignment: .trailing) {
+                                if c < cols - 1 { Rectangle().fill(border).frame(width: 0.75) }
+                            }
                     }
+                }
+                .background(rowColor(r))
+                .overlay(alignment: .bottom) {
+                    if r < rows.count - 1 { Rectangle().fill(border).frame(height: 0.75) }
                 }
             }
         }
         .frame(width: width)
+        .background(Color.white)
+        .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous).strokeBorder(border, lineWidth: 1))
+    }
+
+    private func rowColor(_ r: Int) -> Color {
+        if r == 0 { return header }
+        return r.isMultiple(of: 2) ? stripe : .white
     }
 }
 
@@ -161,9 +182,36 @@ private struct BoardInteractionLayer: View {
                     ForEach(board.items) { item in
                         moveHandle(for: item, in: size)
                     }
+                    if let selected = board.items.first(where: { $0.id == state.selectedItemID }) {
+                        resizeHandle(for: selected, in: size)
+                    }
                 }
             }
         }
+    }
+
+    /// Bottom-right handle on the selected item; drag horizontally to resize
+    /// (the font scales with the width).
+    private func resizeHandle(for item: BoardItem, in size: CGSize) -> some View {
+        let halfWidth = item.width * size.width / 2
+        return RoundedRectangle(cornerRadius: 4)
+            .fill(Color.accentColor.opacity(0.95))
+            .overlay(
+                Image(systemName: "arrow.left.and.right")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(.white)
+            )
+            .frame(width: 22, height: 22)
+            .position(x: item.center.x * size.width + halfWidth + 14,
+                      y: item.center.y * size.height)
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { value in
+                        let dx = abs(value.location.x - item.center.x * size.width)
+                        state.setItemWidth(item.id, (dx * 2) / max(size.width, 1))
+                    }
+            )
+            .help("Drag to resize")
     }
 
     private func moveHandle(for item: BoardItem, in size: CGSize) -> some View {
@@ -251,54 +299,73 @@ private struct BoardItemInspector: View {
 // MARK: - Board toolbar
 
 /// Second toolbar row shown while a board is active: board management plus the
-/// quick-insert buttons (text / table / QR) and export.
+/// quick-insert buttons (text / table / QR) and export. Styled as a compact,
+/// rounded, translucent Safari-like toolbar with segmented groups.
 struct BoardBar: View {
     @EnvironmentObject var state: PresentationState
     let onSave: @MainActor () -> Void
     let onInsert: @MainActor () -> Void
 
+    private var boardIndex: Int { state.activeBoardIndex ?? 0 }
+
     var body: some View {
-        HStack(spacing: 12) {
-            Button { state.addBoard() } label: { Image(systemName: "plus.rectangle") }
-                .help("New whiteboard")
+        HStack(spacing: 10) {
+            group {
+                barButton("plus.rectangle", "New") { state.addBoard() }
+                barButton("chevron.left", disabled: boardIndex == 0) { state.previousBoard() }
+                Text("\(boardIndex + 1) / \(state.boards.count)")
+                    .font(.subheadline.monospacedDigit())
+                    .frame(minWidth: 42)
+                barButton("chevron.right", disabled: boardIndex + 1 >= state.boards.count) { state.nextBoard() }
+                barButton("trash", disabled: state.boards.isEmpty) { state.deleteActiveBoard() }
+            }
 
-            Button { state.previousBoard() } label: { Image(systemName: "chevron.left") }
-                .disabled((state.activeBoardIndex ?? 0) == 0)
-            Text("Board \((state.activeBoardIndex ?? 0) + 1) / \(state.boards.count)")
-                .font(.subheadline.monospacedDigit())
-                .frame(minWidth: 96)
-            Button { state.nextBoard() } label: { Image(systemName: "chevron.right") }
-                .disabled((state.activeBoardIndex ?? 0) + 1 >= state.boards.count)
+            group {
+                barButton("textformat", "Text") { state.addItem(.text) }
+                barButton("tablecells", "Table") { state.addItem(.table) }
+                barButton("qrcode", "QR") { state.addItem(.qr) }
+            }
 
-            Button { state.deleteActiveBoard() } label: { Image(systemName: "trash") }
-                .help("Delete this whiteboard")
-
-            Divider().frame(height: 18)
-
-            Button { state.addItem(.text) } label: { Label("Text", systemImage: "textformat") }
-                .help("Add a text box")
-            Button { state.addItem(.table) } label: { Label("Table", systemImage: "tablecells") }
-                .help("Add a table")
-            Button { state.addItem(.qr) } label: { Label("QR", systemImage: "qrcode") }
-                .help("Add a QR code")
-
-            Divider().frame(height: 18)
-
-            Button { onSave() } label: { Label("Save…", systemImage: "square.and.arrow.down") }
-                .help("Save this whiteboard as its own PDF")
-            Button { onInsert() } label: { Label("Insert into PDF", systemImage: "rectangle.stack.badge.plus") }
-                .disabled(state.sourceURL == nil)
-                .help("Insert after the current slide into a copy of the deck")
+            group {
+                barButton("square.and.arrow.down", "Save") { onSave() }
+                barButton("rectangle.stack.badge.plus", "Insert",
+                          disabled: state.sourceURL == nil) { onInsert() }
+            }
 
             Spacer()
 
-            Button { state.hideBoard() } label: { Label("Done", systemImage: "xmark.circle") }
-                .help("Back to the slides (W)")
+            group {
+                barButton("xmark.circle", "Done") { state.hideBoard() }
+            }
         }
-        .buttonStyle(.borderless)
-        .padding(.horizontal, 10)
+        .padding(.horizontal, 8)
         .padding(.vertical, 6)
-        .background(Color(nsColor: .underPageBackgroundColor))
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(.white.opacity(0.08)))
+        .padding(.horizontal, 8)
+    }
+
+    /// A segmented cluster with a subtle rounded background.
+    private func group<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        HStack(spacing: 2) { content() }
+            .padding(.horizontal, 4)
+            .padding(.vertical, 3)
+            .background(.quaternary, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+    }
+
+    private func barButton(_ icon: String, _ title: String? = nil,
+                           disabled: Bool = false, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 4) {
+                Image(systemName: icon)
+                if let title { Text(title).font(.subheadline) }
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .contentShape(RoundedRectangle(cornerRadius: 6))
+        }
+        .buttonStyle(.plain)
+        .disabled(disabled)
     }
 }
 
