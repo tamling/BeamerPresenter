@@ -181,6 +181,7 @@ private struct BoardInteractionLayer: View {
                 } else if let board = state.activeBoard {
                     ForEach(board.items) { item in
                         moveHandle(for: item, in: size)
+                        deleteHandle(for: item, in: size)
                     }
                     if let selected = board.items.first(where: { $0.id == state.selectedItemID }) {
                         resizeHandle(for: selected, in: size)
@@ -212,6 +213,22 @@ private struct BoardInteractionLayer: View {
                     }
             )
             .help("Drag to resize")
+    }
+
+    /// Small red "✕" at each item's top-right corner for one-click deletion.
+    private func deleteHandle(for item: BoardItem, in size: CGSize) -> some View {
+        let halfWidth = item.width * size.width / 2
+        return Button { state.deleteItem(item.id) } label: {
+            Image(systemName: "xmark")
+                .font(.system(size: 9, weight: .bold))
+                .foregroundStyle(.white)
+                .frame(width: 20, height: 20)
+                .background(Circle().fill(Color.red))
+        }
+        .buttonStyle(.plain)
+        .position(x: item.center.x * size.width + halfWidth + 14,
+                  y: item.center.y * size.height - 26)
+        .help("Delete this item")
     }
 
     private func moveHandle(for item: BoardItem, in size: CGSize) -> some View {
@@ -334,6 +351,17 @@ struct BoardBar: View {
                         }
                     }
                 barButton("qrcode", "QR") { state.addItem(.qr) }
+                Menu {
+                    Button("Time") { state.addTextItem(Date().formatted(date: .omitted, time: .shortened)) }
+                    Button("Deck name") { state.addTextItem(state.title) }
+                    Button("Slide number") { state.addTextItem("Slide \(state.index + 1) / \(state.pageCount)") }
+                } label: {
+                    barLabel("bolt", "Quick")
+                }
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .fixedSize()
+                .help("Insert the time, deck name, or slide number")
             }
 
             group {

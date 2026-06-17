@@ -29,7 +29,7 @@ python3 Tools/make_icon.py
 iconutil -c icns Resources/AppIcon.iconset -o Resources/BeamerPresenter.icns
 
 APP="build/$APP_NAME.app"
-echo "▶︎ Assembling $APP…"
+echo "▶︎ Assembling ${APP}…"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/$APP_NAME"
