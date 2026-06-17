@@ -265,14 +265,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc func openDocument(_ sender: Any?) {
         let panel = NSOpenPanel()
-        panel.allowedContentTypes = [UTType.pdf]
+        panel.message = "Choose a PDF — or its .tex source, and the matching PDF is opened."
+        panel.allowedContentTypes = [.pdf, UTType(filenameExtension: "tex") ?? .plainText]
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = false
         guard panel.runModal() == .OK, let url = panel.url else { return }
         load(url: url)
     }
 
-    private func load(url: URL) {
+    /// Maps a picked file to the PDF to present: a `.pdf` is used directly; a
+    /// `.tex` resolves to the same-named `.pdf` next to it.
+    private func resolvedPDF(for url: URL) -> URL? {
+        if url.pathExtension.lowercased() == "tex" {
+            let pdf = url.deletingPathExtension().appendingPathExtension("pdf")
+            return FileManager.default.fileExists(atPath: pdf.path) ? pdf : nil
+        }
+        return url
+    }
+
+    private func load(url rawURL: URL) {
+        guard let url = resolvedPDF(for: rawURL) else {
+            let alert = NSAlert()
+            alert.messageText = "No PDF found for this .tex"
+            alert.informativeText = "Compile \(rawURL.lastPathComponent) first, or keep "
+                + "\(rawURL.deletingPathExtension().lastPathComponent).pdf next to it."
+            alert.runModal()
+            return
+        }
         guard state.load(url: url) else {
             let alert = NSAlert()
             alert.messageText = "Could not open PDF"

@@ -56,7 +56,9 @@ left half → audience, right half → your notes pane.
 
 You don't have to recompile with the second-screen option. If you open a plain
 PDF and a `.tex` file with the **same base name** sits next to it, the app reads
-your `\note{…}` text directly from the source and shows it in the notes pane:
+your `\note{…}` text directly from the source and shows it in the notes pane.
+You can also do it the other way round — **open (or drop) the `.tex` itself** and
+the app opens the matching `<name>.pdf` beside it:
 
 ```latex
 \begin{frame}{Title}
