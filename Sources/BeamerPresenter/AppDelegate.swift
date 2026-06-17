@@ -376,6 +376,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             styleMask: [.titled, .closable, .resizable, .miniaturizable],
             backing: .buffered, defer: false)
         presenter.title = "BeamerPresenter"
+        presenter.isReleasedWhenClosed = false   // we hold a strong ref; avoid an ARC over-release crash
         presenter.contentView = NSHostingView(rootView: root)
         presenter.delegate = self
         presenter.center()
@@ -392,6 +393,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             contentRect: NSRect(x: 0, y: 0, width: 1280, height: 720),
             styleMask: style, backing: .buffered, defer: false)
         audience.title = "Audience"
+        audience.isReleasedWhenClosed = false   // held in a strong ref; avoid an ARC over-release crash
         audience.contentView = NSHostingView(rootView: AudienceView().environmentObject(state))
         if multiScreen {
             audience.level = .mainMenu
