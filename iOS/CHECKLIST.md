@@ -22,7 +22,10 @@ Target device: **iPad Pro 2021** (USB‑C, external display capable), iPadOS 16+
        iOS 16 but the most contained, reliable option. A future modernisation
        to scene-based external displays (`UIWindowScene` / `requestGeometryUpdate`)
        is noted here for when we adopt the multi-scene lifecycle.
-2. [ ] **Pen colours + laser pointer** (mirrored to the audience)
+2. [x] **Pen colours + laser pointer** — six pen colours, three line weights,
+       and a laser pointer (glowing red dot) that, like the ink, is mirrored
+       live onto the external/audience display. Pen and laser are mutually
+       exclusive tools.
 3. [ ] **Overview grid** — tap a slide to jump
 4. [ ] **Speaker notes** — split (notes‑on‑second‑screen) PDFs *and* `\note{}`
        parsed from a sibling `.tex` (reuse the macOS `TexNotes` logic — it is

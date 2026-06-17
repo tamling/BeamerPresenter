@@ -22,8 +22,14 @@ final class PresentationModel: ObservableObject {
     // Pen
     @Published var penActive = false
     @Published var penColor: Color = .red
+    @Published var penWidth: CGFloat = 0.004   // fraction of slide width
     @Published var strokes: [Int: [InkStroke]] = [:]
     @Published var currentStroke: [CGPoint] = []
+
+    // Laser pointer — a transient dot in unit coords, mirrored to the audience.
+    // It is not persisted (not part of `strokes`).
+    @Published var laserActive = false
+    @Published var laserPoint: CGPoint?
 
     @Published private(set) var recents: [URL] = RecentStore.load()
 
@@ -83,10 +89,10 @@ final class PresentationModel: ObservableObject {
 
     func beginStroke(at p: CGPoint) { currentStroke = [p] }
     func extendStroke(to p: CGPoint) { currentStroke.append(p) }
-    func endStroke(width: CGFloat = 0.004) {
+    func endStroke() {
         defer { currentStroke = [] }
         guard currentStroke.count > 1 else { return }
-        strokes[index, default: []].append(InkStroke(points: currentStroke, color: penColor, width: width))
+        strokes[index, default: []].append(InkStroke(points: currentStroke, color: penColor, width: penWidth))
     }
     func undoInk() {
         guard var s = strokes[index], !s.isEmpty else { return }
@@ -95,6 +101,22 @@ final class PresentationModel: ObservableObject {
     }
     func clearInk() { strokes[index] = nil; currentStroke = [] }
     var hasInk: Bool { !(strokes[index]?.isEmpty ?? true) }
+
+    // MARK: - Tool selection (pen / laser are mutually exclusive)
+
+    func togglePen() {
+        penActive.toggle()
+        if penActive { laserActive = false; laserPoint = nil }
+    }
+    func toggleLaser() {
+        laserActive.toggle()
+        if laserActive { penActive = false } else { laserPoint = nil }
+    }
+
+    // MARK: - Laser
+
+    func moveLaser(to p: CGPoint) { laserPoint = p }
+    func endLaser() { laserPoint = nil }
 
     // MARK: - Thumbnails
 

@@ -13,6 +13,9 @@ struct SlideView: View {
                 Color.black
                 PDFPageView(document: model.document, pageIndex: model.index)
                 inkCanvas
+                if let p = model.laserPoint {
+                    LaserDot(point: p, in: size)
+                }
             }
             .contentShape(Rectangle())
             .gesture(slideGesture(size))
@@ -29,7 +32,7 @@ struct SlideView: View {
             if model.currentStroke.count > 1 {
                 ctx.stroke(path(model.currentStroke, in: sz),
                            with: .color(model.penColor),
-                           style: lineStyle(0.004 * sz.width))
+                           style: lineStyle(model.penWidth * sz.width))
             }
         }
         .allowsHitTesting(false)
@@ -40,14 +43,19 @@ struct SlideView: View {
     private func slideGesture(_ size: CGSize) -> some Gesture {
         DragGesture(minimumDistance: 0)
             .onChanged { value in
-                guard model.penActive else { return }
                 let p = unit(value.location, size)
-                if model.currentStroke.isEmpty { model.beginStroke(at: p) }
-                else { model.extendStroke(to: p) }
+                if model.penActive {
+                    if model.currentStroke.isEmpty { model.beginStroke(at: p) }
+                    else { model.extendStroke(to: p) }
+                } else if model.laserActive {
+                    model.moveLaser(to: p)
+                }
             }
             .onEnded { value in
                 if model.penActive {
                     model.endStroke()
+                } else if model.laserActive {
+                    model.endLaser()
                 } else if value.translation.width < -40 {
                     model.next()
                 } else if value.translation.width > 40 {
@@ -70,18 +78,47 @@ struct AudienceSlideView: View {
     @ObservedObject var model: PresentationModel
 
     var body: some View {
-        ZStack {
-            Color.black
-            PDFPageView(document: model.document, pageIndex: model.index)
-            Canvas { ctx, sz in
-                for stroke in model.strokes[model.index] ?? [] {
-                    ctx.stroke(path(stroke.points, in: sz),
-                               with: .color(stroke.color),
-                               style: lineStyle(stroke.width * sz.width))
+        GeometryReader { geo in
+            let size = geo.size
+            ZStack {
+                Color.black
+                PDFPageView(document: model.document, pageIndex: model.index)
+                Canvas { ctx, sz in
+                    for stroke in model.strokes[model.index] ?? [] {
+                        ctx.stroke(path(stroke.points, in: sz),
+                                   with: .color(stroke.color),
+                                   style: lineStyle(stroke.width * sz.width))
+                    }
+                }
+                .allowsHitTesting(false)
+                if let p = model.laserPoint {
+                    LaserDot(point: p, in: size)
                 }
             }
-            .allowsHitTesting(false)
         }
+    }
+}
+
+/// A glowing red laser dot positioned at a unit point within `size`.
+struct LaserDot: View {
+    let point: CGPoint
+    let size: CGSize
+
+    init(point: CGPoint, in size: CGSize) {
+        self.point = point
+        self.size = size
+    }
+
+    var body: some View {
+        let d = max(14, size.width * 0.018)
+        Circle()
+            .fill(RadialGradient(
+                colors: [.white, .red, .red.opacity(0)],
+                center: .center, startRadius: 0, endRadius: d))
+            .frame(width: d * 2, height: d * 2)
+            .shadow(color: .red.opacity(0.8), radius: d * 0.6)
+            .position(x: point.x * size.width, y: point.y * size.height)
+            .allowsHitTesting(false)
     }
 }
 

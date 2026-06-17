@@ -72,8 +72,12 @@ struct PresenterView: View {
     @EnvironmentObject var external: ExternalDisplayManager
     let openPicker: () -> Void
 
-    private let colors: [(String, Color)] = [("Red", .red), ("Green", .green),
-                                             ("Blue", .blue), ("Yellow", .yellow)]
+    private let colors: [(String, Color)] = [("Red", .red), ("Orange", .orange),
+                                             ("Yellow", .yellow), ("Green", .green),
+                                             ("Blue", .blue), ("White", .white)]
+
+    private let widths: [(String, CGFloat)] = [("Thin", 0.0025), ("Medium", 0.004),
+                                              ("Thick", 0.007)]
 
     var body: some View {
         VStack(spacing: 0) {
@@ -108,19 +112,35 @@ struct PresenterView: View {
 
             Spacer()
 
-            Button { model.penActive.toggle() } label: { Image(systemName: "pencil.tip") }
+            Button { model.toggleLaser() } label: { Image(systemName: "dot.radiowaves.left.and.right") }
+                .foregroundStyle(model.laserActive ? .red : .primary)
+
+            Button { model.togglePen() } label: { Image(systemName: "pencil.tip") }
                 .foregroundStyle(model.penActive ? Color.accentColor : .primary)
             ForEach(colors, id: \.0) { name, color in
                 Button {
                     model.penColor = color
                     model.penActive = true
+                    model.laserActive = false
                 } label: {
                     Circle().fill(color).frame(width: 22, height: 22)
                         .overlay(Circle().strokeBorder(
-                            .white.opacity(model.penColor == color ? 0.9 : 0.25),
+                            .white.opacity(model.penColor == color ? 0.9 : 0.3),
                             lineWidth: model.penColor == color ? 2 : 1))
                 }
             }
+            Menu {
+                ForEach(widths, id: \.0) { name, w in
+                    Button {
+                        model.penWidth = w
+                        model.penActive = true
+                        model.laserActive = false
+                    } label: {
+                        Label(name, systemImage: model.penWidth == w ? "checkmark" : "scribble")
+                    }
+                }
+            } label: { Image(systemName: "lineweight") }
+
             Button { model.undoInk() } label: { Image(systemName: "arrow.uturn.backward") }
                 .disabled(!model.hasInk)
             Button { model.clearInk() } label: { Image(systemName: "trash") }
