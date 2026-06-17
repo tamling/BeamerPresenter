@@ -10,6 +10,7 @@ struct SettingsView: View {
     @AppStorage(Prefs.blackScreenImage) private var blackImage = ""
     @AppStorage(Prefs.showStatusItem) private var showStatusItem = true
     @AppStorage(Prefs.backgroundMode) private var backgroundMode = false
+    @AppStorage(Prefs.audienceFullscreen) private var audienceFullscreen = true
 
     var body: some View {
         Form {
@@ -24,6 +25,15 @@ struct SettingsView: View {
                         NotificationCenter.default.post(name: .backgroundModePrefChanged, object: nil)
                     }
                 Text("Background mode keeps only the menu bar icon; the macOS menu bar is unavailable then.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+
+            Section("Audience window") {
+                Toggle("Fill the external display (full screen)", isOn: $audienceFullscreen)
+                    .onChange(of: audienceFullscreen) { _ in
+                        NotificationCenter.default.post(name: .audienceModeChanged, object: nil)
+                    }
+                Text("Off shows the audience as a normal, resizable window (use the green button or this toggle).")
                     .font(.caption).foregroundStyle(.secondary)
             }
 
@@ -62,7 +72,7 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 500, height: 480)
+        .frame(width: 500, height: 560)
     }
 
     private func chooseImage() {
@@ -97,6 +107,7 @@ enum Prefs {
     static let blackScreenImage = "blackScreenImage"
     static let showStatusItem = "showStatusItem"
     static let backgroundMode = "backgroundMode"
+    static let audienceFullscreen = "audienceFullscreen"
 }
 
 /// Predefined "be right back" messages for the black screen.
