@@ -8,7 +8,8 @@ enum Tool { case none, pen, laser }
 /// The fixed pen palette, shared by the in-app colour swatches and the menu bar.
 enum PenPalette {
     static let colors: [(name: String, color: Color)] =
-        [("Red", .red), ("Green", .green), ("Blue", .blue), ("Yellow", .yellow)]
+        [("Red", PenInk.red), ("Yellow", PenInk.yellow),
+         ("Green", PenInk.green), ("Blue", PenInk.blue)]
 }
 
 /// One freehand annotation, stored in *unit* coordinates (0...1 of the slide

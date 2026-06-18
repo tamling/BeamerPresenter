@@ -57,7 +57,9 @@ struct ContentView: View {
     }
 }
 
-/// Start screen: branding, open / sample actions, recent files, and a version line.
+/// Launcher — Night Console (spec §05): dark identity column with the wordmark,
+/// a single solid-lime primary action, ghost secondaries, a recent card, and a
+/// quiet version footer.
 struct StartView: View {
     @EnvironmentObject var model: PresentationModel
     @State private var showSettings = false
@@ -65,80 +67,93 @@ struct StartView: View {
     let open: () -> Void
 
     var body: some View {
-        VStack(spacing: 24) {
-            HStack {
-                Spacer()
-                Button { showSettings = true } label: {
-                    Image(systemName: "gearshape").font(.title2)
+        ZStack {
+            Theme.base.ignoresSafeArea()
+
+            VStack(spacing: 26) {
+                HStack {
+                    Spacer()
+                    KeyButton("Settings", systemImage: "gearshape") { showSettings = true }
                 }
-            }
 
-            Spacer()
+                Spacer(minLength: 0)
 
-            VStack(spacing: 10) {
-                Image(systemName: "rectangle.on.rectangle.angled")
-                    .font(.system(size: 60)).foregroundStyle(LinearGradient.brand)
-                Text("BeamerPresenter")
-                    .font(.largeTitle.bold())
-                    .foregroundStyle(LinearGradient.brand)
-                Text("Present PDF slides on your iPad.").foregroundStyle(.secondary)
-            }
-
-            VStack(spacing: 12) {
-                Button(action: open) {
-                    Label("Open PDF…", systemImage: "folder")
-                        .font(.headline).foregroundStyle(.white)
-                        .frame(maxWidth: 360).padding(.vertical, 14)
-                        .background(LinearGradient.brand, in: RoundedRectangle(cornerRadius: 12))
+                // Identity
+                VStack(spacing: 10) {
+                    BrandMark()
+                        .padding(22)
+                        .frame(width: 92, height: 92)
+                        .background(Theme.key, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 22).stroke(Theme.hairline, lineWidth: 1))
+                    Text("BeamerPresenter")
+                        .font(.display(30)).tracking(-0.3)
+                        .foregroundStyle(Theme.textPrimary)
+                    Text("Present · Annotate · Two screens")
+                        .font(.mono(10)).textCase(.uppercase).tracking(1.6)
+                        .foregroundStyle(Theme.accent)
+                    Text("Your console on the iPad, clean slides on the projector.")
+                        .font(.ui(15)).foregroundStyle(Theme.textSecondary)
+                        .multilineTextAlignment(.center)
                 }
-                .buttonStyle(.plain)
 
-                if let sample = Bundle.main.url(forResource: "sample", withExtension: "pdf") {
-                    Button { model.open(url: sample) } label: {
-                        Label("Try a sample deck", systemImage: "sparkles").frame(maxWidth: 360)
+                // Actions
+                VStack(spacing: 12) {
+                    Button(action: open) {
+                        Label("Open PDF…", systemImage: "folder")
                     }
-                    .buttonStyle(.bordered).controlSize(.large)
-                }
+                    .buttonStyle(PrimaryButtonStyle())
 
-                Button { showRemote = true } label: {
-                    Label("Use as remote", systemImage: "dot.radiowaves.left.and.right").frame(maxWidth: 360)
-                }
-                .buttonStyle(.bordered).controlSize(.large)
-            }
-
-            if !model.recents.isEmpty {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Recent").font(.headline)
-                    ForEach(model.recents.prefix(5), id: \.self) { url in
-                        Button { model.open(url: url) } label: {
-                            HStack {
-                                Image(systemName: "doc.richtext").foregroundStyle(.tint)
-                                Text(url.deletingPathExtension().lastPathComponent)
-                                    .foregroundStyle(.primary)
-                                Spacer()
-                                Image(systemName: "chevron.right")
-                                    .font(.caption).foregroundStyle(.tertiary)
-                            }
-                            .padding(.vertical, 10).padding(.horizontal, 14)
-                            .background(.quaternary, in: RoundedRectangle(cornerRadius: 10))
+                    if let sample = Bundle.main.url(forResource: "sample", withExtension: "pdf") {
+                        Button { model.open(url: sample) } label: {
+                            Label("Try a sample deck", systemImage: "sparkles")
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(GhostButtonStyle())
                     }
+                    Button { showRemote = true } label: {
+                        Label("Use as remote", systemImage: "dot.radiowaves.left.and.right")
+                    }
+                    .buttonStyle(GhostButtonStyle())
                 }
-                .frame(maxWidth: 360)
-            }
+                .frame(maxWidth: 380)
 
-            Spacer()
+                if !model.recents.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Recent").microLabel()
+                        VStack(spacing: 0) {
+                            ForEach(Array(model.recents.prefix(5).enumerated()), id: \.element) { i, url in
+                                if i > 0 { Divider().overlay(Theme.hairline) }
+                                Button { model.open(url: url) } label: {
+                                    HStack(spacing: 11) {
+                                        Text("PDF").font(.mono(9, bold: true)).foregroundStyle(Theme.accent)
+                                            .padding(.horizontal, 7).padding(.vertical, 5)
+                                            .background(Theme.accentDim, in: RoundedRectangle(cornerRadius: 6))
+                                        Text(url.deletingPathExtension().lastPathComponent)
+                                            .font(.ui(15, "Medium")).foregroundStyle(Theme.textPrimary)
+                                        Spacer()
+                                        Image(systemName: "chevron.right")
+                                            .font(.caption).foregroundStyle(Theme.textFaint)
+                                    }
+                                    .padding(.vertical, 11).padding(.horizontal, 14)
+                                    .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        .nightCard()
+                    }
+                    .frame(maxWidth: 380)
+                }
 
-            VStack(spacing: 2) {
-                Text("BeamerPresenter \(Self.version)").font(.headline)
-                Text("\(Self.releaseDate) · by \(Self.author)")
-                    .font(.caption).foregroundStyle(.secondary)
+                Spacer(minLength: 0)
+
+                VStack(spacing: 4) {
+                    Text("BeamerPresenter \(Self.version)")
+                        .font(.ui(13.5, "Medium")).foregroundStyle(Theme.textSecondary)
+                    Text("\(Self.releaseDate) · by \(Self.author)").microLabel()
+                }
             }
-            .padding(.bottom, 8)
+            .padding(34)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(40)
         .sheet(isPresented: $showSettings) { SettingsView() }
         .sheet(isPresented: $showRemote) { RemoteView() }
     }
@@ -214,7 +229,7 @@ struct PresenterView: View {
                     .transition(.move(edge: .bottom))
             }
         }
-        .background(Color.black.ignoresSafeArea())
+        .background(Theme.base.ignoresSafeArea())
         .background(
             KeyCommandView(
                 onNext: { model.next() },
@@ -302,6 +317,8 @@ struct PresenterView: View {
             TimerControls()
             Spacer(minLength: 8)
 
+            Button { model.penActive = false; model.laserActive = false } label: { Image(systemName: "cursorarrow") }
+                .foregroundStyle(!model.penActive && !model.laserActive ? Color.accentColor : .primary)
             Button { model.toggleLaser() } label: { Image(systemName: "dot.radiowaves.left.and.right") }
                 .foregroundStyle(model.laserActive ? .red : .primary)
 
@@ -321,7 +338,8 @@ struct PresenterView: View {
         .font(.title3)
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
-        .background(.ultraThinMaterial)
+        .background(Theme.raised)
+        .overlay(alignment: .bottom) { Rectangle().fill(Theme.hairline).frame(height: 1) }
     }
 
     // MARK: - Captioned control bar (macOS-style, landscape)
@@ -335,41 +353,47 @@ struct PresenterView: View {
                 group {
                     captionedButton("Exit", "rectangle.portrait.and.arrow.right") { model.close() }
                     captioned("More") {
-                        Menu { overflowMenuContent } label: { Image(systemName: "ellipsis.circle") }
+                        Menu { overflowMenuContent } label: { keyGlyph("ellipsis.circle") }
                     }
                 }
 
                 group {
                     captionedButton("Prev", "chevron.left", disabled: model.index == 0) { model.previous() }
                     captioned("Slide") {
-                        Text("\(model.index + 1) / \(model.pageCount)")
-                            .font(.callout.monospacedDigit().weight(.semibold))
+                        Text(String(format: "%02d / %02d", model.index + 1, model.pageCount))
+                            .font(.mono(14, bold: true)).foregroundStyle(Theme.textPrimary)
                             .lineLimit(1).fixedSize()
+                            .padding(.horizontal, 11).frame(height: 36)
+                            .background(Theme.inset, in: RoundedRectangle(cornerRadius: 9))
+                            .overlay(RoundedRectangle(cornerRadius: 9).stroke(Theme.hairline, lineWidth: 1))
                     }
                     captionedButton("Next", "chevron.right",
                                     disabled: model.index + 1 >= model.pageCount) { model.next() }
                 }
 
                 group {
-                    captionedButton("Overview", "square.grid.2x2") { showOverview = true }
-                    captioned("Blackout") {
+                    captionedButton("Grid", "square.grid.2x2") { showOverview = true }
+                    captioned("Black") {
                         Menu { blackoutMenuContent } label: {
-                            Image(systemName: model.blackout ? "eye.slash.fill" : "eye.slash")
+                            keyGlyph(model.blackout ? "eye.slash.fill" : "eye.slash", active: model.blackout)
                         }
-                        .foregroundStyle(model.blackout ? Color.accentColor : .primary)
                     }
                     captioned("Board") {
                         Menu { boardMenuContent } label: {
-                            Image(systemName: model.isBoardActive ? "square.and.pencil.circle.fill" : "square.and.pencil")
+                            keyGlyph(model.isBoardActive ? "square.and.pencil.circle.fill" : "square.and.pencil",
+                                     active: model.isBoardActive)
                         }
-                        .foregroundStyle(model.isBoardActive ? Color.accentColor : .primary)
                     }
                     if external.isConnected {
-                        captioned("Display") { Image(systemName: "tv.fill").foregroundStyle(.green) }
+                        captioned("Display") { keyGlyph("tv.fill", active: true) }
                     }
                 }
 
                 group {
+                    captionedButton("Cursor", "cursorarrow",
+                                    active: !model.penActive && !model.laserActive) {
+                        model.penActive = false; model.laserActive = false
+                    }
                     captioned("Pen") {
                         Menu {
                             Section("Line weight") {
@@ -381,9 +405,8 @@ struct PresenterView: View {
                             }
                             Toggle("Apple Pencil only", isOn: $pencilOnly)
                         } label: {
-                            Image(systemName: "pencil.tip")
+                            keyGlyph("pencil.tip", active: model.penActive)
                         } primaryAction: { model.togglePen() }
-                        .foregroundStyle(model.penActive ? model.penColor : .primary)
                     }
                     captionedButton("Laser", "dot.circle.and.cursorarrow", active: model.laserActive) { model.toggleLaser() }
                     colourStrip
@@ -403,24 +426,51 @@ struct PresenterView: View {
                                         model.timerRunning ? "pause" : "play",
                                         active: !model.timerRunning) { model.toggleTimer() }
                         captionedButton("Reset", "arrow.counterclockwise") { model.resetTimer() }
-                        captioned("Elapsed") {
-                            Text(TimerControls.elapsedString(model.elapsed))
-                                .font(.callout.monospacedDigit().weight(.semibold))
-                                .lineLimit(1).fixedSize()
-                        }
+                        captioned("Elapsed") { elapsedChip }
                         captioned("Time") {
                             Text(TimerControls.clockString())
-                                .font(.callout.monospacedDigit()).foregroundStyle(.secondary)
-                                .lineLimit(1).fixedSize()
+                                .font(.mono(15, bold: true)).foregroundStyle(Theme.textSecondary)
+                                .lineLimit(1).fixedSize().frame(height: 36)
                         }
                     }
                 }
             }
             .padding(.horizontal, 22)
         }
-        .font(.system(size: 18, weight: .regular))
-        .padding(.vertical, 8)
-        .background(.ultraThinMaterial)
+        .padding(.vertical, 9)
+        .background(Theme.raised)
+        .overlay(alignment: .bottom) { Rectangle().fill(Theme.hairline).frame(height: 1) }
+    }
+
+    /// A tactile key glyph (the Night Console toolbar button surface).
+    private func keyGlyph(_ icon: String, active: Bool = false) -> some View {
+        Image(systemName: icon)
+            .font(.system(size: 16, weight: .medium))
+            .foregroundStyle(active ? Theme.accent : Theme.textPrimary)
+            .frame(width: 46, height: 36)
+            .background(Theme.key, in: RoundedRectangle(cornerRadius: 9))
+            .overlay(RoundedRectangle(cornerRadius: 9)
+                .stroke(active ? Theme.accent : Theme.hairline, lineWidth: 1))
+            .shadow(color: active ? Theme.accent.opacity(0.5) : .clear, radius: 6)
+    }
+
+    /// The running timer — the only solid-lime fill in the chrome.
+    @ViewBuilder private var elapsedChip: some View {
+        if model.timerRunning {
+            Text(TimerControls.elapsedString(model.elapsed))
+                .font(.mono(15, bold: true)).foregroundStyle(Theme.onAccent)
+                .lineLimit(1).fixedSize()
+                .padding(.horizontal, 11).frame(height: 36)
+                .background(Theme.accent, in: RoundedRectangle(cornerRadius: 9))
+                .shadow(color: Theme.accent.opacity(0.5), radius: 8)
+        } else {
+            Text(TimerControls.elapsedString(model.elapsed))
+                .font(.mono(15, bold: true)).foregroundStyle(Theme.textPrimary)
+                .lineLimit(1).fixedSize()
+                .padding(.horizontal, 11).frame(height: 36)
+                .background(Theme.inset, in: RoundedRectangle(cornerRadius: 9))
+                .overlay(RoundedRectangle(cornerRadius: 9).stroke(Theme.hairline, lineWidth: 1))
+        }
     }
 
     /// A cluster of related controls, spaced for breathing room (Keynote-style).
@@ -439,14 +489,16 @@ struct PresenterView: View {
                     } label: {
                         Circle().fill(color).frame(width: 26, height: 26)
                             .overlay(Circle().strokeBorder(
-                                .white.opacity(model.penColor == color ? 0.95 : 0.25),
+                                model.penColor == color ? Theme.accent : Theme.hairlineStrong,
                                 lineWidth: model.penColor == color ? 3 : 1))
+                            .shadow(color: model.penColor == color ? Theme.accent.opacity(0.4) : .clear, radius: 4)
                     }
                     .buttonStyle(.plain)
                 }
                 ColorPicker("", selection: penColorBinding, supportsOpacity: false)
-                    .labelsHidden()
+                    .labelsHidden().frame(width: 30)
             }
+            .frame(height: 36)
         }
     }
 
@@ -456,10 +508,12 @@ struct PresenterView: View {
                 set: { model.penColor = $0; model.penActive = true; model.laserActive = false })
     }
 
+    /// A control stacked above a mono uppercase caption (Night Console).
     private func captioned<C: View>(_ caption: String, @ViewBuilder _ content: () -> C) -> some View {
-        VStack(spacing: 4) {
-            content().frame(height: 30)
-            Text(caption).font(.system(size: 9)).foregroundStyle(.secondary)
+        VStack(spacing: 6) {
+            content().frame(height: 36)
+            Text(caption).font(.mono(9)).textCase(.uppercase).tracking(0.6)
+                .foregroundStyle(Theme.textMuted)
         }
     }
 
@@ -467,9 +521,10 @@ struct PresenterView: View {
                                  active: Bool = false, disabled: Bool = false,
                                  action: @escaping () -> Void) -> some View {
         captioned(caption) {
-            Button(action: action) { Image(systemName: icon) }
-                .foregroundStyle(active ? Color.accentColor : .primary)
+            Button(action: action) { keyGlyph(icon, active: active) }
+                .buttonStyle(.plain)
                 .disabled(disabled)
+                .opacity(disabled ? 0.4 : 1)
         }
     }
 
@@ -639,8 +694,9 @@ struct PresenterView: View {
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 8)
-        .background(Color(white: 0.12))
-        .foregroundStyle(.white)
+        .background(Theme.raised)
+        .overlay(alignment: .bottom) { Rectangle().fill(Theme.hairline).frame(height: 1) }
+        .foregroundStyle(Theme.textPrimary)
     }
 
     /// A larger, thumb-friendly insert button for the board bar.

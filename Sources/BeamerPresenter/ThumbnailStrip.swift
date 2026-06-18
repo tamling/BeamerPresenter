@@ -27,29 +27,32 @@ struct ThumbnailStrip: View {
             }
         }
         .frame(height: thumbHeight + 28)
-        .background(Color(nsColor: .underPageBackgroundColor))
+        .background(Theme.raised)
+        .overlay(alignment: .top) { Rectangle().fill(Theme.hairline).frame(height: 1) }
     }
 
     @ViewBuilder
     private func thumb(_ i: Int) -> some View {
         let isCurrent = i == state.index
-        VStack(spacing: 2) {
+        VStack(spacing: 3) {
             Group {
                 if let image = state.thumbnail(at: i, height: thumbHeight) {
                     Image(nsImage: image).resizable().scaledToFit()
                 } else {
-                    Color.black
+                    Theme.key
                 }
             }
             .frame(height: thumbHeight)
+            .clipShape(RoundedRectangle(cornerRadius: 6))
             .overlay(
-                RoundedRectangle(cornerRadius: 4)
-                    .strokeBorder(isCurrent ? Color.accentColor : Color.gray.opacity(0.4),
-                                  lineWidth: isCurrent ? 3 : 1)
+                RoundedRectangle(cornerRadius: 6)
+                    .strokeBorder(isCurrent ? Theme.accent : Theme.hairlineStrong,
+                                  lineWidth: isCurrent ? 2.5 : 1)
             )
+            .shadow(color: isCurrent ? Theme.accent.opacity(0.4) : .clear, radius: 6)
             Text("\(i + 1)")
-                .font(.caption2)
-                .foregroundStyle(isCurrent ? Color.accentColor : .secondary)
+                .font(.mono(10)).tracking(0.5)
+                .foregroundStyle(isCurrent ? Theme.accent : Theme.textMuted)
         }
     }
 }

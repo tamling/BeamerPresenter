@@ -73,7 +73,7 @@ struct PresenterView: View {
                 ThumbnailStrip()
             }
             .padding(8)
-            .background(Color(nsColor: .windowBackgroundColor))
+            .background(Theme.base)
 
             if state.showOverview {
                 OverviewGrid().transition(.opacity)
@@ -92,7 +92,7 @@ struct PresenterView: View {
             let nextH = avail - notesH
 
             VStack(spacing: 0) {
-                slidePane(title: "Next", index: state.index + 1, interactive: false)
+                slidePane(title: "Next slide", index: state.index + 1, interactive: false)
                     .opacity(state.index + 1 < state.pageCount ? 1 : 0.25)
                     .frame(height: nextH)
 
@@ -130,7 +130,7 @@ struct PresenterView: View {
     private var scratchPane: some View {
         VStack(spacing: 4) {
             HStack {
-                Text("Scratch notes").font(.caption).foregroundStyle(.secondary)
+                Text("Scratch notes").microLabel()
                 Spacer()
                 Menu {
                     Button("Time") { appendScratch(Date().formatted(date: .omitted, time: .shortened)) }
@@ -150,12 +150,12 @@ struct PresenterView: View {
                 .help("Save notes as a .txt file…")
             }
             TextEditor(text: $state.scratch)
-                .font(.callout)
+                .font(.ui(13)).foregroundStyle(Theme.textPrimary)
                 .scrollContentBackground(.hidden)
-                .padding(6)
-                .background(Color(nsColor: .textBackgroundColor))
-                .clipShape(RoundedRectangle(cornerRadius: 6))
-                .overlay(RoundedRectangle(cornerRadius: 6).stroke(.gray.opacity(0.3)))
+                .padding(8)
+                .background(Theme.inset)
+                .clipShape(RoundedRectangle(cornerRadius: 9))
+                .overlay(RoundedRectangle(cornerRadius: 9).stroke(Theme.hairline, lineWidth: 1))
                 .onChange(of: state.scratch) { _ in state.saveScratch() }
         }
     }
@@ -186,26 +186,34 @@ struct PresenterView: View {
 
     /// The large left pane: the current slide, or the whiteboard when active.
     private var currentPane: some View {
-        VStack(spacing: 4) {
-            Text(state.isBoardActive ? "Whiteboard" : "Current")
-                .font(.caption).foregroundStyle(.secondary)
-            if state.isBoardActive {
-                WhiteboardPane()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                SlideView(pageIndex: state.index, interactive: true)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .border(.gray.opacity(0.5))
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text(state.isBoardActive ? "Whiteboard" : "Current slide").microLabel()
+                Spacer()
+                LivePill()
             }
+            Group {
+                if state.isBoardActive {
+                    WhiteboardPane()
+                } else {
+                    SlideView(pageIndex: state.index, interactive: true)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(10)
+            .background(Theme.stage, in: RoundedRectangle(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Theme.hairline, lineWidth: 1))
         }
     }
 
     private func slidePane(title: String, index: Int, interactive: Bool) -> some View {
-        VStack(spacing: 4) {
-            Text(title).font(.caption).foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title).microLabel()
             SlideView(pageIndex: index, interactive: interactive)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .border(.gray.opacity(0.5))
+                .padding(8)
+                .background(Theme.stage, in: RoundedRectangle(cornerRadius: 12))
+                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Theme.hairline, lineWidth: 1))
         }
     }
 
@@ -246,11 +254,12 @@ struct PresenterView: View {
     }
 
     private var notesPane: some View {
-        VStack(spacing: 4) {
-            Text("Notes").font(.caption).foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Speaker notes").microLabel()
             notesContent
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .border(.gray.opacity(0.5))
+                .background(Theme.surface, in: RoundedRectangle(cornerRadius: 12))
+                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Theme.hairline, lineWidth: 1))
         }
         .frame(maxHeight: .infinity)
     }
@@ -267,7 +276,7 @@ struct PresenterView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(10)
             }
-            .background(Color(nsColor: .textBackgroundColor))
+            .background(Theme.surface)
         } else if state.hasNotes {
             placeholder(icon: "note.text",
                         title: "No note for this slide",
@@ -311,7 +320,7 @@ struct ResizeHandle: View {
         ZStack {
             Color.clear
             RoundedRectangle(cornerRadius: 2)
-                .fill(Color.secondary.opacity(hovering ? 0.55 : 0.3))
+                .fill(hovering ? Theme.accent : Theme.hairlineStrong)
                 .frame(width: isHorizontal ? 4 : 40,
                        height: isHorizontal ? 40 : 4)
         }
@@ -353,43 +362,52 @@ private struct ControlBar: View {
     private let tick = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
+        HStack(alignment: .center, spacing: 14) {
             tool("Exit", "rectangle.portrait.and.arrow.right") { state.unload() }
 
-            Spacer(minLength: 8)
+            groupDivider
 
-            // Navigation, then the audience and drawing groups, spread apart.
+            // Navigation
             tool("Prev", "chevron.left", disabled: state.index == 0) { state.previous() }
             captioned("Slide") {
-                Text("\(state.index + 1) / \(state.pageCount)")
-                    .font(.headline.monospacedDigit())
+                Text(String(format: "%02d / %02d", state.index + 1, state.pageCount))
+                    .font(.mono(14, bold: true)).foregroundStyle(Theme.textPrimary)
+                    .padding(.horizontal, 11).frame(height: 34)
+                    .background(Theme.inset, in: RoundedRectangle(cornerRadius: 9))
+                    .overlay(RoundedRectangle(cornerRadius: 9).stroke(Theme.hairline, lineWidth: 1))
             }
             tool("Next", "chevron.right", disabled: state.index + 1 >= state.pageCount) { state.next() }
 
-            Spacer(minLength: 22)
+            groupDivider
 
-            tool("Overview", "square.grid.2x2", active: state.showOverview) { state.showOverview.toggle() }
-            tool("Blackout", state.blackout ? "eye.slash.fill" : "eye.slash", active: state.blackout) { state.blackout.toggle() }
+            // View
+            tool("Grid", "square.grid.2x2", active: state.showOverview) { state.showOverview.toggle() }
+            tool("Black", state.blackout ? "eye.slash.fill" : "eye.slash", active: state.blackout) { state.blackout.toggle() }
             tool("Board", "square.and.pencil", active: state.isBoardActive) { state.toggleBoard() }
 
-            Spacer(minLength: 22)
+            groupDivider
 
+            // Annotate
+            tool("Cursor", "cursorarrow", active: state.tool == .none) { state.tool = .none }
             tool("Pen", "pencil.tip", active: state.tool == .pen) { state.toggleTool(.pen) }
             tool("Laser", "dot.circle.and.cursorarrow", active: state.tool == .laser) { state.toggleTool(.laser) }
 
             ForEach(PenPalette.colors, id: \.name) { name, color in
-                captioned(name) {
+                captioned("") {
                     Button {
                         state.penColor = color
                         if state.tool == .none { state.tool = .pen }   // keep the laser if it's active
                     } label: {
                         Circle().fill(color)
-                            .frame(width: 20, height: 20)
+                            .frame(width: 22, height: 22)
                             .overlay(Circle().strokeBorder(
-                                .primary.opacity(state.penColor == color ? 0.9 : 0.2),
+                                state.penColor == color ? Theme.accent : Theme.hairlineStrong,
                                 lineWidth: state.penColor == color ? 2.5 : 1))
+                            .shadow(color: state.penColor == color ? Theme.accent.opacity(0.4) : .clear, radius: 4)
+                            .frame(height: 34)
                     }
-                    .buttonStyle(.borderless)
+                    .buttonStyle(.plain)
+                    .help(name)
                 }
             }
 
@@ -403,46 +421,69 @@ private struct ControlBar: View {
                  state.timerRunning ? "pause" : "play",
                  active: !state.timerRunning) { state.toggleTimer() }
             tool("Reset", "arrow.counterclockwise") { state.resetTimer() }
-            captioned("Elapsed") {
-                Label(elapsed, systemImage: "stopwatch")
-                    .font(.headline.monospacedDigit())
-            }
+            captioned("Elapsed") { elapsedChip }
             captioned("Time") {
                 Text(now, style: .time)
-                    .font(.headline.monospacedDigit())
-                    .foregroundStyle(.secondary)
+                    .font(.mono(15, bold: true)).foregroundStyle(Theme.textSecondary)
+                    .frame(height: 34)
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 7)
-        .background(Color(nsColor: .underPageBackgroundColor))
+        .padding(.horizontal, 16)
+        .frame(height: 66)
+        .background(Theme.raised)
+        .overlay(alignment: .bottom) { Rectangle().fill(Theme.hairline).frame(height: 1) }
         .onReceive(tick) { now = $0 }
     }
 
-    /// A captioned icon button; tinted when `active`, greyed when `disabled`.
-    private func tool(_ caption: String, _ systemImage: String,
-                      active: Bool = false, disabled: Bool = false,
-                      action: @escaping () -> Void) -> some View {
-        captioned(caption) {
-            Button(action: action) {
-                Image(systemName: systemImage).font(.title3)
-            }
-            .buttonStyle(.borderless)
-            .foregroundStyle(active ? Color.accentColor : .primary)
-            .disabled(disabled)
+    private var groupDivider: some View {
+        Rectangle().fill(Theme.hairline).frame(width: 1, height: 38)
+    }
+
+    /// The running timer is the only solid-lime fill in the chrome.
+    @ViewBuilder private var elapsedChip: some View {
+        if state.timerRunning {
+            Text(elapsed).font(.mono(15, bold: true)).foregroundStyle(Theme.onAccent)
+                .padding(.horizontal, 11).frame(height: 34)
+                .background(Theme.accent, in: RoundedRectangle(cornerRadius: 9))
+                .shadow(color: Theme.accent.opacity(0.5), radius: 8)
+        } else {
+            Text(elapsed).font(.mono(15, bold: true)).foregroundStyle(Theme.textPrimary)
+                .padding(.horizontal, 11).frame(height: 34)
+                .background(Theme.inset, in: RoundedRectangle(cornerRadius: 9))
+                .overlay(RoundedRectangle(cornerRadius: 9).stroke(Theme.hairline, lineWidth: 1))
         }
     }
 
-    /// A control stacked above a small caption. The content sits in a fixed-height
-    /// band so every symbol lines up on the same horizontal line, captions below.
+    /// A tactile key: key surface + hairline; lime border + glow when active.
+    private func tool(_ caption: String, _ systemImage: String,
+                      active: Bool = false, disabled: Bool = false,
+                      action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 6) {
+                Image(systemName: systemImage).font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(active ? Theme.accent : Theme.textPrimary)
+                    .frame(width: 40, height: 34)
+                    .background(Theme.key, in: RoundedRectangle(cornerRadius: 9))
+                    .overlay(RoundedRectangle(cornerRadius: 9)
+                        .stroke(active ? Theme.accent : Theme.hairline, lineWidth: 1))
+                    .shadow(color: active ? Theme.accent.opacity(0.5) : .clear, radius: 6)
+                Text(caption).font(.mono(9)).textCase(.uppercase).tracking(0.6)
+                    .foregroundStyle(active ? Theme.accent : Theme.textMuted)
+            }
+            .opacity(disabled ? 0.4 : 1)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(disabled)
+    }
+
+    /// A control stacked above a mono uppercase caption.
     private func captioned<Content: View>(_ caption: String,
                                           @ViewBuilder _ content: () -> Content) -> some View {
-        VStack(spacing: 3) {
-            content()
-                .frame(height: 24)
-            Text(caption)
-                .font(.system(size: 9))
-                .foregroundStyle(.secondary)
+        VStack(spacing: 6) {
+            content().frame(height: 34)
+            Text(caption).font(.mono(9)).textCase(.uppercase).tracking(0.6)
+                .foregroundStyle(Theme.textMuted)
         }
     }
 
