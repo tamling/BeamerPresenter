@@ -32,9 +32,11 @@ tactile keys, mono labels, a single electric-lime signal. Reference mock:
 - [ ] **Settings / Remote** — Night surfaces, cards, mono labels.
 
 ## Notes
-- **Fonts:** `.custom(...)` falls back to system until the three Google fonts
-  (`SpaceGrotesk-Bold`, `IBMPlexSans-*`, `JetBrainsMono-*`) `.ttf` are added to
-  the target and `UIAppFonts` in Info.plist. Drop the `.ttf`s into
-  `iOS/BeamerPresenter/Fonts/` and list them in `project.yml`.
+- **Fonts:** the three typefaces (Space Grotesk, IBM Plex Sans, JetBrains Mono,
+  SIL OFL) are bundled in `iOS/BeamerPresenter/Fonts/` and `Resources/Fonts/`,
+  registered via `UIAppFonts` (iOS) and `ATSApplicationFontsPath = Fonts`
+  (macOS, copied by `build-app.sh`). Regenerate the exact static weights with
+  `python3 tools/make_fonts.py`. (`swift run` dev builds without the .app bundle
+  fall back to system fonts.)
 - The chrome never recolours slide content — the deck stays as authored.
 - macOS port of the same spec is a separate effort (shared tokens, AppKit shell).

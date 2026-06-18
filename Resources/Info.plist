@@ -18,6 +18,8 @@
     <string>2.0</string>
     <key>NSHumanReadableCopyright</key>
     <string>© 2026 Timo Amling</string>
+    <key>ATSApplicationFontsPath</key>
+    <string>Fonts</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>LSMinimumSystemVersion</key>

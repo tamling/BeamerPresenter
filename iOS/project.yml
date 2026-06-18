@@ -36,6 +36,13 @@ targets:
         CFBundleDisplayName: BeamerPresenter
         CFBundleShortVersionString: "2.0"
         CFBundleVersion: "2"
+        UIAppFonts:
+          - SpaceGrotesk-Bold.ttf
+          - IBMPlexSans-Regular.ttf
+          - IBMPlexSans-Medium.ttf
+          - IBMPlexSans-SemiBold.ttf
+          - JetBrainsMono-Regular.ttf
+          - JetBrainsMono-Bold.ttf
         UILaunchScreen: {}
         UIRequiresFullScreen: false
         UISupportedInterfaceOrientations:

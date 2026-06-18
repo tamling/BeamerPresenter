@@ -57,6 +57,8 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/$APP_NAME"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
 cp Resources/BeamerPresenter.icns "$APP/Contents/Resources/BeamerPresenter.icns"
+# Bundle the Night Console fonts (registered via ATSApplicationFontsPath = Fonts).
+[ -d Resources/Fonts ] && cp -R Resources/Fonts "$APP/Contents/Resources/Fonts"
 printf 'APPL????' > "$APP/Contents/PkgInfo"
 
 if [ -n "$SIGN_IDENTITY" ]; then
