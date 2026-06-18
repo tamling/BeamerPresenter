@@ -53,19 +53,78 @@ enum QRCode {
 
 // MARK: - Rendering (presenter, audience, export all share this)
 
-/// A board's white background, committed ink, live stroke, and items.
+/// The palette a board renders in. Presenter and the audience screen use `.dark`
+/// (the Night look); the PDF/board export uses `.light` so printed pages stay
+/// ink-on-white and readable on paper.
+struct BoardStyle {
+    var background: Color
+    var showGrid: Bool
+    var gridDot: Color
+    var text: Color
+    var tableBorder: Color
+    var tableHeader: Color
+    var tableSurface: Color
+    var tableStripe: Color
+
+    func rowColor(_ r: Int) -> Color {
+        if r == 0 { return tableHeader }
+        return r.isMultiple(of: 2) ? tableSurface : tableStripe
+    }
+
+    /// Night look — presenter + audience.
+    static let dark = BoardStyle(
+        background: Theme.stage,
+        showGrid: true,
+        gridDot: Theme.textFaint.opacity(0.4),
+        text: Theme.textPrimary,
+        tableBorder: Theme.hairlineStrong,
+        tableHeader: Theme.key,
+        tableSurface: Theme.surface,
+        tableStripe: Color(hex: 0x21252C)
+    )
+
+    /// Printable look — PDF / board export. Ink-on-white, no grid.
+    static let light = BoardStyle(
+        background: .white,
+        showGrid: false,
+        gridDot: .clear,
+        text: .black,
+        tableBorder: Color(white: 0.80),
+        tableHeader: Color(white: 0.93),
+        tableSurface: .white,
+        tableStripe: Color(white: 0.975)
+    )
+}
+
+/// A board's background, committed ink, live stroke, and items.
 struct BoardCanvas: View {
     let board: Whiteboard
     var liveStroke: [CGPoint] = []
     var liveColor: Color = .red
     var liveWidth: CGFloat = 0.004
     var liveWidths: [CGFloat] = []
+    var style: BoardStyle = .dark
 
     var body: some View {
         GeometryReader { geo in
             let size = geo.size
             ZStack {
-                Color.white
+                style.background
+                if style.showGrid {
+                    Canvas { ctx, sz in
+                        let step = max(16, sz.width * 0.028)
+                        var y = step
+                        while y < sz.height {
+                            var x = step
+                            while x < sz.width {
+                                ctx.fill(Path(ellipseIn: CGRect(x: x - 1, y: y - 1, width: 2, height: 2)),
+                                         with: .color(style.gridDot))
+                                x += step
+                            }
+                            y += step
+                        }
+                    }
+                }
                 Canvas { ctx, sz in
                     for stroke in board.strokes {
                         drawStroke(ctx, points: stroke.points, widths: stroke.pointWidths,
@@ -75,7 +134,7 @@ struct BoardCanvas: View {
                                baseWidth: liveWidth, color: liveColor, in: sz)
                 }
                 ForEach(board.items) { item in
-                    BoardItemView(item: item, boardSize: size)
+                    BoardItemView(item: item, boardSize: size, style: style)
                         .position(x: item.center.x * size.width,
                                   y: item.center.y * size.height)
                 }
@@ -88,6 +147,7 @@ struct BoardCanvas: View {
 struct BoardItemView: View {
     let item: BoardItem
     let boardSize: CGSize
+    var style: BoardStyle = .dark
 
     private var pixelWidth: CGFloat { max(8, item.width * boardSize.width) }
     private var fontSize: CGFloat { max(6, item.fontScale * boardSize.width) }
@@ -97,21 +157,26 @@ struct BoardItemView: View {
         case .text:
             Text(item.text.isEmpty ? " " : item.text)
                 .font(.system(size: fontSize))
-                .foregroundStyle(.black)
+                .foregroundStyle(style.text)
                 .multilineTextAlignment(.leading)
                 .frame(width: pixelWidth, alignment: .topLeading)
         case .qr:
             Group {
                 if let image = QRCode.image(from: item.text) {
+                    // QR always sits on a white chip with a quiet zone so it scans
+                    // on the dark board (and is seamless on the light export).
                     Image(uiImage: image).resizable().interpolation(.none).scaledToFit()
+                        .padding(pixelWidth * 0.06)
+                        .background(Color.white)
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
                 } else {
-                    RoundedRectangle(cornerRadius: 4).stroke(.gray)
-                        .overlay(Image(systemName: "qrcode").foregroundStyle(.gray))
+                    RoundedRectangle(cornerRadius: 6).stroke(style.tableBorder)
+                        .overlay(Image(systemName: "qrcode").foregroundStyle(style.text.opacity(0.5)))
                 }
             }
             .frame(width: pixelWidth, height: pixelWidth)
         case .table:
-            TableItemView(text: item.text, width: pixelWidth, fontSize: fontSize)
+            TableItemView(text: item.text, width: pixelWidth, fontSize: fontSize, style: style)
         }
     }
 }
@@ -121,10 +186,7 @@ struct TableItemView: View {
     let text: String
     let width: CGFloat
     let fontSize: CGFloat
-
-    private let border = Color(white: 0.80)
-    private let header = Color(white: 0.93)
-    private let stripe = Color(white: 0.975)
+    var style: BoardStyle = .dark
 
     private var rows: [[String]] {
         text.split(separator: "\n", omittingEmptySubsequences: false)
@@ -140,30 +202,25 @@ struct TableItemView: View {
                     ForEach(0..<cols, id: \.self) { c in
                         Text(c < rows[r].count ? rows[r][c] : "")
                             .font(.system(size: fontSize, weight: r == 0 ? .semibold : .regular))
-                            .foregroundStyle(.black)
+                            .foregroundStyle(style.text)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.horizontal, fontSize * 0.5)
                             .padding(.vertical, fontSize * 0.32)
                             .overlay(alignment: .trailing) {
-                                if c < cols - 1 { Rectangle().fill(border).frame(width: 0.75) }
+                                if c < cols - 1 { Rectangle().fill(style.tableBorder).frame(width: 0.75) }
                             }
                     }
                 }
-                .background(rowColor(r))
+                .background(style.rowColor(r))
                 .overlay(alignment: .bottom) {
-                    if r < rows.count - 1 { Rectangle().fill(border).frame(height: 0.75) }
+                    if r < rows.count - 1 { Rectangle().fill(style.tableBorder).frame(height: 0.75) }
                 }
             }
         }
         .frame(width: width)
-        .background(Color.white)
+        .background(style.tableSurface)
         .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous).strokeBorder(border, lineWidth: 1))
-    }
-
-    private func rowColor(_ r: Int) -> Color {
-        if r == 0 { return header }
-        return r.isMultiple(of: 2) ? stripe : .white
+        .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous).strokeBorder(style.tableBorder, lineWidth: 1))
     }
 }
 
@@ -177,16 +234,15 @@ struct TableEditor: View {
 
     @State private var rows: [[String]]
 
-    private let border = Color(white: 0.80)
-    private let header = Color(white: 0.93)
-    private let stripe = Color(white: 0.975)
-
     init(text: String, width: CGFloat, fontSize: CGFloat, onChange: @escaping (String) -> Void) {
         self.width = width
         self.fontSize = fontSize
         self.onChange = onChange
         _rows = State(initialValue: TableEditor.parse(text))
     }
+
+    // The editor is presenter-only, so it always uses the Night palette.
+    private let style = BoardStyle.dark
 
     var body: some View {
         let cols = max(1, rows.map(\.count).max() ?? 1)
@@ -198,26 +254,26 @@ struct TableEditor: View {
                         TextField("", text: cellBinding(r, c))
                             .textFieldStyle(.plain)
                             .font(.system(size: fontSize, weight: r == 0 ? .semibold : .regular))
-                            .foregroundColor(.black)
-                            .tint(.blue)
+                            .foregroundColor(style.text)
+                            .tint(Theme.accent)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.horizontal, fontSize * 0.5)
                             .padding(.vertical, fontSize * 0.32)
                             .overlay(alignment: .trailing) {
-                                if c < cols - 1 { Rectangle().fill(border).frame(width: 0.75) }
+                                if c < cols - 1 { Rectangle().fill(style.tableBorder).frame(width: 0.75) }
                             }
                     }
                 }
-                .background(rowColor(r))
+                .background(style.rowColor(r))
                 .overlay(alignment: .bottom) {
-                    if r < rows.count - 1 { Rectangle().fill(border).frame(height: 0.75) }
+                    if r < rows.count - 1 { Rectangle().fill(style.tableBorder).frame(height: 0.75) }
                 }
             }
         }
         .frame(width: width)
-        .background(Color.white)
+        .background(style.tableSurface)
         .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous).strokeBorder(border, lineWidth: 1))
+        .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous).strokeBorder(style.tableBorder, lineWidth: 1))
     }
 
     private func cellBinding(_ r: Int, _ c: Int) -> Binding<String> {
@@ -228,11 +284,6 @@ struct TableEditor: View {
                 rows[r][c] = newValue
                 onChange(TableEditor.serialize(rows))
             })
-    }
-
-    private func rowColor(_ r: Int) -> Color {
-        if r == 0 { return header }
-        return r.isMultiple(of: 2) ? stripe : .white
     }
 
     static func parse(_ text: String) -> [[String]] {

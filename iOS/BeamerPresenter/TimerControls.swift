@@ -23,6 +23,14 @@ struct TimerControls: View {
                     .font(.subheadline.monospacedDigit())
                     .lineLimit(1).fixedSize()
                     .foregroundStyle(.secondary)
+                if let remaining = model.remaining {
+                    Divider().frame(height: 18)
+                    Image(systemName: "hourglass").font(.caption2).foregroundStyle(.secondary)
+                    Text(Self.remainingString(remaining))
+                        .font(.subheadline.monospacedDigit().weight(.semibold))
+                        .lineLimit(1).fixedSize()
+                        .foregroundStyle(remaining < 0 ? .red : (remaining <= 300 ? .orange : .secondary))
+                }
             }
         }
     }
@@ -32,6 +40,16 @@ struct TimerControls: View {
         let h = s / 3600, m = (s % 3600) / 60, sec = s % 60
         return h > 0 ? String(format: "%d:%02d:%02d", h, m, sec)
                      : String(format: "%02d:%02d", m, sec)
+    }
+
+    /// Countdown form: time left ("MM:SS"), or "+MM:SS" once the target is passed.
+    static func remainingString(_ t: TimeInterval) -> String {
+        let over = t < -0.5
+        let s = abs(Int(t.rounded()))
+        let h = s / 3600, m = (s % 3600) / 60, sec = s % 60
+        let body = h > 0 ? String(format: "%d:%02d:%02d", h, m, sec)
+                         : String(format: "%02d:%02d", m, sec)
+        return (over ? "+" : "") + body
     }
 
     static func clockString() -> String {

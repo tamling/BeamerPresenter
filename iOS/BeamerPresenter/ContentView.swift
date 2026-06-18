@@ -427,6 +427,10 @@ struct PresenterView: View {
                                         active: !model.timerRunning) { model.toggleTimer() }
                         captionedButton("Reset", "arrow.counterclockwise") { model.resetTimer() }
                         captioned("Elapsed") { elapsedChip }
+                        if model.remaining != nil {
+                            captioned("Left") { remainingChip }
+                        }
+                        captioned("Target") { targetMenu }
                         captioned("Time") {
                             Text(TimerControls.clockString())
                                 .font(.mono(15, bold: true)).foregroundStyle(Theme.textSecondary)
@@ -469,6 +473,45 @@ struct PresenterView: View {
                 .lineLimit(1).fixedSize()
                 .padding(.horizontal, 11).frame(height: 36)
                 .background(Theme.inset, in: RoundedRectangle(cornerRadius: 9))
+                .overlay(RoundedRectangle(cornerRadius: 9).stroke(Theme.hairline, lineWidth: 1))
+        }
+    }
+
+    /// Countdown to the lecture target: neutral, amber in the last 5 min, red over.
+    @ViewBuilder private var remainingChip: some View {
+        if let remaining = model.remaining {
+            let over = remaining < 0
+            let warn = !over && remaining <= 300
+            let fg: Color = over ? PenInk.red : (warn ? Theme.statusWarn : Theme.textPrimary)
+            let line: Color = over ? PenInk.red.opacity(0.6)
+                                   : (warn ? Theme.statusWarn.opacity(0.5) : Theme.hairline)
+            Text(TimerControls.remainingString(remaining))
+                .font(.mono(15, bold: true)).foregroundStyle(fg)
+                .lineLimit(1).fixedSize()
+                .padding(.horizontal, 11).frame(height: 36)
+                .background(Theme.inset, in: RoundedRectangle(cornerRadius: 9))
+                .overlay(RoundedRectangle(cornerRadius: 9).stroke(line, lineWidth: 1))
+        }
+    }
+
+    /// Picks the lecture length: off, a single 45-min slot, or a 90-min double.
+    private var targetMenu: some View {
+        Menu {
+            Picker("Lecture length", selection: $model.lectureMinutes) {
+                Text("Off").tag(0)
+                Text("45 min").tag(45)
+                Text("90 min (2 × 45)").tag(90)
+                Text("30 min").tag(30)
+                Text("60 min").tag(60)
+                Text("120 min").tag(120)
+            }
+        } label: {
+            Text(model.lectureMinutes > 0 ? "\(model.lectureMinutes)m" : "—")
+                .font(.mono(15, bold: true))
+                .foregroundStyle(model.lectureMinutes > 0 ? Theme.textPrimary : Theme.textMuted)
+                .lineLimit(1).fixedSize()
+                .padding(.horizontal, 11).frame(height: 36)
+                .background(Theme.key, in: RoundedRectangle(cornerRadius: 9))
                 .overlay(RoundedRectangle(cornerRadius: 9).stroke(Theme.hairline, lineWidth: 1))
         }
     }
