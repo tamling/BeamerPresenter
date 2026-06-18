@@ -24,12 +24,14 @@ tactile keys, mono labels, a single electric-lime signal. Reference mock:
       uppercase captions, inset slide-counter well, the solid-lime running-timer
       chip; macOS adds the `LivePill` + hairline group dividers.
 - [x] **Thumbnail rail** — `key`-surface thumbs, current = lime 2.5px ring + glow.
-- [ ] **Overview grid** — LazyVGrid 5 cols, gap 13, current ringed lime.
-- [ ] **Whiteboard** — `stage` canvas with faint dot-grid, lime ink, dark mono
-      tables, mini toolbar reusing KeyButton.
-- [x] **Black-out / audience** — `blackout` fill, "● Audience paused" pill,
-      centred Space Grotesk message + mono clock (both platforms).
-- [ ] **Settings / Remote** — Night surfaces, cards, mono labels.
+- [x] **Overview grid** — Night base, lime ring + glow on the current slide,
+      mono numbers, key-surface thumbs (both platforms).
+- [x] **Whiteboard chrome** — mini toolbar (macOS BoardBar / iPad insert bar) in
+      Night surfaces; the board *content* stays light so exported PDFs and the
+      audience screen stay readable/printable.
+- [x] **Black-out / audience** — `blackout` fill, blinking "● Audience paused"
+      pill, centred Space Grotesk message + mono clock (both platforms).
+- [x] **Settings** — system dark form on the Night base with the lime accent.
 
 ## Notes
 - **Fonts:** the three typefaces (Space Grotesk, IBM Plex Sans, JetBrains Mono,

@@ -334,7 +334,7 @@ struct BoardBar: View {
                 barButton("plus.rectangle", "New") { state.addBoard() }
                 barButton("chevron.left", disabled: boardIndex == 0) { state.previousBoard() }
                 Text("\(boardIndex + 1) / \(state.boards.count)")
-                    .font(.subheadline.monospacedDigit())
+                    .font(.mono(13, bold: true)).foregroundStyle(Theme.textPrimary)
                     .frame(minWidth: 42)
                 barButton("chevron.right", disabled: boardIndex + 1 >= state.boards.count) { state.nextBoard() }
                 barButton("trash", disabled: state.boards.isEmpty) { state.deleteActiveBoard() }
@@ -379,17 +379,18 @@ struct BoardBar: View {
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(.white.opacity(0.08)))
+        .background(Theme.raised, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Theme.hairline, lineWidth: 1))
         .padding(.horizontal, 8)
     }
 
-    /// A segmented cluster with a subtle rounded background.
+    /// A segmented cluster with an inset rounded background.
     private func group<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
         HStack(spacing: 2) { content() }
             .padding(.horizontal, 4)
             .padding(.vertical, 3)
-            .background(.quaternary, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+            .background(Theme.inset, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous).stroke(Theme.hairline, lineWidth: 1))
     }
 
     private func barButton(_ icon: String, _ title: String? = nil,
@@ -397,13 +398,15 @@ struct BoardBar: View {
         Button(action: action) { barLabel(icon, title) }
             .buttonStyle(.plain)
             .disabled(disabled)
+            .opacity(disabled ? 0.4 : 1)
     }
 
     private func barLabel(_ icon: String, _ title: String?) -> some View {
         HStack(spacing: 4) {
             Image(systemName: icon)
-            if let title { Text(title).font(.subheadline) }
+            if let title { Text(title).font(.ui(12, "Medium")) }
         }
+        .foregroundStyle(Theme.textSecondary)
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
         .contentShape(RoundedRectangle(cornerRadius: 6))

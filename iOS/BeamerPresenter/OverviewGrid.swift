@@ -27,8 +27,8 @@ struct OverviewGrid: View {
                 }
                 .onAppear { proxy.scrollTo(model.index, anchor: .center) }
             }
-            .background(Color.black.ignoresSafeArea())
-            .navigationTitle("All Slides")
+            .background(Theme.base.ignoresSafeArea())
+            .navigationTitle("All slides")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
@@ -52,13 +52,15 @@ struct OverviewGrid: View {
             }
             .frame(height: thumbHeight)
             .frame(maxWidth: .infinity)
-            .background(Color.black)
-            .overlay(RoundedRectangle(cornerRadius: 6)
-                .strokeBorder(isCurrent ? Color.accentColor : Color.gray.opacity(0.4),
-                              lineWidth: isCurrent ? 3 : 1))
+            .background(Theme.key)
+            .clipShape(RoundedRectangle(cornerRadius: 7))
+            .overlay(RoundedRectangle(cornerRadius: 7)
+                .strokeBorder(isCurrent ? Theme.accent : Theme.hairlineStrong,
+                              lineWidth: isCurrent ? 2.5 : 1))
+            .shadow(color: isCurrent ? Theme.accent.opacity(0.4) : .clear, radius: 8)
             Text("\(i + 1)")
-                .font(.callout.monospacedDigit())
-                .foregroundStyle(isCurrent ? Color.accentColor : .secondary)
+                .font(.mono(11))
+                .foregroundStyle(isCurrent ? Theme.accent : Theme.textMuted)
         }
     }
 }

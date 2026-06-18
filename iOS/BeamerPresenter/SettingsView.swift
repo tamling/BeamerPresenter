@@ -77,6 +77,8 @@ struct SettingsView: View {
                     LabeledContent("Version", value: appVersion)
                 }
             }
+            .scrollContentBackground(.hidden)
+            .background(Theme.base)
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
