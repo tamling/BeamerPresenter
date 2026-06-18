@@ -18,8 +18,8 @@ struct NotesPanel: View {
             Divider().overlay(Color.white.opacity(0.15))
             content
         }
-        .background(Color(white: 0.08))
-        .foregroundStyle(.white)
+        .background(Theme.surface)
+        .foregroundStyle(Theme.textPrimary)
         .fileImporter(isPresented: $importing, allowedContentTypes: texTypes) { result in
             if case .success(let url) = result { model.loadTexNotes(url: url) }
         }

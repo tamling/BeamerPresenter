@@ -68,13 +68,15 @@ struct PresenterConsole: View {
     }
 
     private func pane<Content: View>(_ title: String, @ViewBuilder _ content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(title).font(.caption).foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title).font(.mono(9)).textCase(.uppercase).tracking(1.6)
+                .foregroundStyle(Theme.textMuted)
             content()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Color.black)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-                .overlay(RoundedRectangle(cornerRadius: 8).stroke(.gray.opacity(0.4)))
+                .padding(8)
+                .background(Theme.stage)
+                .clipShape(RoundedRectangle(cornerRadius: 11))
+                .overlay(RoundedRectangle(cornerRadius: 11).stroke(Theme.hairline, lineWidth: 1))
         }
     }
 }
@@ -107,7 +109,7 @@ struct ResizeHandle: View {
         ZStack {
             Color.clear
             RoundedRectangle(cornerRadius: 2)
-                .fill(Color.secondary.opacity(0.45))
+                .fill(Theme.hairlineStrong)
                 .frame(width: isHorizontal ? 4 : 44, height: isHorizontal ? 44 : 4)
         }
         .frame(width: isHorizontal ? 12 : nil, height: isHorizontal ? nil : 12)

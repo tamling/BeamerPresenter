@@ -14,16 +14,16 @@ tactile keys, mono labels, a single electric-lime signal. Reference mock:
 - [x] **Accent** switched app-wide to lime `#C7F24E`; pen inks set to the spec
       hues (red/yellow/green/blue).
 
-## Screens
+## Screens (iPad + macOS)
 - [x] **Launcher** — dark identity column, solid-lime primary, ghost secondaries,
-      recent card, mono version footer.
-- [ ] **Presenter console** — three bands: toolbar 60pt (raised) · body · rail
-      96pt (raised). Body = current slide on `stage` mat + 430pt right column
-      (next slide, notes, scratch). KeyButton groups split by hairlines.
-- [ ] **Toolbar / control bar** — rebuild on `KeyButton` (tactile keys, lime when
-      active), `LivePill`, the solid-lime running-timer chip, hairline group
-      dividers.
-- [ ] **Thumbnail rail** — `key`-surface thumbs, current = lime 2.5px ring + glow.
+      recent card, mono version footer. (macOS: identity rail + library + dashboard.)
+- [x] **Presenter console** — toolbar (raised) · body · thumbnail rail (raised).
+      Current/next slides on a `stage` mat, notes/scratch on Night surfaces with
+      hairline borders, lime resize handles.
+- [x] **Toolbar / control bar** — tactile keys (lime when active + glow), mono
+      uppercase captions, inset slide-counter well, the solid-lime running-timer
+      chip; macOS adds the `LivePill` + hairline group dividers.
+- [x] **Thumbnail rail** — `key`-surface thumbs, current = lime 2.5px ring + glow.
 - [ ] **Overview grid** — LazyVGrid 5 cols, gap 13, current ringed lime.
 - [ ] **Whiteboard** — `stage` canvas with faint dot-grid, lime ink, dark mono
       tables, mini toolbar reusing KeyButton.

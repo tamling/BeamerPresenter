@@ -224,7 +224,7 @@ struct PresenterView: View {
                     .transition(.move(edge: .bottom))
             }
         }
-        .background(Color.black.ignoresSafeArea())
+        .background(Theme.base.ignoresSafeArea())
         .background(
             KeyCommandView(
                 onNext: { model.next() },
@@ -331,7 +331,8 @@ struct PresenterView: View {
         .font(.title3)
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
-        .background(.ultraThinMaterial)
+        .background(Theme.raised)
+        .overlay(alignment: .bottom) { Rectangle().fill(Theme.hairline).frame(height: 1) }
     }
 
     // MARK: - Captioned control bar (macOS-style, landscape)
@@ -345,7 +346,7 @@ struct PresenterView: View {
                 group {
                     captionedButton("Exit", "rectangle.portrait.and.arrow.right") { model.close() }
                     captioned("More") {
-                        Menu { overflowMenuContent } label: { Image(systemName: "ellipsis.circle") }
+                        Menu { overflowMenuContent } label: { keyGlyph("ellipsis.circle") }
                     }
                 }
 
@@ -353,8 +354,11 @@ struct PresenterView: View {
                     captionedButton("Prev", "chevron.left", disabled: model.index == 0) { model.previous() }
                     captioned("Slide") {
                         Text("\(model.index + 1) / \(model.pageCount)")
-                            .font(.callout.monospacedDigit().weight(.semibold))
+                            .font(.mono(14, bold: true)).foregroundStyle(Theme.textPrimary)
                             .lineLimit(1).fixedSize()
+                            .padding(.horizontal, 11).frame(height: 36)
+                            .background(Theme.inset, in: RoundedRectangle(cornerRadius: 9))
+                            .overlay(RoundedRectangle(cornerRadius: 9).stroke(Theme.hairline, lineWidth: 1))
                     }
                     captionedButton("Next", "chevron.right",
                                     disabled: model.index + 1 >= model.pageCount) { model.next() }
@@ -364,18 +368,17 @@ struct PresenterView: View {
                     captionedButton("Overview", "square.grid.2x2") { showOverview = true }
                     captioned("Blackout") {
                         Menu { blackoutMenuContent } label: {
-                            Image(systemName: model.blackout ? "eye.slash.fill" : "eye.slash")
+                            keyGlyph(model.blackout ? "eye.slash.fill" : "eye.slash", active: model.blackout)
                         }
-                        .foregroundStyle(model.blackout ? Color.accentColor : .primary)
                     }
                     captioned("Board") {
                         Menu { boardMenuContent } label: {
-                            Image(systemName: model.isBoardActive ? "square.and.pencil.circle.fill" : "square.and.pencil")
+                            keyGlyph(model.isBoardActive ? "square.and.pencil.circle.fill" : "square.and.pencil",
+                                     active: model.isBoardActive)
                         }
-                        .foregroundStyle(model.isBoardActive ? Color.accentColor : .primary)
                     }
                     if external.isConnected {
-                        captioned("Display") { Image(systemName: "tv.fill").foregroundStyle(.green) }
+                        captioned("Display") { keyGlyph("tv.fill", active: true) }
                     }
                 }
 
@@ -391,9 +394,8 @@ struct PresenterView: View {
                             }
                             Toggle("Apple Pencil only", isOn: $pencilOnly)
                         } label: {
-                            Image(systemName: "pencil.tip")
+                            keyGlyph("pencil.tip", active: model.penActive)
                         } primaryAction: { model.togglePen() }
-                        .foregroundStyle(model.penActive ? model.penColor : .primary)
                     }
                     captionedButton("Laser", "dot.circle.and.cursorarrow", active: model.laserActive) { model.toggleLaser() }
                     colourStrip
@@ -413,24 +415,51 @@ struct PresenterView: View {
                                         model.timerRunning ? "pause" : "play",
                                         active: !model.timerRunning) { model.toggleTimer() }
                         captionedButton("Reset", "arrow.counterclockwise") { model.resetTimer() }
-                        captioned("Elapsed") {
-                            Text(TimerControls.elapsedString(model.elapsed))
-                                .font(.callout.monospacedDigit().weight(.semibold))
-                                .lineLimit(1).fixedSize()
-                        }
+                        captioned("Elapsed") { elapsedChip }
                         captioned("Time") {
                             Text(TimerControls.clockString())
-                                .font(.callout.monospacedDigit()).foregroundStyle(.secondary)
-                                .lineLimit(1).fixedSize()
+                                .font(.mono(15, bold: true)).foregroundStyle(Theme.textSecondary)
+                                .lineLimit(1).fixedSize().frame(height: 36)
                         }
                     }
                 }
             }
             .padding(.horizontal, 22)
         }
-        .font(.system(size: 18, weight: .regular))
-        .padding(.vertical, 8)
-        .background(.ultraThinMaterial)
+        .padding(.vertical, 9)
+        .background(Theme.raised)
+        .overlay(alignment: .bottom) { Rectangle().fill(Theme.hairline).frame(height: 1) }
+    }
+
+    /// A tactile key glyph (the Night Console toolbar button surface).
+    private func keyGlyph(_ icon: String, active: Bool = false) -> some View {
+        Image(systemName: icon)
+            .font(.system(size: 16, weight: .medium))
+            .foregroundStyle(active ? Theme.accent : Theme.textPrimary)
+            .frame(width: 46, height: 36)
+            .background(Theme.key, in: RoundedRectangle(cornerRadius: 9))
+            .overlay(RoundedRectangle(cornerRadius: 9)
+                .stroke(active ? Theme.accent : Theme.hairline, lineWidth: 1))
+            .shadow(color: active ? Theme.accent.opacity(0.5) : .clear, radius: 6)
+    }
+
+    /// The running timer — the only solid-lime fill in the chrome.
+    @ViewBuilder private var elapsedChip: some View {
+        if model.timerRunning {
+            Text(TimerControls.elapsedString(model.elapsed))
+                .font(.mono(15, bold: true)).foregroundStyle(Theme.onAccent)
+                .lineLimit(1).fixedSize()
+                .padding(.horizontal, 11).frame(height: 36)
+                .background(Theme.accent, in: RoundedRectangle(cornerRadius: 9))
+                .shadow(color: Theme.accent.opacity(0.5), radius: 8)
+        } else {
+            Text(TimerControls.elapsedString(model.elapsed))
+                .font(.mono(15, bold: true)).foregroundStyle(Theme.textPrimary)
+                .lineLimit(1).fixedSize()
+                .padding(.horizontal, 11).frame(height: 36)
+                .background(Theme.inset, in: RoundedRectangle(cornerRadius: 9))
+                .overlay(RoundedRectangle(cornerRadius: 9).stroke(Theme.hairline, lineWidth: 1))
+        }
     }
 
     /// A cluster of related controls, spaced for breathing room (Keynote-style).
@@ -449,14 +478,16 @@ struct PresenterView: View {
                     } label: {
                         Circle().fill(color).frame(width: 26, height: 26)
                             .overlay(Circle().strokeBorder(
-                                .white.opacity(model.penColor == color ? 0.95 : 0.25),
+                                model.penColor == color ? Theme.accent : Theme.hairlineStrong,
                                 lineWidth: model.penColor == color ? 3 : 1))
+                            .shadow(color: model.penColor == color ? Theme.accent.opacity(0.4) : .clear, radius: 4)
                     }
                     .buttonStyle(.plain)
                 }
                 ColorPicker("", selection: penColorBinding, supportsOpacity: false)
-                    .labelsHidden()
+                    .labelsHidden().frame(width: 30)
             }
+            .frame(height: 36)
         }
     }
 
@@ -466,10 +497,12 @@ struct PresenterView: View {
                 set: { model.penColor = $0; model.penActive = true; model.laserActive = false })
     }
 
+    /// A control stacked above a mono uppercase caption (Night Console).
     private func captioned<C: View>(_ caption: String, @ViewBuilder _ content: () -> C) -> some View {
-        VStack(spacing: 4) {
-            content().frame(height: 30)
-            Text(caption).font(.system(size: 9)).foregroundStyle(.secondary)
+        VStack(spacing: 6) {
+            content().frame(height: 36)
+            Text(caption).font(.mono(9)).textCase(.uppercase).tracking(0.6)
+                .foregroundStyle(Theme.textMuted)
         }
     }
 
@@ -477,9 +510,10 @@ struct PresenterView: View {
                                  active: Bool = false, disabled: Bool = false,
                                  action: @escaping () -> Void) -> some View {
         captioned(caption) {
-            Button(action: action) { Image(systemName: icon) }
-                .foregroundStyle(active ? Color.accentColor : .primary)
+            Button(action: action) { keyGlyph(icon, active: active) }
+                .buttonStyle(.plain)
                 .disabled(disabled)
+                .opacity(disabled ? 0.4 : 1)
         }
     }
 
@@ -649,8 +683,9 @@ struct PresenterView: View {
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 8)
-        .background(Color(white: 0.12))
-        .foregroundStyle(.white)
+        .background(Theme.raised)
+        .overlay(alignment: .bottom) { Rectangle().fill(Theme.hairline).frame(height: 1) }
+        .foregroundStyle(Theme.textPrimary)
     }
 
     /// A larger, thumb-friendly insert button for the board bar.
