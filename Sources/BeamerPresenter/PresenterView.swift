@@ -359,6 +359,8 @@ private struct ControlBar: View {
     @EnvironmentObject var state: PresentationState
 
     @State private var now = Date()
+    @State private var showCustomTarget = false
+    @State private var customTargetText = ""
     private let tick = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var body: some View {
@@ -473,28 +475,76 @@ private struct ControlBar: View {
         }
     }
 
-    /// Picks the lecture length: off, a single 45-min slot, or a 90-min double.
+    /// Picks the lecture length: off, a preset slot, or a custom number of minutes.
     private var targetMenu: some View {
         Menu {
-            Picker("Lecture length", selection: $state.lectureMinutes) {
-                Text("Off").tag(0)
-                Text("45 min").tag(45)
-                Text("90 min (2 × 45)").tag(90)
-                Text("30 min").tag(30)
-                Text("60 min").tag(60)
-                Text("120 min").tag(120)
+            Button { state.lectureMinutes = 0 } label: { targetRow("Off", 0) }
+            Divider()
+            ForEach(targetPresets, id: \.0) { minutes, title in
+                Button { state.lectureMinutes = minutes } label: { targetRow(title, minutes) }
+            }
+            Divider()
+            Button("Custom…") {
+                customTargetText = state.lectureMinutes > 0 ? "\(state.lectureMinutes)" : ""
+                showCustomTarget = true
             }
         } label: {
-            Text(state.lectureMinutes > 0 ? "\(state.lectureMinutes)m" : "—")
-                .font(.mono(15, bold: true))
-                .foregroundStyle(state.lectureMinutes > 0 ? Theme.textPrimary : Theme.textMuted)
-                .padding(.horizontal, 11).frame(height: 34)
-                .background(Theme.key, in: RoundedRectangle(cornerRadius: 9))
-                .overlay(RoundedRectangle(cornerRadius: 9).stroke(Theme.hairline, lineWidth: 1))
+            HStack(spacing: 5) {
+                Text(state.lectureMinutes > 0 ? "\(state.lectureMinutes)m" : "Off")
+                Image(systemName: "chevron.down").font(.system(size: 9, weight: .semibold))
+            }
+            .font(.mono(15, bold: true))
+            .foregroundStyle(state.lectureMinutes > 0 ? Theme.textPrimary : Theme.textMuted)
+            .padding(.horizontal, 11).frame(height: 34)
+            .background(Theme.key, in: RoundedRectangle(cornerRadius: 9))
+            .overlay(RoundedRectangle(cornerRadius: 9).stroke(Theme.hairline, lineWidth: 1))
         }
         .menuStyle(.borderlessButton)
         .menuIndicator(.hidden)
         .fixedSize()
+        .popover(isPresented: $showCustomTarget, arrowEdge: .bottom) { customTargetEditor }
+    }
+
+    /// The preset lecture slots offered in the dropdown.
+    private var targetPresets: [(Int, String)] {
+        [(30, "30 min"), (45, "45 min"), (60, "60 min"),
+         (90, "90 min (2 × 45)"), (120, "120 min")]
+    }
+
+    /// A menu row that shows a checkmark when it is the current target.
+    @ViewBuilder private func targetRow(_ title: String, _ minutes: Int) -> some View {
+        if state.lectureMinutes == minutes {
+            Label(title, systemImage: "checkmark")
+        } else {
+            Text(title)
+        }
+    }
+
+    /// A small popover to type an arbitrary lecture length in minutes.
+    private var customTargetEditor: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Custom length").font(.headline)
+            HStack(spacing: 6) {
+                TextField("Minutes", text: $customTargetText)
+                    .frame(width: 70)
+                    .onSubmit { applyCustomTarget() }
+                Text("min").foregroundStyle(.secondary)
+            }
+            HStack {
+                Button("Off") { state.lectureMinutes = 0; showCustomTarget = false }
+                Spacer()
+                Button("Set") { applyCustomTarget() }.keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(14)
+        .frame(width: 200)
+    }
+
+    private func applyCustomTarget() {
+        if let m = Int(customTargetText.trimmingCharacters(in: .whitespaces)), m > 0 {
+            state.lectureMinutes = min(m, 600)
+        }
+        showCustomTarget = false
     }
 
     private func remainingText(_ t: TimeInterval) -> String {
