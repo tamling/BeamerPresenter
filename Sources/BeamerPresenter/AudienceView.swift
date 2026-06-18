@@ -13,6 +13,11 @@ struct AudienceView: View {
             if let board = state.activeBoard {
                 BoardCanvas(board: board, style: state.boardStyle)
                     .aspectRatio(state.slideAspect, contentMode: .fit)
+                    .overlay {
+                        if let laser = state.laserPoint {
+                            BoardLaserDot(point: laser, color: state.penColor)
+                        }
+                    }
             } else if state.blackout {
                 BlackScreenView(message: blackMessage)
             } else {

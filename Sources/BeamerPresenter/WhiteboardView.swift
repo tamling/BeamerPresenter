@@ -182,6 +182,27 @@ struct TableItemView: View {
     }
 }
 
+/// The laser dot drawn over a board (presenter + audience). It shares the board's
+/// aspect-fit frame, so the unit point lines up on both screens. Never exported.
+struct BoardLaserDot: View {
+    let point: CGPoint
+    let color: Color
+
+    var body: some View {
+        GeometryReader { geo in
+            let sz = geo.size
+            Canvas { ctx, _ in
+                let r = 0.018 * sz.width
+                let c = CGPoint(x: point.x * sz.width, y: point.y * sz.height)
+                let rect = CGRect(x: c.x - r, y: c.y - r, width: 2 * r, height: 2 * r)
+                ctx.fill(Path(ellipseIn: rect.insetBy(dx: r * 0.5, dy: r * 0.5)), with: .color(color))
+                ctx.fill(Path(ellipseIn: rect), with: .color(color.opacity(0.35)))
+            }
+            .allowsHitTesting(false)
+        }
+    }
+}
+
 // MARK: - Interactive presenter board
 
 /// The whiteboard as shown on the presenter screen: shared rendering plus a layer
@@ -197,6 +218,9 @@ struct WhiteboardPane: View {
                             liveColor: state.penColor,
                             style: state.boardStyle)
                 BoardInteractionLayer()
+                if let laser = state.laserPoint {
+                    BoardLaserDot(point: laser, color: state.penColor)
+                }
             } else {
                 state.boardStyle.background
             }
@@ -211,8 +235,8 @@ struct WhiteboardPane: View {
     }
 }
 
-/// Captures pen drags (when the pen tool is active) and otherwise shows a move
-/// handle on each item for selecting and repositioning it.
+/// Captures pen drags (when the pen tool is active), laser drags (laser tool),
+/// and otherwise shows a move handle on each item for selecting/repositioning it.
 private struct BoardInteractionLayer: View {
     @EnvironmentObject var state: PresentationState
 
@@ -235,6 +259,15 @@ private struct BoardInteractionLayer: View {
                                     }
                                 }
                                 .onEnded { _ in state.boardEndStroke() }
+                        )
+                } else if state.tool == .laser {
+                    Rectangle()
+                        .fill(Color.clear)
+                        .contentShape(Rectangle())
+                        .gesture(
+                            DragGesture(minimumDistance: 0)
+                                .onChanged { state.setLaser(unitPoint($0.location, in: size)) }
+                                .onEnded { _ in state.setLaser(nil) }
                         )
                 } else if let board = state.activeBoard {
                     ForEach(board.items) { item in
