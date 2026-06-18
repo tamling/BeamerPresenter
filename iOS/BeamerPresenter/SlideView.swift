@@ -90,41 +90,32 @@ struct SlideView: View {
                 let h = max(58, item.width * size.width * 0.55)
                 let selected = model.selectedItemID == item.id
 
-                // Grab the item itself: drag to move, pinch to resize, tap to select.
-                Rectangle()
-                    .fill(Color.white.opacity(0.001))
-                    .frame(width: w, height: h)
-                    .overlay {
-                        if selected {
-                            RoundedRectangle(cornerRadius: 8)
-                                .strokeBorder(Color.accentColor, lineWidth: 2)
+                if selected && item.kind == .table {
+                    // Editable cells: tap a cell and type. Move via the grip handle.
+                    TableEditor(text: item.text,
+                                width: max(8, item.width * size.width),
+                                fontSize: max(6, item.fontScale * size.width),
+                                onChange: { model.updateItemText(item.id, $0) })
+                        .id(item.id)
+                        .position(center)
+                    moveGrip(item, at: CGPoint(x: center.x - half - 20, y: center.y - h / 2 - 4), size: size)
+                } else {
+                    // Grab the item itself: drag to move, pinch to resize, tap to select.
+                    Rectangle()
+                        .fill(Color.white.opacity(0.001))
+                        .frame(width: w, height: h)
+                        .overlay {
+                            if selected {
+                                RoundedRectangle(cornerRadius: 8)
+                                    .strokeBorder(Color.accentColor, lineWidth: 2)
+                            }
                         }
-                    }
-                    .contentShape(Rectangle())
-                    .position(center)
-                    .onTapGesture { model.selectedItemID = item.id }
-                    .gesture(
-                        DragGesture(minimumDistance: 4, coordinateSpace: .named("board"))
-                            .onChanged { v in
-                                model.selectedItemID = item.id
-                                let base = moveStart ?? item.center
-                                if moveStart == nil { moveStart = base }
-                                model.moveItem(item.id, to: CGPoint(
-                                    x: base.x + v.translation.width / size.width,
-                                    y: base.y + v.translation.height / size.height))
-                            }
-                            .onEnded { _ in moveStart = nil }
-                    )
-                    .simultaneousGesture(
-                        MagnificationGesture()
-                            .onChanged { scale in
-                                model.selectedItemID = item.id
-                                let base = resizeStart ?? item.width
-                                if resizeStart == nil { resizeStart = base }
-                                model.setItemWidth(item.id, base * scale)
-                            }
-                            .onEnded { _ in resizeStart = nil }
-                    )
+                        .contentShape(Rectangle())
+                        .position(center)
+                        .onTapGesture { model.selectedItemID = item.id }
+                        .gesture(moveDrag(item, size))
+                        .simultaneousGesture(pinch(item))
+                }
 
                 // Big delete button at the top-right corner.
                 Button { model.deleteItem(item.id) } label: {
@@ -149,6 +140,42 @@ struct SlideView: View {
                 }
             }
         }
+    }
+
+    /// Translation-based move (no jump regardless of where the item is grabbed).
+    private func moveDrag(_ item: BoardItem, _ size: CGSize) -> some Gesture {
+        DragGesture(minimumDistance: 4, coordinateSpace: .named("board"))
+            .onChanged { v in
+                model.selectedItemID = item.id
+                let base = moveStart ?? item.center
+                if moveStart == nil { moveStart = base }
+                model.moveItem(item.id, to: CGPoint(
+                    x: base.x + v.translation.width / size.width,
+                    y: base.y + v.translation.height / size.height))
+            }
+            .onEnded { _ in moveStart = nil }
+    }
+
+    /// Pinch to resize the item (scales from the width at gesture start).
+    private func pinch(_ item: BoardItem) -> some Gesture {
+        MagnificationGesture()
+            .onChanged { scale in
+                model.selectedItemID = item.id
+                let base = resizeStart ?? item.width
+                if resizeStart == nil { resizeStart = base }
+                model.setItemWidth(item.id, base * scale)
+            }
+            .onEnded { _ in resizeStart = nil }
+    }
+
+    /// A draggable grip used to move a table while its cells stay editable.
+    private func moveGrip(_ item: BoardItem, at p: CGPoint, size: CGSize) -> some View {
+        RoundedRectangle(cornerRadius: 8).fill(Color.accentColor)
+            .overlay(Image(systemName: "arrow.up.and.down.and.arrow.left.and.right")
+                .font(.system(size: 13, weight: .bold)).foregroundStyle(.white))
+            .frame(width: 36, height: 36)
+            .position(p)
+            .gesture(moveDrag(item, size))
     }
 
     private var inkCanvas: some View {

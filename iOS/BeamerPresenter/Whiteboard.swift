@@ -166,3 +166,83 @@ struct TableItemView: View {
         return r.isMultiple(of: 2) ? stripe : .white
     }
 }
+
+/// An editable mirror of `TableItemView`: same look, but each cell is a TextField
+/// so the presenter can tap a cell and type. Edits are serialised back to the
+/// `"a | b"` form and reported via `onChange`.
+struct TableEditor: View {
+    let width: CGFloat
+    let fontSize: CGFloat
+    let onChange: (String) -> Void
+
+    @State private var rows: [[String]]
+
+    private let border = Color(white: 0.80)
+    private let header = Color(white: 0.93)
+    private let stripe = Color(white: 0.975)
+
+    init(text: String, width: CGFloat, fontSize: CGFloat, onChange: @escaping (String) -> Void) {
+        self.width = width
+        self.fontSize = fontSize
+        self.onChange = onChange
+        _rows = State(initialValue: TableEditor.parse(text))
+    }
+
+    var body: some View {
+        let cols = max(1, rows.map(\.count).max() ?? 1)
+        let radius = fontSize * 0.45
+        VStack(spacing: 0) {
+            ForEach(rows.indices, id: \.self) { r in
+                HStack(spacing: 0) {
+                    ForEach(0..<cols, id: \.self) { c in
+                        TextField("", text: cellBinding(r, c))
+                            .textFieldStyle(.plain)
+                            .font(.system(size: fontSize, weight: r == 0 ? .semibold : .regular))
+                            .foregroundColor(.black)
+                            .tint(.blue)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, fontSize * 0.5)
+                            .padding(.vertical, fontSize * 0.32)
+                            .overlay(alignment: .trailing) {
+                                if c < cols - 1 { Rectangle().fill(border).frame(width: 0.75) }
+                            }
+                    }
+                }
+                .background(rowColor(r))
+                .overlay(alignment: .bottom) {
+                    if r < rows.count - 1 { Rectangle().fill(border).frame(height: 0.75) }
+                }
+            }
+        }
+        .frame(width: width)
+        .background(Color.white)
+        .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous).strokeBorder(border, lineWidth: 1))
+    }
+
+    private func cellBinding(_ r: Int, _ c: Int) -> Binding<String> {
+        Binding(
+            get: { rows.indices.contains(r) && rows[r].indices.contains(c) ? rows[r][c] : "" },
+            set: { newValue in
+                guard rows.indices.contains(r), rows[r].indices.contains(c) else { return }
+                rows[r][c] = newValue
+                onChange(TableEditor.serialize(rows))
+            })
+    }
+
+    private func rowColor(_ r: Int) -> Color {
+        if r == 0 { return header }
+        return r.isMultiple(of: 2) ? stripe : .white
+    }
+
+    static func parse(_ text: String) -> [[String]] {
+        let parsed = text.split(separator: "\n", omittingEmptySubsequences: false)
+            .map { $0.components(separatedBy: "|").map { $0.trimmingCharacters(in: .whitespaces) } }
+        let cols = max(1, parsed.map(\.count).max() ?? 1)
+        return parsed.map { $0 + Array(repeating: "", count: max(0, cols - $0.count)) }
+    }
+
+    static func serialize(_ rows: [[String]]) -> String {
+        rows.map { $0.joined(separator: " | ") }.joined(separator: "\n")
+    }
+}

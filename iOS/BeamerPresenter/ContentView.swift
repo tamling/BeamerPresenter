@@ -621,20 +621,20 @@ struct PresenterView: View {
                 }
             insertButton("QR", "qrcode") { model.addItem(.qr) }
 
-            if let item = model.selectedItem() {
+            if let item = model.selectedItem(), item.kind != .table {
                 Divider().frame(height: 22)
-                TextField(item.kind == .qr ? "URL / text to encode"
-                          : (item.kind == .table ? "Cells: row by row, columns by |" : "Text"),
+                TextField(item.kind == .qr ? "URL / text to encode" : "Text",
                           text: Binding(
                             get: { model.selectedItem()?.text ?? "" },
                             set: { model.updateItemText(item.id, $0) }))
                     .textFieldStyle(.roundedBorder)
                     .frame(maxWidth: 340)
-                    .font(item.kind == .table ? .system(.footnote, design: .monospaced) : .body)
                 Button { model.selectedItemID = nil } label: { Image(systemName: "checkmark") }
             }
             Spacer()
-            Text("Drag to move · pinch to resize")
+            Text(model.selectedItem()?.kind == .table
+                 ? "Tap a cell to type · drag the grip to move · pinch to resize"
+                 : "Drag to move · pinch to resize")
                 .font(.caption).foregroundStyle(.secondary)
         }
         .padding(.horizontal, 18)
