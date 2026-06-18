@@ -4,8 +4,8 @@ import UniformTypeIdentifiers
 /// The shared pen palette, used by the toolbar and Settings.
 enum AppColors {
     static let palette: [(name: String, color: Color)] = [
-        ("Red", .red), ("Orange", .orange), ("Yellow", .yellow),
-        ("Green", .green), ("Blue", .blue), ("White", .white)
+        ("Red", PenInk.red), ("Yellow", PenInk.yellow),
+        ("Green", PenInk.green), ("Blue", PenInk.blue)
     ]
     static func color(_ name: String) -> Color {
         palette.first { $0.name == name }?.color ?? .red

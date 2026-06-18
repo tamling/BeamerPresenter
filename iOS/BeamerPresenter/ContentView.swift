@@ -57,7 +57,9 @@ struct ContentView: View {
     }
 }
 
-/// Start screen: branding, open / sample actions, recent files, and a version line.
+/// Launcher — Night Console (spec §05): dark identity column with the wordmark,
+/// a single solid-lime primary action, ghost secondaries, a recent card, and a
+/// quiet version footer.
 struct StartView: View {
     @EnvironmentObject var model: PresentationModel
     @State private var showSettings = false
@@ -65,80 +67,88 @@ struct StartView: View {
     let open: () -> Void
 
     var body: some View {
-        VStack(spacing: 24) {
-            HStack {
-                Spacer()
-                Button { showSettings = true } label: {
-                    Image(systemName: "gearshape").font(.title2)
+        ZStack {
+            Theme.base.ignoresSafeArea()
+
+            VStack(spacing: 26) {
+                HStack {
+                    Spacer()
+                    KeyButton("Settings", systemImage: "gearshape") { showSettings = true }
                 }
-            }
 
-            Spacer()
+                Spacer(minLength: 0)
 
-            VStack(spacing: 10) {
-                Image(systemName: "rectangle.on.rectangle.angled")
-                    .font(.system(size: 60)).foregroundStyle(LinearGradient.brand)
-                Text("BeamerPresenter")
-                    .font(.largeTitle.bold())
-                    .foregroundStyle(LinearGradient.brand)
-                Text("Present PDF slides on your iPad.").foregroundStyle(.secondary)
-            }
-
-            VStack(spacing: 12) {
-                Button(action: open) {
-                    Label("Open PDF…", systemImage: "folder")
-                        .font(.headline).foregroundStyle(.white)
-                        .frame(maxWidth: 360).padding(.vertical, 14)
-                        .background(LinearGradient.brand, in: RoundedRectangle(cornerRadius: 12))
+                // Identity
+                VStack(spacing: 12) {
+                    Image(systemName: "rectangle.on.rectangle.angled")
+                        .font(.system(size: 40, weight: .medium))
+                        .foregroundStyle(Theme.onAccent)
+                        .frame(width: 92, height: 92)
+                        .background(Theme.accent, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                        .shadow(color: Theme.accent.opacity(0.4), radius: 18, y: 4)
+                    Text("BeamerPresenter")
+                        .font(.display(30)).tracking(-0.3)
+                        .foregroundStyle(Theme.textPrimary)
+                    Text("Present PDF slides on your iPad.")
+                        .font(.ui(15)).foregroundStyle(Theme.textSecondary)
                 }
-                .buttonStyle(.plain)
 
-                if let sample = Bundle.main.url(forResource: "sample", withExtension: "pdf") {
-                    Button { model.open(url: sample) } label: {
-                        Label("Try a sample deck", systemImage: "sparkles").frame(maxWidth: 360)
+                // Actions
+                VStack(spacing: 12) {
+                    Button(action: open) {
+                        Label("Open PDF…", systemImage: "folder")
                     }
-                    .buttonStyle(.bordered).controlSize(.large)
-                }
+                    .buttonStyle(PrimaryButtonStyle())
 
-                Button { showRemote = true } label: {
-                    Label("Use as remote", systemImage: "dot.radiowaves.left.and.right").frame(maxWidth: 360)
-                }
-                .buttonStyle(.bordered).controlSize(.large)
-            }
-
-            if !model.recents.isEmpty {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Recent").font(.headline)
-                    ForEach(model.recents.prefix(5), id: \.self) { url in
-                        Button { model.open(url: url) } label: {
-                            HStack {
-                                Image(systemName: "doc.richtext").foregroundStyle(.tint)
-                                Text(url.deletingPathExtension().lastPathComponent)
-                                    .foregroundStyle(.primary)
-                                Spacer()
-                                Image(systemName: "chevron.right")
-                                    .font(.caption).foregroundStyle(.tertiary)
-                            }
-                            .padding(.vertical, 10).padding(.horizontal, 14)
-                            .background(.quaternary, in: RoundedRectangle(cornerRadius: 10))
+                    if let sample = Bundle.main.url(forResource: "sample", withExtension: "pdf") {
+                        Button { model.open(url: sample) } label: {
+                            Label("Try a sample deck", systemImage: "sparkles")
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(GhostButtonStyle())
                     }
+                    Button { showRemote = true } label: {
+                        Label("Use as remote", systemImage: "dot.radiowaves.left.and.right")
+                    }
+                    .buttonStyle(GhostButtonStyle())
                 }
-                .frame(maxWidth: 360)
-            }
+                .frame(maxWidth: 380)
 
-            Spacer()
+                if !model.recents.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Recent").microLabel()
+                        VStack(spacing: 0) {
+                            ForEach(Array(model.recents.prefix(5).enumerated()), id: \.element) { i, url in
+                                if i > 0 { Divider().overlay(Theme.hairline) }
+                                Button { model.open(url: url) } label: {
+                                    HStack(spacing: 12) {
+                                        Image(systemName: "doc.richtext").foregroundStyle(Theme.accent)
+                                        Text(url.deletingPathExtension().lastPathComponent)
+                                            .font(.ui(15)).foregroundStyle(Theme.textPrimary)
+                                        Spacer()
+                                        Image(systemName: "chevron.right")
+                                            .font(.caption).foregroundStyle(Theme.textFaint)
+                                    }
+                                    .padding(.vertical, 12).padding(.horizontal, 14)
+                                    .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        .nightCard()
+                    }
+                    .frame(maxWidth: 380)
+                }
 
-            VStack(spacing: 2) {
-                Text("BeamerPresenter \(Self.version)").font(.headline)
-                Text("\(Self.releaseDate) · by \(Self.author)")
-                    .font(.caption).foregroundStyle(.secondary)
+                Spacer(minLength: 0)
+
+                VStack(spacing: 4) {
+                    Text("BeamerPresenter \(Self.version)")
+                        .font(.ui(13.5, "Medium")).foregroundStyle(Theme.textSecondary)
+                    Text("\(Self.releaseDate) · by \(Self.author)").microLabel()
+                }
             }
-            .padding(.bottom, 8)
+            .padding(34)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(40)
         .sheet(isPresented: $showSettings) { SettingsView() }
         .sheet(isPresented: $showRemote) { RemoteView() }
     }
