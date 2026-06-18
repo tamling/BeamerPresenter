@@ -1,9 +1,14 @@
 #!/usr/bin/env bash
 #
 # Builds a release binary with SwiftPM and wraps it into a double-clickable
-# BeamerPresenter.app bundle. Run on macOS (Apple Silicon):
+# BeamerPresenter.app bundle. Run on macOS:
 #
-#   ./build-app.sh
+#   ./build-app.sh                 # universal (Apple Silicon + Intel) — default
+#   ARCHS="arm64" ./build-app.sh   # Apple Silicon only
+#   ARCHS="x86_64" ./build-app.sh  # Intel only
+#
+# A universal build runs on both Apple Silicon and Intel Macs from one .app.
+# (The x86_64 slice cross-compiles fine on an Apple Silicon Mac.)
 #
 # Optional: pass a Developer ID to codesign the result:
 #
@@ -14,15 +19,19 @@ cd "$(dirname "$0")"
 
 APP_NAME="BeamerPresenter"
 CONFIG="release"
-ARCH="arm64"
+ARCHS="${ARCHS:-arm64 x86_64}"        # space-separated list of architectures
 SIGN_IDENTITY="${1:-}"
 
-echo "▶︎ Building ($CONFIG, $ARCH)…"
-swift build -c "$CONFIG" --arch "$ARCH"
+ARCH_FLAGS=()
+for a in $ARCHS; do ARCH_FLAGS+=(--arch "$a"); done
 
-BIN_DIR="$(swift build -c "$CONFIG" --arch "$ARCH" --show-bin-path)"
+echo "▶︎ Building ($CONFIG, $ARCHS)…"
+swift build -c "$CONFIG" "${ARCH_FLAGS[@]}"
+
+BIN_DIR="$(swift build -c "$CONFIG" "${ARCH_FLAGS[@]}" --show-bin-path)"
 BIN="$BIN_DIR/$APP_NAME"
 [ -x "$BIN" ] || { echo "✗ Binary not found at $BIN"; exit 1; }
+echo "▶︎ Binary architectures: $(lipo -archs "$BIN" 2>/dev/null || echo "$ARCHS")"
 
 echo "▶︎ Building app icon…"
 python3 Tools/make_icon.py
