@@ -11,7 +11,7 @@ struct AudienceView: View {
         ZStack {
             Color.black
             if let board = state.activeBoard {
-                BoardCanvas(board: board)
+                BoardCanvas(board: board, style: state.boardStyle)
                     .aspectRatio(state.slideAspect, contentMode: .fit)
             } else if state.blackout {
                 BlackScreenView(message: blackMessage)

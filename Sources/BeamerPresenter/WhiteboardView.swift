@@ -194,10 +194,11 @@ struct WhiteboardPane: View {
             if let board = state.activeBoard {
                 BoardCanvas(board: board,
                             liveStroke: state.boardStroke,
-                            liveColor: state.penColor)
+                            liveColor: state.penColor,
+                            style: state.boardStyle)
                 BoardInteractionLayer()
             } else {
-                Theme.stage
+                state.boardStyle.background
             }
         }
         .aspectRatio(state.slideAspect, contentMode: .fit)
@@ -420,6 +421,11 @@ struct BoardBar: View {
                 .menuIndicator(.hidden)
                 .fixedSize()
                 .help("Insert the time, deck name, or slide number")
+            }
+
+            group {
+                barButton(state.boardLight ? "sun.max" : "moon.stars",
+                          state.boardLight ? "White" : "Black") { state.boardLight.toggle() }
             }
 
             group {

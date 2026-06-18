@@ -26,13 +26,13 @@ tactile keys, mono labels, a single electric-lime signal. Reference mock:
 - [x] **Thumbnail rail** — `key`-surface thumbs, current = lime 2.5px ring + glow.
 - [x] **Overview grid** — Night base, lime ring + glow on the current slide,
       mono numbers, key-surface thumbs (both platforms).
-- [x] **Whiteboard** — dark on screen, light on paper. A shared `BoardStyle`
-      drives the palette: `.dark` (Night `stage` + faint dot-grid, light text,
-      dark tables) for the presenter *and* the audience screen; `.light`
-      (ink-on-white, no grid, light tables) for the PDF / board export so printed
-      pages stay readable. QR codes always sit on a white chip with a quiet zone
-      so they scan on either background. Chrome (macOS BoardBar / iPad insert bar)
-      is on Night surfaces.
+- [x] **Whiteboard** — a shared `BoardStyle` drives the palette: `.dark` (Night
+      `stage` + faint dot-grid, light text, dark tables) or `.light` (ink-on-white,
+      no grid, light tables). A black/white toggle in the board chrome flips the
+      on-screen board (presenter + audience), persisted across launches; the PDF /
+      board export always uses `.light` so printed pages stay readable. QR codes
+      always sit on a white chip with a quiet zone so they scan on either
+      background. Chrome (macOS BoardBar / iPad insert bar) is on Night surfaces.
 - [x] **Black-out / audience** — `blackout` fill, blinking "● Audience paused"
       pill, centred Space Grotesk message + mono clock (both platforms).
 - [x] **Settings** — system dark form on the Night base with the lime accent.
