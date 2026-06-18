@@ -27,10 +27,11 @@ struct NotesPanel: View {
 
     private var header: some View {
         HStack {
-            Label("Notes", systemImage: "note.text").font(.headline)
+            Text("Speaker notes").font(.mono(9)).textCase(.uppercase).tracking(1.6)
+                .foregroundStyle(Theme.textMuted)
             Spacer()
-            Text("\(model.index + 1) / \(model.pageCount)")
-                .font(.subheadline.monospacedDigit()).foregroundStyle(.secondary)
+            Text(String(format: "%02d / %02d", model.index + 1, model.pageCount))
+                .font(.mono(11)).foregroundStyle(Theme.textMuted)
         }
         .padding(.horizontal, 14).padding(.vertical, 10)
     }

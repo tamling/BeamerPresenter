@@ -92,7 +92,7 @@ struct PresenterView: View {
             let nextH = avail - notesH
 
             VStack(spacing: 0) {
-                slidePane(title: "Next", index: state.index + 1, interactive: false)
+                slidePane(title: "Next slide", index: state.index + 1, interactive: false)
                     .opacity(state.index + 1 < state.pageCount ? 1 : 0.25)
                     .frame(height: nextH)
 
@@ -187,7 +187,11 @@ struct PresenterView: View {
     /// The large left pane: the current slide, or the whiteboard when active.
     private var currentPane: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(state.isBoardActive ? "Whiteboard" : "Current").microLabel()
+            HStack {
+                Text(state.isBoardActive ? "Whiteboard" : "Current slide").microLabel()
+                Spacer()
+                LivePill()
+            }
             Group {
                 if state.isBoardActive {
                     WhiteboardPane()
@@ -251,7 +255,7 @@ struct PresenterView: View {
 
     private var notesPane: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Notes").microLabel()
+            Text("Speaker notes").microLabel()
             notesContent
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(Theme.surface, in: RoundedRectangle(cornerRadius: 12))
@@ -360,14 +364,13 @@ private struct ControlBar: View {
     var body: some View {
         HStack(alignment: .center, spacing: 14) {
             tool("Exit", "rectangle.portrait.and.arrow.right") { state.unload() }
-            LivePill().padding(.leading, 2)
 
             groupDivider
 
             // Navigation
             tool("Prev", "chevron.left", disabled: state.index == 0) { state.previous() }
             captioned("Slide") {
-                Text("\(state.index + 1) / \(state.pageCount)")
+                Text(String(format: "%02d / %02d", state.index + 1, state.pageCount))
                     .font(.mono(14, bold: true)).foregroundStyle(Theme.textPrimary)
                     .padding(.horizontal, 11).frame(height: 34)
                     .background(Theme.inset, in: RoundedRectangle(cornerRadius: 9))
@@ -378,8 +381,8 @@ private struct ControlBar: View {
             groupDivider
 
             // View
-            tool("Overview", "square.grid.2x2", active: state.showOverview) { state.showOverview.toggle() }
-            tool("Blackout", state.blackout ? "eye.slash.fill" : "eye.slash", active: state.blackout) { state.blackout.toggle() }
+            tool("Grid", "square.grid.2x2", active: state.showOverview) { state.showOverview.toggle() }
+            tool("Black", state.blackout ? "eye.slash.fill" : "eye.slash", active: state.blackout) { state.blackout.toggle() }
             tool("Board", "square.and.pencil", active: state.isBoardActive) { state.toggleBoard() }
 
             groupDivider
@@ -389,7 +392,7 @@ private struct ControlBar: View {
             tool("Laser", "dot.circle.and.cursorarrow", active: state.tool == .laser) { state.toggleTool(.laser) }
 
             ForEach(PenPalette.colors, id: \.name) { name, color in
-                captioned(name) {
+                captioned("") {
                     Button {
                         state.penColor = color
                         if state.tool == .none { state.tool = .pen }   // keep the laser if it's active
@@ -403,6 +406,7 @@ private struct ControlBar: View {
                             .frame(height: 34)
                     }
                     .buttonStyle(.plain)
+                    .help(name)
                 }
             }
 

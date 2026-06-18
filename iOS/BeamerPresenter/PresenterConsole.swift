@@ -18,8 +18,19 @@ struct PresenterConsole: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            pane("Current") {
-                SlideView().frame(maxWidth: .infinity, maxHeight: .infinity)
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Text("Current slide").font(.mono(9)).textCase(.uppercase).tracking(1.6)
+                        .foregroundStyle(Theme.textMuted)
+                    Spacer()
+                    LivePill()
+                }
+                SlideView()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .padding(8)
+                    .background(Theme.stage)
+                    .clipShape(RoundedRectangle(cornerRadius: 11))
+                    .overlay(RoundedRectangle(cornerRadius: 11).stroke(Theme.hairline, lineWidth: 1))
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
@@ -45,7 +56,7 @@ struct PresenterConsole: View {
             VStack(spacing: 0) {
                 // Tap the next-slide preview to advance to it.
                 Button { model.next() } label: {
-                    pane("Next") {
+                    pane("Next slide") {
                         StaticSlideView(index: model.index + 1)
                             .opacity(model.index + 1 < model.pageCount ? 1 : 0.25)
                     }

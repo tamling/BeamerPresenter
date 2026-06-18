@@ -79,18 +79,22 @@ struct StartView: View {
                 Spacer(minLength: 0)
 
                 // Identity
-                VStack(spacing: 12) {
-                    Image(systemName: "rectangle.on.rectangle.angled")
-                        .font(.system(size: 40, weight: .medium))
-                        .foregroundStyle(Theme.onAccent)
+                VStack(spacing: 10) {
+                    Image(systemName: "chart.bar.fill")
+                        .font(.system(size: 40, weight: .bold))
+                        .foregroundStyle(Theme.accent)
                         .frame(width: 92, height: 92)
-                        .background(Theme.accent, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-                        .shadow(color: Theme.accent.opacity(0.4), radius: 18, y: 4)
+                        .background(Theme.key, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 22).stroke(Theme.hairline, lineWidth: 1))
                     Text("BeamerPresenter")
                         .font(.display(30)).tracking(-0.3)
                         .foregroundStyle(Theme.textPrimary)
-                    Text("Present PDF slides on your iPad.")
+                    Text("Present · Annotate · Two screens")
+                        .font(.mono(10)).textCase(.uppercase).tracking(1.6)
+                        .foregroundStyle(Theme.accent)
+                    Text("Your console on the iPad, clean slides on the projector.")
                         .font(.ui(15)).foregroundStyle(Theme.textSecondary)
+                        .multilineTextAlignment(.center)
                 }
 
                 // Actions
@@ -120,15 +124,17 @@ struct StartView: View {
                             ForEach(Array(model.recents.prefix(5).enumerated()), id: \.element) { i, url in
                                 if i > 0 { Divider().overlay(Theme.hairline) }
                                 Button { model.open(url: url) } label: {
-                                    HStack(spacing: 12) {
-                                        Image(systemName: "doc.richtext").foregroundStyle(Theme.accent)
+                                    HStack(spacing: 11) {
+                                        Text("PDF").font(.mono(9, bold: true)).foregroundStyle(Theme.accent)
+                                            .padding(.horizontal, 7).padding(.vertical, 5)
+                                            .background(Theme.accentDim, in: RoundedRectangle(cornerRadius: 6))
                                         Text(url.deletingPathExtension().lastPathComponent)
-                                            .font(.ui(15)).foregroundStyle(Theme.textPrimary)
+                                            .font(.ui(15, "Medium")).foregroundStyle(Theme.textPrimary)
                                         Spacer()
                                         Image(systemName: "chevron.right")
                                             .font(.caption).foregroundStyle(Theme.textFaint)
                                     }
-                                    .padding(.vertical, 12).padding(.horizontal, 14)
+                                    .padding(.vertical, 11).padding(.horizontal, 14)
                                     .contentShape(Rectangle())
                                 }
                                 .buttonStyle(.plain)
@@ -353,7 +359,7 @@ struct PresenterView: View {
                 group {
                     captionedButton("Prev", "chevron.left", disabled: model.index == 0) { model.previous() }
                     captioned("Slide") {
-                        Text("\(model.index + 1) / \(model.pageCount)")
+                        Text(String(format: "%02d / %02d", model.index + 1, model.pageCount))
                             .font(.mono(14, bold: true)).foregroundStyle(Theme.textPrimary)
                             .lineLimit(1).fixedSize()
                             .padding(.horizontal, 11).frame(height: 36)
@@ -365,8 +371,8 @@ struct PresenterView: View {
                 }
 
                 group {
-                    captionedButton("Overview", "square.grid.2x2") { showOverview = true }
-                    captioned("Blackout") {
+                    captionedButton("Grid", "square.grid.2x2") { showOverview = true }
+                    captioned("Black") {
                         Menu { blackoutMenuContent } label: {
                             keyGlyph(model.blackout ? "eye.slash.fill" : "eye.slash", active: model.blackout)
                         }

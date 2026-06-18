@@ -11,29 +11,40 @@ struct BlackoutView: View {
     @AppStorage("blackoutImagePath") private var imagePath = ""
 
     var body: some View {
-        ZStack {
-            Color.black
-            if let image = backgroundImage {
-                Image(uiImage: image).resizable().scaledToFit()
-            }
-            VStack(spacing: 24) {
-                if !message.isEmpty {
-                    Text(message)
-                        .font(.system(size: 64, weight: .semibold))
-                        .multilineTextAlignment(.center)
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 40)
-                        .shadow(radius: 8)
+        GeometryReader { geo in
+            let s = min(geo.size.width, geo.size.height)
+            ZStack {
+                Theme.blackout
+                if let image = backgroundImage {
+                    Image(uiImage: image).resizable().scaledToFill()
+                        .frame(width: geo.size.width, height: geo.size.height).clipped()
+                    Color.black.opacity(0.45)
                 }
-                if showClock {
-                    TimelineView(.periodic(from: .now, by: 1)) { _ in
-                        Text(Self.clock())
-                            .font(.system(size: message.isEmpty ? 96 : 44,
-                                          weight: .light).monospacedDigit())
-                            .foregroundStyle(.white.opacity(0.85))
-                            .shadow(radius: 8)
+                VStack(spacing: s * 0.035) {
+                    HStack(spacing: s * 0.012) {
+                        Circle().fill(Theme.statusOk)
+                            .frame(width: max(7, s * 0.012), height: max(7, s * 0.012))
+                            .shadow(color: Theme.statusOk.opacity(0.7), radius: 4)
+                        Text("Audience paused")
+                            .font(.mono(max(11, s * 0.018))).textCase(.uppercase).tracking(2)
+                            .foregroundStyle(Theme.textMuted)
+                    }
+                    if !message.isEmpty {
+                        Text(message)
+                            .font(.display(s * 0.10))
+                            .multilineTextAlignment(.center)
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 40)
+                    }
+                    if showClock {
+                        TimelineView(.periodic(from: .now, by: 1)) { _ in
+                            Text(Self.clock())
+                                .font(.mono(s * (message.isEmpty ? 0.15 : 0.07), bold: true))
+                                .foregroundStyle(Theme.textFaint)
+                        }
                     }
                 }
+                .frame(width: geo.size.width, height: geo.size.height)
             }
         }
         .ignoresSafeArea()

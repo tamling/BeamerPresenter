@@ -46,18 +46,24 @@ struct WelcomeView: View {
     private var sidebarBranding: some View {
         VStack(alignment: .leading, spacing: 22) {
             VStack(alignment: .leading, spacing: 10) {
-                Image(nsImage: NSApp.applicationIconImage)
-                    .resizable()
+                Image(systemName: "chart.bar.fill")
+                    .font(.system(size: 30, weight: .bold))
+                    .foregroundStyle(Theme.accent)
                     .frame(width: 64, height: 64)
-                    .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
+                    .background(Theme.key, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 16).stroke(Theme.hairline, lineWidth: 1))
                 Text(AppInfo.name).font(.display(30)).tracking(-0.3)
                     .foregroundStyle(Theme.textPrimary)
-                Text("Present LaTeX Beamer PDFs with speaker notes.")
+                Text("Present · Annotate · Two screens")
+                    .font(.mono(10)).textCase(.uppercase).tracking(1.6)
+                    .foregroundStyle(Theme.accent)
+                Text("Present LaTeX Beamer PDFs with speaker notes — your console on one screen, clean slides on the other.")
                     .font(.ui(15)).foregroundStyle(Theme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             Button(action: onOpen) {
-                Label("Open PDF, .tex or .pptx…", systemImage: "folder")
+                Label("Open PDF · .tex · .pptx", systemImage: "rectangle.on.rectangle")
             }
             .buttonStyle(PrimaryButtonStyle())
             .keyboardShortcut("o", modifiers: .command)
@@ -177,17 +183,20 @@ struct WelcomeView: View {
 
     private func recentRow(_ url: URL) -> some View {
         Button { onOpenURL(url) } label: {
-            HStack {
-                Image(systemName: "doc.richtext")
-                VStack(alignment: .leading) {
+            HStack(spacing: 11) {
+                Text(url.pathExtension.uppercased().isEmpty ? "PDF" : url.pathExtension.uppercased())
+                    .font(.mono(9, bold: true)).tracking(0.5).foregroundStyle(Theme.accent)
+                    .padding(.horizontal, 7).padding(.vertical, 5)
+                    .background(Theme.accentDim, in: RoundedRectangle(cornerRadius: 6))
+                VStack(alignment: .leading, spacing: 1) {
                     Text(url.deletingPathExtension().lastPathComponent)
+                        .font(.ui(15, "Medium")).foregroundStyle(Theme.textPrimary)
                     Text(url.deletingLastPathComponent().path)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
+                        .font(.mono(11)).foregroundStyle(Theme.textMuted)
+                        .lineLimit(1).truncationMode(.middle)
                 }
             }
+            .padding(.vertical, 3)
         }
         .buttonStyle(.plain)
     }

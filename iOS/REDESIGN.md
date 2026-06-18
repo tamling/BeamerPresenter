@@ -27,8 +27,8 @@ tactile keys, mono labels, a single electric-lime signal. Reference mock:
 - [ ] **Overview grid** — LazyVGrid 5 cols, gap 13, current ringed lime.
 - [ ] **Whiteboard** — `stage` canvas with faint dot-grid, lime ink, dark mono
       tables, mini toolbar reusing KeyButton.
-- [ ] **Black-out / audience** — `blackout` fill, centred Space Grotesk message +
-      mono clock; audience stays chrome-free.
+- [x] **Black-out / audience** — `blackout` fill, "● Audience paused" pill,
+      centred Space Grotesk message + mono clock (both platforms).
 - [ ] **Settings / Remote** — Night surfaces, cards, mono labels.
 
 ## Notes
