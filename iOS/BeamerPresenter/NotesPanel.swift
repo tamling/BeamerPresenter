@@ -1,11 +1,16 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// The presenter-only speaker-notes pane shown beside the slide. It shows either
 /// parsed `.tex` notes for the current slide, or — for a "notes on second screen"
 /// split PDF — the right-hand notes half of the page.
 struct NotesPanel: View {
     @EnvironmentObject var model: PresentationModel
-    let loadTex: () -> Void
+    @State private var importing = false
+
+    private var texTypes: [UTType] {
+        [UTType(filenameExtension: "tex"), .plainText, .text, .data].compactMap { $0 }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -15,6 +20,9 @@ struct NotesPanel: View {
         }
         .background(Color(white: 0.08))
         .foregroundStyle(.white)
+        .fileImporter(isPresented: $importing, allowedContentTypes: texTypes) { result in
+            if case .success(let url) = result { model.loadTexNotes(url: url) }
+        }
     }
 
     private var header: some View {
@@ -55,7 +63,7 @@ struct NotesPanel: View {
                  : "No note for this slide.")
                 .foregroundStyle(.secondary)
             if model.notesByPage.isEmpty {
-                Button { loadTex() } label: {
+                Button { importing = true } label: {
                     Label("Load notes (.tex)…", systemImage: "doc.text")
                 }
                 .buttonStyle(.bordered)

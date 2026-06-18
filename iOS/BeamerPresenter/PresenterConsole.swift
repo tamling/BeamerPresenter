@@ -6,7 +6,6 @@ import SwiftUI
 /// at the bottom. All three dividers are draggable and the sizes persist.
 struct PresenterConsole: View {
     @EnvironmentObject var model: PresentationModel
-    let loadTex: () -> Void
 
     @AppStorage("consoleSidebarWidth") private var sidebarWidth: Double = 380
     @AppStorage("consoleNotesFraction") private var notesFraction: Double = 0.5
@@ -44,10 +43,15 @@ struct PresenterConsole: View {
             let nextH = avail - notesH
 
             VStack(spacing: 0) {
-                pane("Next") {
-                    StaticSlideView(index: model.index + 1)
-                        .opacity(model.index + 1 < model.pageCount ? 1 : 0.25)
+                // Tap the next-slide preview to advance to it.
+                Button { model.next() } label: {
+                    pane("Next") {
+                        StaticSlideView(index: model.index + 1)
+                            .opacity(model.index + 1 < model.pageCount ? 1 : 0.25)
+                    }
                 }
+                .buttonStyle(.plain)
+                .disabled(model.index + 1 >= model.pageCount)
                 .frame(height: nextH)
 
                 ResizeHandle(axis: .vertical) { t in
@@ -56,7 +60,7 @@ struct PresenterConsole: View {
                     notesFraction = (start - Double(t) / Double(max(avail, 1))).clamped(to: notesRange)
                 } onEnded: { notesStart = nil }
 
-                NotesPanel(loadTex: loadTex)
+                NotesPanel()
                     .clipShape(RoundedRectangle(cornerRadius: 8))
                     .frame(height: notesH)
             }

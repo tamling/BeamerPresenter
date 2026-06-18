@@ -6,6 +6,8 @@ import SwiftUI
 struct SlideView: View {
     @EnvironmentObject var model: PresentationModel
     @AppStorage("pencilOnly") private var pencilOnly = false
+    @State private var moveStart: CGPoint?      // item centre (unit) at drag start
+    @State private var resizeStart: CGFloat?    // item width at pinch start
 
     var body: some View {
         GeometryReader { geo in
@@ -56,6 +58,7 @@ struct SlideView: View {
                     .allowsHitTesting(false)
                 }
             }
+            .coordinateSpace(name: "board")
             .slideSwitch(index: model.index, forward: model.forward)
         }
     }
@@ -81,38 +84,66 @@ struct SlideView: View {
     private func boardHandles(_ size: CGSize) -> some View {
         if !model.penActive, !model.laserActive, let board = model.activeBoard {
             ForEach(board.items) { item in
+                let center = CGPoint(x: item.center.x * size.width, y: item.center.y * size.height)
                 let half = item.width * size.width / 2
-                // Move
-                Circle()
-                    .fill(Color.accentColor.opacity(model.selectedItemID == item.id ? 0.95 : 0.55))
-                    .overlay(Image(systemName: "arrow.up.and.down.and.arrow.left.and.right")
-                        .font(.system(size: 11, weight: .bold)).foregroundStyle(.white))
-                    .frame(width: 30, height: 30)
-                    .position(x: item.center.x * size.width, y: item.center.y * size.height)
-                    .gesture(DragGesture(minimumDistance: 0)
-                        .onChanged { v in
-                            model.selectedItemID = item.id
-                            model.moveItem(item.id, to: unit(v.location, size))
-                        })
-                // Delete
+                let w = max(72, item.width * size.width)
+                let h = max(58, item.width * size.width * 0.55)
+                let selected = model.selectedItemID == item.id
+
+                // Grab the item itself: drag to move, pinch to resize, tap to select.
+                Rectangle()
+                    .fill(Color.white.opacity(0.001))
+                    .frame(width: w, height: h)
+                    .overlay {
+                        if selected {
+                            RoundedRectangle(cornerRadius: 8)
+                                .strokeBorder(Color.accentColor, lineWidth: 2)
+                        }
+                    }
+                    .contentShape(Rectangle())
+                    .position(center)
+                    .onTapGesture { model.selectedItemID = item.id }
+                    .gesture(
+                        DragGesture(minimumDistance: 4, coordinateSpace: .named("board"))
+                            .onChanged { v in
+                                model.selectedItemID = item.id
+                                let base = moveStart ?? item.center
+                                if moveStart == nil { moveStart = base }
+                                model.moveItem(item.id, to: CGPoint(
+                                    x: base.x + v.translation.width / size.width,
+                                    y: base.y + v.translation.height / size.height))
+                            }
+                            .onEnded { _ in moveStart = nil }
+                    )
+                    .simultaneousGesture(
+                        MagnificationGesture()
+                            .onChanged { scale in
+                                model.selectedItemID = item.id
+                                let base = resizeStart ?? item.width
+                                if resizeStart == nil { resizeStart = base }
+                                model.setItemWidth(item.id, base * scale)
+                            }
+                            .onEnded { _ in resizeStart = nil }
+                    )
+
+                // Big delete button at the top-right corner.
                 Button { model.deleteItem(item.id) } label: {
-                    Image(systemName: "xmark").font(.system(size: 10, weight: .bold))
-                        .foregroundStyle(.white).frame(width: 24, height: 24)
+                    Image(systemName: "xmark").font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(.white).frame(width: 36, height: 36)
                         .background(Circle().fill(Color.red))
                 }
-                .position(x: item.center.x * size.width + half + 16,
-                          y: item.center.y * size.height - 28)
-                // Resize (selected only)
-                if model.selectedItemID == item.id {
-                    RoundedRectangle(cornerRadius: 5).fill(Color.accentColor.opacity(0.95))
-                        .overlay(Image(systemName: "arrow.left.and.right")
-                            .font(.system(size: 10, weight: .bold)).foregroundStyle(.white))
-                        .frame(width: 26, height: 26)
-                        .position(x: item.center.x * size.width + half + 16,
-                                  y: item.center.y * size.height)
-                        .gesture(DragGesture(minimumDistance: 0)
+                .position(x: center.x + max(half, w / 2) + 20, y: center.y - h / 2 - 4)
+
+                // Big corner resize handle (drag), when selected.
+                if selected {
+                    RoundedRectangle(cornerRadius: 8).fill(Color.accentColor)
+                        .overlay(Image(systemName: "arrow.up.left.and.arrow.down.right")
+                            .font(.system(size: 13, weight: .bold)).foregroundStyle(.white))
+                        .frame(width: 36, height: 36)
+                        .position(x: center.x + max(half, w / 2) + 20, y: center.y + h / 2 + 4)
+                        .gesture(DragGesture(minimumDistance: 0, coordinateSpace: .named("board"))
                             .onChanged { v in
-                                let dx = abs(v.location.x - item.center.x * size.width)
+                                let dx = abs(v.location.x - center.x)
                                 model.setItemWidth(item.id, (dx * 2) / max(size.width, 1))
                             })
                 }

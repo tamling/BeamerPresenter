@@ -79,6 +79,18 @@ final class PresentationModel: ObservableObject {
         boards[i].items.append(item)
         selectedItemID = item.id
     }
+    /// Insert an empty table of the given size (chosen via the grid picker).
+    func addTable(rows: Int, columns: Int) {
+        guard let i = activeBoardIndex else { return }
+        let r = max(1, rows), c = max(1, columns)
+        let line = Array(repeating: " ", count: c).joined(separator: " | ")
+        var item = BoardItem.makeDefault(.table)
+        item.text = Array(repeating: line, count: r).joined(separator: "\n")
+        item.width = min(0.9, 0.16 * CGFloat(c))
+        boards[i].items.append(item)
+        selectedItemID = item.id
+    }
+
     func moveItem(_ id: UUID, to p: CGPoint) {
         guard let i = activeBoardIndex,
               let j = boards[i].items.firstIndex(where: { $0.id == id }) else { return }

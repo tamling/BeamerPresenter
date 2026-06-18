@@ -156,7 +156,7 @@ struct PresenterView: View {
     @EnvironmentObject var external: ExternalDisplayManager
     @State private var showOverview = false
     @State private var showNotes = false
-    @State private var importingNotes = false
+    @AppStorage("showThumbnails") private var showThumbnails = true
     @State private var exportURL: URL?
     @State private var showShare = false
     @State private var showSettings = false
@@ -167,6 +167,7 @@ struct PresenterView: View {
     @State private var importingBlackImage = false
     @State private var showCustomMessage = false
     @State private var customMessage = ""
+    @State private var showTablePicker = false
     @AppStorage("doNotDisturb") private var doNotDisturb = false
     @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var landscape = false
@@ -175,10 +176,6 @@ struct PresenterView: View {
     /// The full console (current slide + next + notes + own notes) is used on a
     /// wide landscape iPad; portrait keeps the big single-slide layout.
     private var useConsole: Bool { landscape && sizeClass == .regular }
-
-    private var texTypes: [UTType] {
-        [UTType(filenameExtension: "tex"), .plainText, .text].compactMap { $0 }
-    }
 
     private var colors: [(String, Color)] { AppColors.palette.map { ($0.name, $0.color) } }
 
@@ -193,14 +190,14 @@ struct PresenterView: View {
                 Group {
                     if useConsole {
                         // Wide landscape iPad: the full macOS-style presenter console.
-                        PresenterConsole(loadTex: { importingNotes = true })
+                        PresenterConsole()
                     } else {
                         // Portrait / narrow: the big single slide, notes on demand.
                         HStack(spacing: 0) {
                             SlideView()
                                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                             if showNotes {
-                                NotesPanel(loadTex: { importingNotes = true })
+                                NotesPanel()
                                     .frame(width: 340)
                                     .transition(.move(edge: .trailing))
                             }
@@ -211,8 +208,11 @@ struct PresenterView: View {
                 .onAppear { landscape = geo.size.width > geo.size.height }
                 .onChange(of: geo.size) { s in landscape = s.width > s.height }
             }
-            ThumbnailStrip()
-                .frame(height: 96)
+            if showThumbnails {
+                ThumbnailStrip()
+                    .frame(height: 96)
+                    .transition(.move(edge: .bottom))
+            }
         }
         .background(Color.black.ignoresSafeArea())
         .background(
@@ -224,9 +224,6 @@ struct PresenterView: View {
         )
         .sheet(isPresented: $showOverview) {
             OverviewGrid(isPresented: $showOverview)
-        }
-        .fileImporter(isPresented: $importingNotes, allowedContentTypes: texTypes) { result in
-            if case .success(let url) = result { model.loadTexNotes(url: url) }
         }
         .sheet(isPresented: $showShare) {
             if let url = exportURL { ShareSheet(items: [url]) }
@@ -308,7 +305,9 @@ struct PresenterView: View {
             Button { model.toggleLaser() } label: { Image(systemName: "dot.radiowaves.left.and.right") }
                 .foregroundStyle(model.laserActive ? .red : .primary)
 
-            penMenu   // colours/weight collapsed into one control (portrait)
+            penMenu   // pen toggle + weight (portrait)
+            ColorPicker("", selection: penColorBinding, supportsOpacity: false)
+                .labelsHidden()
 
             Button {
                 model.isBoardActive ? model.boardUndoInk() : model.undoInk()
@@ -429,28 +428,37 @@ struct PresenterView: View {
         HStack(alignment: .top, spacing: 18) { content() }
     }
 
-    /// The pen colours as one tidy dot row under a single caption (no six labels).
+    /// The pen colours as a tidy dot row under a single caption, plus the system
+    /// colour picker (the native iPad overlay) for any custom colour.
     private var colourStrip: some View {
         captioned("Colour") {
-            HStack(spacing: 8) {
+            HStack(spacing: 11) {
                 ForEach(colors, id: \.0) { _, color in
                     Button {
                         model.penColor = color; model.penActive = true; model.laserActive = false
                     } label: {
-                        Circle().fill(color).frame(width: 17, height: 17)
+                        Circle().fill(color).frame(width: 26, height: 26)
                             .overlay(Circle().strokeBorder(
                                 .white.opacity(model.penColor == color ? 0.95 : 0.25),
-                                lineWidth: model.penColor == color ? 2 : 1))
+                                lineWidth: model.penColor == color ? 3 : 1))
                     }
                     .buttonStyle(.plain)
                 }
+                ColorPicker("", selection: penColorBinding, supportsOpacity: false)
+                    .labelsHidden()
             }
         }
     }
 
+    /// Binding that also activates the pen when a colour is picked.
+    private var penColorBinding: Binding<Color> {
+        Binding(get: { model.penColor },
+                set: { model.penColor = $0; model.penActive = true; model.laserActive = false })
+    }
+
     private func captioned<C: View>(_ caption: String, @ViewBuilder _ content: () -> C) -> some View {
         VStack(spacing: 4) {
-            content().frame(height: 24)
+            content().frame(height: 30)
             Text(caption).font(.system(size: 9)).foregroundStyle(.secondary)
         }
     }
@@ -473,6 +481,7 @@ struct PresenterView: View {
     @ViewBuilder private var overflowMenuContent: some View {
         Button { openPicker() } label: { Label("Open PDF…", systemImage: "folder") }
         Button { exportAndShare() } label: { Label("Export & Share…", systemImage: "square.and.arrow.up") }
+        Toggle(isOn: $showThumbnails.animation()) { Label("Slide strip", systemImage: "rectangle.grid.1x2") }
         Toggle(isOn: $doNotDisturb) { Label("Keep screen awake", systemImage: "moon") }
         Button { showSettings = true } label: { Label("Settings…", systemImage: "gearshape") }
         Divider()
@@ -597,32 +606,94 @@ struct PresenterView: View {
 
     /// Secondary row while a board is active: insert items and edit the selection.
     private var boardInsertBar: some View {
-        HStack(spacing: 14) {
+        HStack(spacing: 12) {
             Label(model.activeBoard?.name ?? "Board", systemImage: "rectangle")
                 .font(.subheadline).foregroundStyle(.secondary)
-            Divider().frame(height: 18)
-            Button { model.addItem(.text) } label: { Label("Text", systemImage: "textformat") }
-            Button { model.addItem(.table) } label: { Label("Table", systemImage: "tablecells") }
-            Button { model.addItem(.qr) } label: { Label("QR", systemImage: "qrcode") }
+            Divider().frame(height: 22)
+
+            insertButton("Text", "textformat") { model.addItem(.text) }
+            insertButton("Table", "tablecells") { showTablePicker = true }
+                .popover(isPresented: $showTablePicker) {
+                    TableSizePicker { rows, cols in
+                        model.addTable(rows: rows, columns: cols)
+                        showTablePicker = false
+                    }
+                }
+            insertButton("QR", "qrcode") { model.addItem(.qr) }
 
             if let item = model.selectedItem() {
-                Divider().frame(height: 18)
+                Divider().frame(height: 22)
                 TextField(item.kind == .qr ? "URL / text to encode"
-                          : (item.kind == .table ? "Rows on lines, columns by |" : "Text"),
+                          : (item.kind == .table ? "Cells: row by row, columns by |" : "Text"),
                           text: Binding(
                             get: { model.selectedItem()?.text ?? "" },
                             set: { model.updateItemText(item.id, $0) }))
                     .textFieldStyle(.roundedBorder)
-                    .frame(maxWidth: 320)
+                    .frame(maxWidth: 340)
                     .font(item.kind == .table ? .system(.footnote, design: .monospaced) : .body)
                 Button { model.selectedItemID = nil } label: { Image(systemName: "checkmark") }
             }
             Spacer()
+            Text("Drag to move · pinch to resize")
+                .font(.caption).foregroundStyle(.secondary)
         }
-        .font(.subheadline)
         .padding(.horizontal, 18)
         .padding(.vertical, 8)
         .background(Color(white: 0.12))
         .foregroundStyle(.white)
+    }
+
+    /// A larger, thumb-friendly insert button for the board bar.
+    private func insertButton(_ title: String, _ icon: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label(title, systemImage: icon)
+                .font(.body.weight(.medium))
+                .padding(.horizontal, 14).padding(.vertical, 8)
+                .background(Color.white.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+/// Apple Notes-style table size grid: drag across the cells to size, release (or
+/// tap) to insert a table of that size.
+struct TableSizePicker: View {
+    let onPick: (_ rows: Int, _ columns: Int) -> Void
+    private let maxRows = 8, maxCols = 8
+    private let cell: CGFloat = 30
+    private let gap: CGFloat = 4
+    @State private var rows = 1
+    @State private var cols = 1
+
+    var body: some View {
+        VStack(spacing: 10) {
+            Text("\(rows) × \(cols)").font(.headline.monospacedDigit())
+            grid
+                .contentShape(Rectangle())
+                .gesture(
+                    DragGesture(minimumDistance: 0, coordinateSpace: .local)
+                        .onChanged { v in
+                            cols = min(max(Int(v.location.x / (cell + gap)) + 1, 1), maxCols)
+                            rows = min(max(Int(v.location.y / (cell + gap)) + 1, 1), maxRows)
+                        }
+                        .onEnded { _ in onPick(rows, cols) }
+                )
+        }
+        .padding(18)
+    }
+
+    private var grid: some View {
+        VStack(spacing: gap) {
+            ForEach(1...maxRows, id: \.self) { r in
+                HStack(spacing: gap) {
+                    ForEach(1...maxCols, id: \.self) { c in
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill((r <= rows && c <= cols) ? Color.accentColor
+                                                           : Color.secondary.opacity(0.25))
+                            .frame(width: cell, height: cell)
+                    }
+                }
+            }
+        }
     }
 }
