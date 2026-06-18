@@ -149,6 +149,17 @@ final class PresentationModel: ObservableObject {
     private var timerStartedAt: Date?
     private var timerAccumulated: TimeInterval = 0
 
+    /// Optional lecture target in minutes (0 = off). A normal lecture slot is
+    /// 45 min; a double slot is 90 min (2 × 45). Persisted across launches.
+    @Published var lectureMinutes: Int = UserDefaults.standard.integer(forKey: "lectureMinutes") {
+        didSet { UserDefaults.standard.set(lectureMinutes, forKey: "lectureMinutes") }
+    }
+
+    /// Seconds left until the lecture target (negative once over), or nil if off.
+    var remaining: TimeInterval? {
+        lectureMinutes > 0 ? TimeInterval(lectureMinutes * 60) - elapsed : nil
+    }
+
     // Your own free-form notes for this deck, autosaved per deck in UserDefaults.
     @Published var scratch: String = ""
 

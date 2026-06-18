@@ -422,6 +422,10 @@ private struct ControlBar: View {
                  active: !state.timerRunning) { state.toggleTimer() }
             tool("Reset", "arrow.counterclockwise") { state.resetTimer() }
             captioned("Elapsed") { elapsedChip }
+            if state.remainingSeconds != nil {
+                captioned("Left") { remainingChip }
+            }
+            captioned("Target") { targetMenu }
             captioned("Time") {
                 Text(now, style: .time)
                     .font(.mono(15, bold: true)).foregroundStyle(Theme.textSecondary)
@@ -452,6 +456,55 @@ private struct ControlBar: View {
                 .background(Theme.inset, in: RoundedRectangle(cornerRadius: 9))
                 .overlay(RoundedRectangle(cornerRadius: 9).stroke(Theme.hairline, lineWidth: 1))
         }
+    }
+
+    /// Countdown to the lecture target: neutral, amber in the last 5 min, red over.
+    @ViewBuilder private var remainingChip: some View {
+        if let remaining = state.remainingSeconds {
+            let over = remaining < 0
+            let warn = !over && remaining <= 300
+            let fg: Color = over ? PenInk.red : (warn ? Theme.statusWarn : Theme.textPrimary)
+            let line: Color = over ? PenInk.red.opacity(0.6)
+                                   : (warn ? Theme.statusWarn.opacity(0.5) : Theme.hairline)
+            Text(remainingText(remaining)).font(.mono(15, bold: true)).foregroundStyle(fg)
+                .padding(.horizontal, 11).frame(height: 34)
+                .background(Theme.inset, in: RoundedRectangle(cornerRadius: 9))
+                .overlay(RoundedRectangle(cornerRadius: 9).stroke(line, lineWidth: 1))
+        }
+    }
+
+    /// Picks the lecture length: off, a single 45-min slot, or a 90-min double.
+    private var targetMenu: some View {
+        Menu {
+            Picker("Lecture length", selection: $state.lectureMinutes) {
+                Text("Off").tag(0)
+                Text("45 min").tag(45)
+                Text("90 min (2 × 45)").tag(90)
+                Text("30 min").tag(30)
+                Text("60 min").tag(60)
+                Text("120 min").tag(120)
+            }
+        } label: {
+            Text(state.lectureMinutes > 0 ? "\(state.lectureMinutes)m" : "—")
+                .font(.mono(15, bold: true))
+                .foregroundStyle(state.lectureMinutes > 0 ? Theme.textPrimary : Theme.textMuted)
+                .padding(.horizontal, 11).frame(height: 34)
+                .background(Theme.key, in: RoundedRectangle(cornerRadius: 9))
+                .overlay(RoundedRectangle(cornerRadius: 9).stroke(Theme.hairline, lineWidth: 1))
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+    }
+
+    private func remainingText(_ t: TimeInterval) -> String {
+        _ = now   // re-render every tick
+        let over = t < -0.5
+        let s = abs(Int(t.rounded()))
+        let h = s / 3600, m = (s % 3600) / 60, sec = s % 60
+        let body = h > 0 ? String(format: "%d:%02d:%02d", h, m, sec)
+                         : String(format: "%02d:%02d", m, sec)
+        return (over ? "+" : "") + body
     }
 
     /// A tactile key: key surface + hairline; lime border + glow when active.

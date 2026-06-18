@@ -53,6 +53,17 @@ final class PresentationState: ObservableObject {
         timerRunning ? accumulated + Date().timeIntervalSince(startDate) : accumulated
     }
 
+    /// Optional lecture target in minutes (0 = off). A normal lecture slot is
+    /// 45 min; a double slot is 90 min (2 × 45). Persisted across launches.
+    @Published var lectureMinutes: Int = UserDefaults.standard.integer(forKey: "lectureMinutes") {
+        didSet { UserDefaults.standard.set(lectureMinutes, forKey: "lectureMinutes") }
+    }
+
+    /// Seconds left until the lecture target (negative once over), or nil if off.
+    var remainingSeconds: TimeInterval? {
+        lectureMinutes > 0 ? TimeInterval(lectureMinutes * 60) - elapsedSeconds : nil
+    }
+
     // Annotation / laser
     @Published var tool: Tool = .none
     @Published var penColor: Color = .red
