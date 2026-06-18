@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// The current slide at its true aspect ratio, with the ink layer on top and a
 /// single gesture that draws when the pen is on, or navigates (tap an edge /
@@ -8,6 +9,7 @@ struct SlideView: View {
     @AppStorage("pencilOnly") private var pencilOnly = false
     @State private var moveStart: CGPoint?      // item centre (unit) at drag start
     @State private var resizeStart: CGFloat?    // item width at pinch start
+    @State private var keyboardTop: CGFloat = .infinity   // global Y of the keyboard top
 
     var body: some View {
         GeometryReader { geo in
@@ -59,8 +61,31 @@ struct SlideView: View {
                 }
             }
             .coordinateSpace(name: "board")
+            .offset(y: -keyboardShift(geo.frame(in: .global), size))
+            .animation(.easeOut(duration: 0.25), value: keyboardTop)
             .slideSwitch(index: model.index, forward: model.forward)
+            .onReceive(NotificationCenter.default.publisher(
+                for: UIResponder.keyboardWillChangeFrameNotification)) { note in
+                if let f = note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect {
+                    keyboardTop = f.minY
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(
+                for: UIResponder.keyboardWillHideNotification)) { _ in
+                keyboardTop = .infinity
+            }
         }
+    }
+
+    /// How far to lift the board so the selected table's cells clear the keyboard.
+    private func keyboardShift(_ globalFrame: CGRect, _ size: CGSize) -> CGFloat {
+        guard keyboardTop.isFinite, model.isBoardActive,
+              let item = model.selectedItem(), item.kind == .table else { return 0 }
+        let rows = max(1, item.text.split(separator: "\n", omittingEmptySubsequences: false).count)
+        let fontSize = max(6, item.fontScale * size.width)
+        let tableHeight = CGFloat(rows) * fontSize * 1.7
+        let tableBottom = globalFrame.minY + item.center.y * size.height + tableHeight / 2
+        return max(0, tableBottom - (keyboardTop - 16))
     }
 
     // MARK: - Board interaction
