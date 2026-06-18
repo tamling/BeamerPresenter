@@ -183,6 +183,8 @@ struct PresenterView: View {
     @State private var showCustomMessage = false
     @State private var customMessage = ""
     @State private var showTablePicker = false
+    @State private var showCustomTarget = false
+    @State private var customTargetText = ""
     @AppStorage("doNotDisturb") private var doNotDisturb = false
     @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var landscape = false
@@ -259,6 +261,15 @@ struct PresenterView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("Shown centred on the audience screen.")
+        }
+        .alert("Custom length", isPresented: $showCustomTarget) {
+            TextField("Minutes", text: $customTargetText)
+                .keyboardType(.numberPad)
+            Button("Set") { applyCustomTarget() }
+            Button("Off", role: .destructive) { model.lectureMinutes = 0 }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Lecture length in minutes.")
         }
     }
 
@@ -494,25 +505,50 @@ struct PresenterView: View {
         }
     }
 
-    /// Picks the lecture length: off, a single 45-min slot, or a 90-min double.
+    /// Picks the lecture length: off, a preset slot, or a custom number of minutes.
     private var targetMenu: some View {
         Menu {
-            Picker("Lecture length", selection: $model.lectureMinutes) {
-                Text("Off").tag(0)
-                Text("45 min").tag(45)
-                Text("90 min (2 × 45)").tag(90)
-                Text("30 min").tag(30)
-                Text("60 min").tag(60)
-                Text("120 min").tag(120)
+            Button { model.lectureMinutes = 0 } label: { targetRow("Off", 0) }
+            ForEach(targetPresets, id: \.0) { minutes, title in
+                Button { model.lectureMinutes = minutes } label: { targetRow(title, minutes) }
+            }
+            Divider()
+            Button("Custom…") {
+                customTargetText = model.lectureMinutes > 0 ? "\(model.lectureMinutes)" : ""
+                showCustomTarget = true
             }
         } label: {
-            Text(model.lectureMinutes > 0 ? "\(model.lectureMinutes)m" : "—")
-                .font(.mono(15, bold: true))
-                .foregroundStyle(model.lectureMinutes > 0 ? Theme.textPrimary : Theme.textMuted)
-                .lineLimit(1).fixedSize()
-                .padding(.horizontal, 11).frame(height: 36)
-                .background(Theme.key, in: RoundedRectangle(cornerRadius: 9))
-                .overlay(RoundedRectangle(cornerRadius: 9).stroke(Theme.hairline, lineWidth: 1))
+            HStack(spacing: 5) {
+                Text(model.lectureMinutes > 0 ? "\(model.lectureMinutes)m" : "Off")
+                Image(systemName: "chevron.down").font(.system(size: 9, weight: .semibold))
+            }
+            .font(.mono(15, bold: true))
+            .foregroundStyle(model.lectureMinutes > 0 ? Theme.textPrimary : Theme.textMuted)
+            .lineLimit(1).fixedSize()
+            .padding(.horizontal, 11).frame(height: 36)
+            .background(Theme.key, in: RoundedRectangle(cornerRadius: 9))
+            .overlay(RoundedRectangle(cornerRadius: 9).stroke(Theme.hairline, lineWidth: 1))
+        }
+    }
+
+    /// The preset lecture slots offered in the dropdown.
+    private var targetPresets: [(Int, String)] {
+        [(30, "30 min"), (45, "45 min"), (60, "60 min"),
+         (90, "90 min (2 × 45)"), (120, "120 min")]
+    }
+
+    /// A menu row that shows a checkmark when it is the current target.
+    @ViewBuilder private func targetRow(_ title: String, _ minutes: Int) -> some View {
+        if model.lectureMinutes == minutes {
+            Label(title, systemImage: "checkmark")
+        } else {
+            Text(title)
+        }
+    }
+
+    private func applyCustomTarget() {
+        if let m = Int(customTargetText.trimmingCharacters(in: .whitespaces)), m > 0 {
+            model.lectureMinutes = min(m, 600)
         }
     }
 
