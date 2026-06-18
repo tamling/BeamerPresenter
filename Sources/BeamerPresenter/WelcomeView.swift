@@ -21,16 +21,18 @@ struct WelcomeView: View {
         VStack(spacing: 0) {
             HStack(spacing: 0) {
                 sidebarBranding
-                    .padding(28)
-                    .frame(width: 360)
-                Divider()
+                    .padding(30)
+                    .frame(width: 404)
+                Rectangle().fill(Theme.hairline).frame(width: 1)
                 library
                     .frame(maxWidth: .infinity)
             }
-            Divider()
+            Rectangle().fill(Theme.hairline).frame(height: 1)
             dashboard
         }
-        .frame(minWidth: 640, minHeight: 440)
+        .frame(minWidth: 680, minHeight: 460)
+        .background(Theme.base)
+        .tint(Theme.accent)
         .onReceive(NotificationCenter.default.publisher(for: Favorites.didChange)) { _ in
             favorites = Favorites.load()
         }
@@ -42,21 +44,22 @@ struct WelcomeView: View {
     // MARK: - Left
 
     private var sidebarBranding: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 22) {
+            VStack(alignment: .leading, spacing: 10) {
                 Image(nsImage: NSApp.applicationIconImage)
                     .resizable()
-                    .frame(width: 60, height: 60)
-                Text(AppInfo.name).font(.largeTitle.bold())
+                    .frame(width: 64, height: 64)
+                    .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
+                Text(AppInfo.name).font(.display(30)).tracking(-0.3)
+                    .foregroundStyle(Theme.textPrimary)
                 Text("Present LaTeX Beamer PDFs with speaker notes.")
-                    .foregroundStyle(.secondary)
+                    .font(.ui(15)).foregroundStyle(Theme.textSecondary)
             }
 
             Button(action: onOpen) {
                 Label("Open PDF, .tex or .pptx…", systemImage: "folder")
-                    .frame(maxWidth: .infinity)
             }
-            .controlSize(.large)
+            .buttonStyle(PrimaryButtonStyle())
             .keyboardShortcut("o", modifiers: .command)
 
             dropZone
@@ -65,8 +68,7 @@ struct WelcomeView: View {
             systemStatus
 
             Text("Tip: keep the .tex with \\note{…} next to the PDF — or just open the .tex.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .font(.ui(13)).foregroundStyle(Theme.textFaint)
         }
         .onAppear {
             guard !checkedDeps else { return }
@@ -92,7 +94,8 @@ struct WelcomeView: View {
 
     private func statusRow(ok: Bool, okText: String, missingText: String) -> some View {
         HStack(spacing: 8) {
-            Circle().fill(ok ? Color.green : Color.yellow).frame(width: 9, height: 9)
+            Circle().fill(ok ? Theme.statusOk : Theme.statusWarn).frame(width: 9, height: 9)
+                .shadow(color: (ok ? Theme.statusOk : Theme.statusWarn).opacity(0.6), radius: 4)
             Text(ok ? okText : missingText)
             Spacer()
         }
@@ -104,13 +107,13 @@ struct WelcomeView: View {
         List {
             Section {
                 if favorites.isEmpty {
-                    Text("No favorite folders yet").foregroundStyle(.secondary)
+                    Text("No favorite folders yet").font(.ui(13)).foregroundStyle(Theme.textFaint)
                 } else {
                     ForEach(favorites, id: \.self) { favoriteRow($0) }
                 }
             } header: {
                 HStack {
-                    Text("Favorite Folders")
+                    Text("Favorite Folders").microLabel()
                     Spacer()
                     Button { addFavoriteFolder() } label: { Image(systemName: "plus") }
                         .buttonStyle(.borderless)
@@ -121,13 +124,13 @@ struct WelcomeView: View {
 
             Section {
                 if recents.isEmpty {
-                    Text("No recent presentations").foregroundStyle(.secondary)
+                    Text("No recent presentations").font(.ui(13)).foregroundStyle(Theme.textFaint)
                 } else {
                     ForEach(recents, id: \.self) { recentRow($0) }
                 }
             } header: {
                 HStack {
-                    Text("Recent")
+                    Text("Recent").microLabel()
                     Spacer()
                     if !recents.isEmpty {
                         Button("Clear") {
@@ -140,6 +143,8 @@ struct WelcomeView: View {
             }
         }
         .listStyle(.sidebar)
+        .scrollContentBackground(.hidden)
+        .background(Theme.base)
     }
 
     private func pdfRow(_ url: URL) -> some View {
@@ -190,31 +195,31 @@ struct WelcomeView: View {
     // MARK: - Bottom dashboard
 
     private var dashboard: some View {
-        HStack(spacing: 22) {
+        HStack(spacing: 26) {
             statTile("rectangle.on.rectangle", "\(Stats.count)", "Presentations")
             statTile("stopwatch", Stats.format(Stats.averageSeconds), "Avg. session")
             statTile("clock", Stats.format(Stats.totalSeconds), "Total time")
 
             Spacer()
 
-            VStack(alignment: .trailing, spacing: 1) {
-                Text("\(AppInfo.name) \(AppInfo.version)").font(.caption).bold()
-                Text("\(AppInfo.releaseDate)  ·  by \(AppInfo.author)")
-                    .font(.caption2).foregroundStyle(.secondary)
+            VStack(alignment: .trailing, spacing: 3) {
+                Text("\(AppInfo.name) \(AppInfo.version)")
+                    .font(.ui(13.5, "Medium")).foregroundStyle(Theme.textSecondary)
+                Text("\(AppInfo.releaseDate)  ·  by \(AppInfo.author)").microLabel()
             }
         }
-        .padding(.horizontal, 24)
-        .padding(.vertical, 12)
-        .background(Color(nsColor: .underPageBackgroundColor))
+        .padding(.horizontal, 30)
+        .frame(height: 66)
+        .background(Theme.raised)
         .id(statsTick)   // refresh when stats change
     }
 
     private func statTile(_ icon: String, _ value: String, _ title: String) -> some View {
-        HStack(spacing: 9) {
-            Image(systemName: icon).font(.title3).foregroundStyle(.tint)
-            VStack(alignment: .leading, spacing: 0) {
-                Text(value).font(.headline.monospacedDigit())
-                Text(title).font(.caption2).foregroundStyle(.secondary)
+        HStack(spacing: 10) {
+            Image(systemName: icon).font(.title3).foregroundStyle(Theme.accent)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(value).font(.display(19)).foregroundStyle(Theme.textPrimary)
+                Text(title).microLabel()
             }
         }
     }
@@ -235,16 +240,17 @@ struct WelcomeView: View {
 
     private var dropZone: some View {
         RoundedRectangle(cornerRadius: 12)
-            .strokeBorder(style: StrokeStyle(lineWidth: 2, dash: [8]))
-            .foregroundStyle(dropTargeted ? Color.accentColor : Color.secondary.opacity(0.5))
+            .strokeBorder(dropTargeted ? Theme.accent : Theme.hairlineStrong,
+                          style: StrokeStyle(lineWidth: 2, dash: [8]))
+            .background(RoundedRectangle(cornerRadius: 12)
+                .fill(dropTargeted ? Theme.accentDim : Color.clear))
             .overlay(
                 VStack(spacing: 8) {
                     Image(systemName: "square.and.arrow.down").font(.title2)
-                    Text("Drop a PDF, .tex or .pptx to open").font(.callout)
-                    Text("…or drop a folder to add it to favorites")
-                        .font(.caption)
+                    Text("Drop a PDF, .tex or .pptx to open").font(.ui(13.5))
+                    Text("…or drop a folder to add it to favorites").font(.ui(12))
                 }
-                .foregroundStyle(.secondary)
+                .foregroundStyle(dropTargeted ? Theme.accent : Theme.textFaint)
                 .multilineTextAlignment(.center)
                 .padding(8)
             )

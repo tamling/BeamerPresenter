@@ -19,6 +19,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     private var cancellables = Set<AnyCancellable>()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Night Console is a single fixed dark theme.
+        NSApp.appearance = NSAppearance(named: .darkAqua)
         setupMenu()
         installKeyMonitor()
         NotificationCenter.default.addObserver(
