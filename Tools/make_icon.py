@@ -81,70 +81,60 @@ def lerp(a, b, t):
 
 # ---------------------------------------------------------------- the icon
 
-# Palette
-TOP   = (84, 104, 255)     # indigo
-BOT   = (139, 92, 246)     # violet
-WHITE = (255, 255, 255)
-INK1  = (79, 102, 241)     # bar colours (light -> dark)
-INK2  = (99, 91, 240)
-INK3  = (124, 92, 246)
-TITLE = (255, 176, 32)     # warm title accent on the slide
-LASER = (255, 59, 48)      # red laser dot
+# Night Console palette: near-black tile + glowing lime bar chart.
+BG_TOP = (32, 36, 44)
+BG_BOT = (9, 10, 13)
+LIME   = (198, 240, 74)
+
+GLOW_PASSES = 16
+GLOW_MAX = 0.060
+GLOW_ALPHA = 0.05
+
+
+def glow_rr(buf, S, cx, cy, w, h, r, color):
+    for k in range(GLOW_PASSES, 0, -1):
+        grow = S * GLOW_MAX * (k / GLOW_PASSES)
+        fill_rr(buf, S, S, cx, cy, w + 2 * grow, h + 2 * grow, r + grow,
+                color=color, alpha=GLOW_ALPHA)
+    fill_rr(buf, S, S, cx, cy, w, h, r, color=color)
+
+
+def glow_circle(buf, S, cx, cy, rad, color):
+    for k in range(GLOW_PASSES, 0, -1):
+        grow = S * GLOW_MAX * (k / GLOW_PASSES)
+        fill_circle(buf, S, S, cx, cy, rad + grow, color, alpha=GLOW_ALPHA)
+    fill_circle(buf, S, S, cx, cy, rad, color)
 
 
 def render(S):
     buf = bytearray(S * S * 4)               # transparent RGBA
 
     def bg_grad(t):
-        # main vertical gradient with a soft highlight near the top
-        base = lerp(TOP, BOT, min(max(t, 0), 1))
-        hi = max(0.0, 1 - t * 2.2) * 0.18
+        base = lerp(BG_TOP, BG_BOT, min(max(t, 0), 1))
+        hi = max(0.0, 1 - t * 2.4) * 0.10
         return tuple(min(255, c + (255 - c) * hi) for c in base)
 
     # Background squircle (full-bleed with a hair of margin).
     m = S * 0.035
     fill_rr(buf, S, S, S / 2, S / 2, S - 2 * m, S - 2 * m, S * 0.2237, grad=bg_grad)
 
-    # Presentation screen — soft shadow then a white panel.
-    sw, sh = S * 0.66, S * 0.44
-    scx, scy = S * 0.5, S * 0.435
-    sr = S * 0.045
-    fill_rr(buf, S, S, scx, scy + S * 0.012, sw, sh, sr, color=(0, 0, 0), alpha=0.18)
-    fill_rr(buf, S, S, scx, scy, sw, sh, sr, color=WHITE)
+    # Three lime bars, bottom-aligned, the middle one tallest.
+    bw = S * 0.135
+    gap = S * 0.052
+    total = 3 * bw + 2 * gap
+    x0 = S / 2 - total / 2 + bw / 2
+    base_y = S * 0.78
+    heights = [S * 0.31, S * 0.48, S * 0.35]
+    r = bw * 0.30
+    for i, h in enumerate(heights):
+        cx = x0 + i * (bw + gap)
+        glow_rr(buf, S, cx, base_y - h / 2, bw, h, r, LIME)
 
-    # Slide content: a little bar chart + a title bar.
-    pad = S * 0.055
-    inner_l = scx - sw / 2 + pad
-    inner_r = scx + sw / 2 - pad
-    base_y = scy + sh / 2 - pad
-    top_y = scy - sh / 2 + pad
-
-    # Title accent bar (top-left of the slide).
-    tw = (inner_r - inner_l) * 0.5
-    th = S * 0.028
-    fill_rr(buf, S, S, inner_l + tw / 2, top_y + th / 2, tw, th, th / 2, color=TITLE)
-
-    # Three bars growing left-to-right.
-    bw = S * 0.072
-    gap = S * 0.045
-    chart_left = inner_l + bw / 2
-    heights = [S * 0.11, S * 0.175, S * 0.135]
-    colors = [INK1, INK2, INK3]
-    for i, (bh, col) in enumerate(zip(heights, colors)):
-        bx = chart_left + i * (bw + gap)
-        fill_rr(buf, S, S, bx, base_y - bh / 2, bw, bh, bw * 0.18, color=col)
-
-    # Laser dot in the slide's top-right corner.
-    fill_circle(buf, S, S, inner_r - S * 0.03, top_y + S * 0.045, S * 0.026, LASER)
-
-    # Stand: neck + base, in translucent white.
-    neck_w = S * 0.03
-    neck_top = scy + sh / 2
-    neck_bot = S * 0.72
-    fill_rr(buf, S, S, scx, (neck_top + neck_bot) / 2, neck_w, neck_bot - neck_top,
-            neck_w / 2, color=WHITE, alpha=0.92)
-    fill_rr(buf, S, S, scx, neck_bot + S * 0.018, S * 0.26, S * 0.036, S * 0.018,
-            color=WHITE, alpha=0.92)
+    # A dot floating above the middle bar.
+    mid_cx = x0 + (bw + gap)
+    mid_top = base_y - heights[1]
+    dot_r = S * 0.050
+    glow_circle(buf, S, mid_cx, mid_top - S * 0.03 - dot_r, dot_r, LIME)
 
     return buf
 
