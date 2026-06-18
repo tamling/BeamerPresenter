@@ -22,6 +22,19 @@ CONFIG="release"
 ARCHS="${ARCHS:-arm64 x86_64}"        # space-separated list of architectures
 SIGN_IDENTITY="${1:-}"
 
+# A universal (multi-arch) build uses Xcode's build system (xcbuild), which is
+# only in the full Xcode — not the standalone Command Line Tools. If xcode-select
+# points at the CLT, fall back to the host's native arch with a clear hint.
+DEVDIR="$(xcode-select -p 2>/dev/null || true)"
+if [ "$(echo "$ARCHS" | wc -w | tr -d ' ')" -gt 1 ] && [[ "$DEVDIR" == *CommandLineTools* ]]; then
+    echo "⚠︎ Universal build needs full Xcode (xcbuild), but xcode-select points to:"
+    echo "    $DEVDIR"
+    echo "  → For a universal (Intel + Apple Silicon) build, switch to Xcode once:"
+    echo "      sudo xcode-select -s /Applications/Xcode.app/Contents/Developer"
+    echo "  Falling back to this Mac's native arch ($(uname -m)) for now."
+    ARCHS="$(uname -m)"
+fi
+
 ARCH_FLAGS=()
 for a in $ARCHS; do ARCH_FLAGS+=(--arch "$a"); done
 
