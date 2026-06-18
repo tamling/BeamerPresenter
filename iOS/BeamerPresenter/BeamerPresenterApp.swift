@@ -17,12 +17,14 @@ extension LinearGradient {
 struct BeamerPresenterApp: App {
     @StateObject private var model = PresentationModel()
     @StateObject private var external = ExternalDisplayManager()
+    @StateObject private var presenterLink = RemoteLink(role: .presenter)
 
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .environmentObject(model)
                 .environmentObject(external)
+                .environmentObject(presenterLink)
                 .preferredColorScheme(.dark)
                 .tint(.brand)
                 .statusBarHidden(model.document != nil)

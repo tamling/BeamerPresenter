@@ -4,6 +4,7 @@ import UniformTypeIdentifiers
 
 struct ContentView: View {
     @EnvironmentObject var model: PresentationModel
+    @EnvironmentObject var presenterLink: RemoteLink
     @State private var importing = false
 
     var body: some View {
@@ -17,6 +18,42 @@ struct ContentView: View {
         .fileImporter(isPresented: $importing, allowedContentTypes: [.pdf]) { result in
             if case .success(let url) = result { model.open(url: url) }
         }
+        // Advertise to iPhone remotes while a deck is open; apply their commands.
+        .onChange(of: model.document != nil) { hasDoc in
+            if hasDoc {
+                presenterLink.onCommand = { apply($0) }
+                presenterLink.start(title: model.title)
+                pushState()
+            } else {
+                presenterLink.stop()
+            }
+        }
+        .onChange(of: model.index) { _ in pushState() }
+        .onChange(of: model.blackout) { _ in pushState() }
+        .onChange(of: model.timerRunning) { _ in pushState() }
+        .onChange(of: presenterLink.connected) { if $0 { pushState() } }
+        .onReceive(Timer.publish(every: 2, on: .main, in: .common).autoconnect()) { _ in
+            if presenterLink.connected { pushState() }
+        }
+    }
+
+    private func apply(_ command: RemoteCommand) {
+        switch command {
+        case .previous:   model.previous()
+        case .next:       model.next()
+        case .blackout:   model.toggleBlackout()
+        case .toggleTimer: model.toggleTimer()
+        case .resetTimer: model.resetTimer()
+        }
+    }
+
+    private func pushState() {
+        guard model.document != nil else { return }
+        presenterLink.send(state: PresenterState(
+            title: model.title, index: model.index, pageCount: model.pageCount,
+            note: model.note(for: model.index) ?? "",
+            blackout: model.blackout, timerRunning: model.timerRunning,
+            elapsed: Int(model.elapsed)))
     }
 }
 
@@ -24,6 +61,7 @@ struct ContentView: View {
 struct StartView: View {
     @EnvironmentObject var model: PresentationModel
     @State private var showSettings = false
+    @State private var showRemote = false
     let open: () -> Void
 
     var body: some View {
@@ -61,6 +99,11 @@ struct StartView: View {
                     }
                     .buttonStyle(.bordered).controlSize(.large)
                 }
+
+                Button { showRemote = true } label: {
+                    Label("Use as remote", systemImage: "dot.radiowaves.left.and.right").frame(maxWidth: 360)
+                }
+                .buttonStyle(.bordered).controlSize(.large)
             }
 
             if !model.recents.isEmpty {
@@ -97,6 +140,7 @@ struct StartView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(40)
         .sheet(isPresented: $showSettings) { SettingsView() }
+        .sheet(isPresented: $showRemote) { RemoteView() }
     }
 
     static let author = "Timo Amling"

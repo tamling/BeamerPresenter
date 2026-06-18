@@ -21,7 +21,7 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.beamerpresenter.ios
-        TARGETED_DEVICE_FAMILY: 2          # iPad only
+        TARGETED_DEVICE_FAMILY: "1,2"      # iPhone (remote) + iPad (presenter)
         MARKETING_VERSION: "2.0"
         CURRENT_PROJECT_VERSION: "2"
         GENERATE_INFOPLIST_FILE: NO
@@ -38,11 +38,20 @@ targets:
         CFBundleVersion: "2"
         UILaunchScreen: {}
         UIRequiresFullScreen: false
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
         UISupportedInterfaceOrientations~ipad:
           - UIInterfaceOrientationPortrait
           - UIInterfaceOrientationPortraitUpsideDown
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
+        # iPhone-as-remote talks to the iPad over the local network (Multipeer).
+        NSLocalNetworkUsageDescription: Connect to a nearby BeamerPresenter to control the presentation.
+        NSBonjourServices:
+          - _bp-remote._tcp
+          - _bp-remote._udp
         # Open PDFs from the Files app / iCloud Drive
         UIFileSharingEnabled: true
         LSSupportsOpeningDocumentsInPlace: true

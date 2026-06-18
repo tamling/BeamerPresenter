@@ -73,6 +73,11 @@ Target device: **iPad Pro 2021** (USB‑C, external display capable), iPadOS 16+
         clickers emit: Page Down / → / ↓ / space = next, Page Up / ← / ↑ =
         previous, `b` / `.` = black-out, Esc = close board. Works with any paired
         keyboard too (iPadOS 16-compatible, unlike SwiftUI `onKeyPress`).
+12. [x] **iPhone as remote** — the app is universal; **Use as remote** on the
+        start screen turns an iPhone into a remote for the presenting iPad over
+        MultipeerConnectivity (Wi-Fi/Bluetooth, auto-discovery, encrypted). It
+        shows the current slide number + speaker note and offers prev/next,
+        black-out and timer. The iPad advertises automatically while a deck is open.
 
 ## Notes / platform limits
 - **No on‑device LaTeX / PowerPoint compilation** — iOS can't spawn subprocesses.
