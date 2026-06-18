@@ -26,9 +26,11 @@ tactile keys, mono labels, a single electric-lime signal. Reference mock:
 - [x] **Thumbnail rail** — `key`-surface thumbs, current = lime 2.5px ring + glow.
 - [x] **Overview grid** — Night base, lime ring + glow on the current slide,
       mono numbers, key-surface thumbs (both platforms).
-- [x] **Whiteboard chrome** — mini toolbar (macOS BoardBar / iPad insert bar) in
-      Night surfaces; the board *content* stays light so exported PDFs and the
-      audience screen stay readable/printable.
+- [x] **Whiteboard** — fully dark: `stage` background + faint dot-grid, lime/red
+      ink, dark tables (`BoardTable` shared tints), text in `textPrimary`; QR codes
+      sit on a white chip with a quiet zone so they still scan. The dark look is
+      deliberately shared by the presenter, the audience screen *and* the PDF
+      export. Chrome (macOS BoardBar / iPad insert bar) is on Night surfaces.
 - [x] **Black-out / audience** — `blackout` fill, blinking "● Audience paused"
       pill, centred Space Grotesk message + mono clock (both platforms).
 - [x] **Settings** — system dark form on the Night base with the lime accent.
@@ -40,5 +42,7 @@ tactile keys, mono labels, a single electric-lime signal. Reference mock:
   (macOS, copied by `build-app.sh`). Regenerate the exact static weights with
   `python3 tools/make_fonts.py`. (`swift run` dev builds without the .app bundle
   fall back to system fonts.)
-- The chrome never recolours slide content — the deck stays as authored.
+- The chrome never recolours slide content — the deck stays as authored. The
+  whiteboard, however, *is* part of the Night system, so its dark look carries
+  through to export and the audience screen by design.
 - macOS port of the same spec is a separate effort (shared tokens, AppKit shell).

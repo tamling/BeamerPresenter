@@ -65,7 +65,20 @@ struct BoardCanvas: View {
         GeometryReader { geo in
             let size = geo.size
             ZStack {
-                Color.white
+                Theme.stage
+                Canvas { ctx, sz in
+                    let step = max(16, sz.width * 0.028)
+                    var y = step
+                    while y < sz.height {
+                        var x = step
+                        while x < sz.width {
+                            ctx.fill(Path(ellipseIn: CGRect(x: x - 1, y: y - 1, width: 2, height: 2)),
+                                     with: .color(Theme.textFaint.opacity(0.4)))
+                            x += step
+                        }
+                        y += step
+                    }
+                }
                 Canvas { ctx, sz in
                     for stroke in board.strokes {
                         drawStroke(ctx, points: stroke.points, widths: stroke.pointWidths,
@@ -97,16 +110,20 @@ struct BoardItemView: View {
         case .text:
             Text(item.text.isEmpty ? " " : item.text)
                 .font(.system(size: fontSize))
-                .foregroundStyle(.black)
+                .foregroundStyle(Theme.textPrimary)
                 .multilineTextAlignment(.leading)
                 .frame(width: pixelWidth, alignment: .topLeading)
         case .qr:
             Group {
                 if let image = QRCode.image(from: item.text) {
+                    // QR stays on a white chip (with quiet zone) so it scans on the dark board.
                     Image(uiImage: image).resizable().interpolation(.none).scaledToFit()
+                        .padding(pixelWidth * 0.06)
+                        .background(Color.white)
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
                 } else {
-                    RoundedRectangle(cornerRadius: 4).stroke(.gray)
-                        .overlay(Image(systemName: "qrcode").foregroundStyle(.gray))
+                    RoundedRectangle(cornerRadius: 6).stroke(Theme.hairlineStrong)
+                        .overlay(Image(systemName: "qrcode").foregroundStyle(Theme.textMuted))
                 }
             }
             .frame(width: pixelWidth, height: pixelWidth)
@@ -122,10 +139,6 @@ struct TableItemView: View {
     let width: CGFloat
     let fontSize: CGFloat
 
-    private let border = Color(white: 0.80)
-    private let header = Color(white: 0.93)
-    private let stripe = Color(white: 0.975)
-
     private var rows: [[String]] {
         text.split(separator: "\n", omittingEmptySubsequences: false)
             .map { $0.components(separatedBy: "|").map { $0.trimmingCharacters(in: .whitespaces) } }
@@ -140,30 +153,36 @@ struct TableItemView: View {
                     ForEach(0..<cols, id: \.self) { c in
                         Text(c < rows[r].count ? rows[r][c] : "")
                             .font(.system(size: fontSize, weight: r == 0 ? .semibold : .regular))
-                            .foregroundStyle(.black)
+                            .foregroundStyle(Theme.textPrimary)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.horizontal, fontSize * 0.5)
                             .padding(.vertical, fontSize * 0.32)
                             .overlay(alignment: .trailing) {
-                                if c < cols - 1 { Rectangle().fill(border).frame(width: 0.75) }
+                                if c < cols - 1 { Rectangle().fill(BoardTable.border).frame(width: 0.75) }
                             }
                     }
                 }
-                .background(rowColor(r))
+                .background(BoardTable.rowColor(r))
                 .overlay(alignment: .bottom) {
-                    if r < rows.count - 1 { Rectangle().fill(border).frame(height: 0.75) }
+                    if r < rows.count - 1 { Rectangle().fill(BoardTable.border).frame(height: 0.75) }
                 }
             }
         }
         .frame(width: width)
-        .background(Color.white)
+        .background(Theme.surface)
         .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous).strokeBorder(border, lineWidth: 1))
+        .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous).strokeBorder(BoardTable.border, lineWidth: 1))
     }
+}
 
-    private func rowColor(_ r: Int) -> Color {
+/// Shared dark-table colours (presenter, audience and export use the same look).
+enum BoardTable {
+    static let border = Theme.hairlineStrong
+    static let header = Theme.key
+    static let stripe = Color(hex: 0x21252C)
+    static func rowColor(_ r: Int) -> Color {
         if r == 0 { return header }
-        return r.isMultiple(of: 2) ? stripe : .white
+        return r.isMultiple(of: 2) ? Theme.surface : stripe
     }
 }
 
@@ -176,10 +195,6 @@ struct TableEditor: View {
     let onChange: (String) -> Void
 
     @State private var rows: [[String]]
-
-    private let border = Color(white: 0.80)
-    private let header = Color(white: 0.93)
-    private let stripe = Color(white: 0.975)
 
     init(text: String, width: CGFloat, fontSize: CGFloat, onChange: @escaping (String) -> Void) {
         self.width = width
@@ -198,26 +213,26 @@ struct TableEditor: View {
                         TextField("", text: cellBinding(r, c))
                             .textFieldStyle(.plain)
                             .font(.system(size: fontSize, weight: r == 0 ? .semibold : .regular))
-                            .foregroundColor(.black)
-                            .tint(.blue)
+                            .foregroundColor(Theme.textPrimary)
+                            .tint(Theme.accent)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.horizontal, fontSize * 0.5)
                             .padding(.vertical, fontSize * 0.32)
                             .overlay(alignment: .trailing) {
-                                if c < cols - 1 { Rectangle().fill(border).frame(width: 0.75) }
+                                if c < cols - 1 { Rectangle().fill(BoardTable.border).frame(width: 0.75) }
                             }
                     }
                 }
-                .background(rowColor(r))
+                .background(BoardTable.rowColor(r))
                 .overlay(alignment: .bottom) {
-                    if r < rows.count - 1 { Rectangle().fill(border).frame(height: 0.75) }
+                    if r < rows.count - 1 { Rectangle().fill(BoardTable.border).frame(height: 0.75) }
                 }
             }
         }
         .frame(width: width)
-        .background(Color.white)
+        .background(Theme.surface)
         .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous).strokeBorder(border, lineWidth: 1))
+        .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous).strokeBorder(BoardTable.border, lineWidth: 1))
     }
 
     private func cellBinding(_ r: Int, _ c: Int) -> Binding<String> {
@@ -228,11 +243,6 @@ struct TableEditor: View {
                 rows[r][c] = newValue
                 onChange(TableEditor.serialize(rows))
             })
-    }
-
-    private func rowColor(_ r: Int) -> Color {
-        if r == 0 { return header }
-        return r.isMultiple(of: 2) ? stripe : .white
     }
 
     static func parse(_ text: String) -> [[String]] {

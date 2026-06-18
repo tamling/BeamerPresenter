@@ -14,7 +14,7 @@ enum DeckExporter {
     static func renderBoardPDF(_ board: Whiteboard, size: CGSize) -> Data? {
         let content = BoardCanvas(board: board)
             .frame(width: size.width, height: size.height)
-            .background(Color.white)
+            .background(Theme.stage)
         let renderer = ImageRenderer(content: content)
         renderer.proposedSize = ProposedViewSize(size)
 
