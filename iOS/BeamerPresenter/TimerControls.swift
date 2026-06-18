@@ -13,6 +13,7 @@ struct TimerControls: View {
                 }
                 Text(Self.elapsedString(model.elapsed))
                     .font(.headline.monospacedDigit())
+                    .lineLimit(1).fixedSize()
                     .frame(minWidth: 64)
                 Button { model.resetTimer() } label: {
                     Image(systemName: "arrow.counterclockwise")
@@ -20,6 +21,7 @@ struct TimerControls: View {
                 Divider().frame(height: 18)
                 Text(Self.clockString())
                     .font(.subheadline.monospacedDigit())
+                    .lineLimit(1).fixedSize()
                     .foregroundStyle(.secondary)
             }
         }

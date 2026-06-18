@@ -19,6 +19,8 @@ final class PresentationModel: ObservableObject {
     @Published private(set) var pageCount = 0
     @Published private(set) var title = ""
     @Published var index = 0
+    /// Direction of the last navigation, for the slide-switch animation.
+    @Published private(set) var forward = true
 
     // Pen
     @Published var penActive = false
@@ -293,6 +295,7 @@ final class PresentationModel: ObservableObject {
     func go(to i: Int) {
         guard pageCount > 0 else { return }
         let clamped = min(max(0, i), pageCount - 1)
+        forward = clamped >= index
         if clamped != index { currentStroke = [] }
         index = clamped
     }

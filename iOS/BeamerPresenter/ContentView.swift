@@ -328,107 +328,105 @@ struct PresenterView: View {
     // MARK: - Captioned control bar (macOS-style, landscape)
 
     /// A wide control bar matching the macOS app: every control is an icon with a
-    /// small caption beneath it, grouped with spacers.
+    /// small caption beneath it, grouped with whitespace. Horizontally scrollable
+    /// so nothing is ever clipped on narrower iPads.
     private var controlBar: some View {
-        HStack(alignment: .top, spacing: 0) {
-            group {
-                captionedButton("Exit", "rectangle.portrait.and.arrow.right") { model.close() }
-                captioned("More") {
-                    Menu { overflowMenuContent } label: { Image(systemName: "ellipsis.circle") }
-                }
-            }
-
-            Spacer(minLength: 14)
-
-            group {
-                captionedButton("Prev", "chevron.left", disabled: model.index == 0) { model.previous() }
-                captioned("Slide") {
-                    Text("\(model.index + 1) / \(model.pageCount)")
-                        .font(.callout.monospacedDigit().weight(.semibold))
-                }
-                captionedButton("Next", "chevron.right",
-                                disabled: model.index + 1 >= model.pageCount) { model.next() }
-            }
-
-            Spacer(minLength: 14)
-
-            group {
-                captionedButton("Overview", "square.grid.2x2") { showOverview = true }
-                captioned("Blackout") {
-                    Menu { blackoutMenuContent } label: {
-                        Image(systemName: model.blackout ? "eye.slash.fill" : "eye.slash")
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(alignment: .top, spacing: 30) {
+                group {
+                    captionedButton("Exit", "rectangle.portrait.and.arrow.right") { model.close() }
+                    captioned("More") {
+                        Menu { overflowMenuContent } label: { Image(systemName: "ellipsis.circle") }
                     }
-                    .foregroundStyle(model.blackout ? Color.accentColor : .primary)
                 }
-                captioned("Board") {
-                    Menu { boardMenuContent } label: {
-                        Image(systemName: model.isBoardActive ? "square.and.pencil.circle.fill" : "square.and.pencil")
+
+                group {
+                    captionedButton("Prev", "chevron.left", disabled: model.index == 0) { model.previous() }
+                    captioned("Slide") {
+                        Text("\(model.index + 1) / \(model.pageCount)")
+                            .font(.callout.monospacedDigit().weight(.semibold))
+                            .lineLimit(1).fixedSize()
                     }
-                    .foregroundStyle(model.isBoardActive ? Color.accentColor : .primary)
+                    captionedButton("Next", "chevron.right",
+                                    disabled: model.index + 1 >= model.pageCount) { model.next() }
                 }
-                captionedButton("Awake", doNotDisturb ? "moon.fill" : "moon",
-                                active: doNotDisturb) { doNotDisturb.toggle() }
-                if external.isConnected {
-                    captioned("Display") { Image(systemName: "tv.fill").foregroundStyle(.green) }
+
+                group {
+                    captionedButton("Overview", "square.grid.2x2") { showOverview = true }
+                    captioned("Blackout") {
+                        Menu { blackoutMenuContent } label: {
+                            Image(systemName: model.blackout ? "eye.slash.fill" : "eye.slash")
+                        }
+                        .foregroundStyle(model.blackout ? Color.accentColor : .primary)
+                    }
+                    captioned("Board") {
+                        Menu { boardMenuContent } label: {
+                            Image(systemName: model.isBoardActive ? "square.and.pencil.circle.fill" : "square.and.pencil")
+                        }
+                        .foregroundStyle(model.isBoardActive ? Color.accentColor : .primary)
+                    }
+                    if external.isConnected {
+                        captioned("Display") { Image(systemName: "tv.fill").foregroundStyle(.green) }
+                    }
                 }
-            }
 
-            Spacer(minLength: 14)
-
-            group {
-                captionedButton("Pen", "pencil.tip", active: model.penActive) { model.togglePen() }
-                captionedButton("Laser", "dot.circle.and.cursorarrow", active: model.laserActive) { model.toggleLaser() }
-                colourStrip
-                captioned("Weight") {
-                    Menu {
-                        Section("Line weight") {
-                            ForEach(widths, id: \.0) { name, w in
-                                Button { model.penWidth = w; model.penActive = true } label: {
-                                    Label(name, systemImage: model.penWidth == w ? "checkmark" : "scribble")
+                group {
+                    captioned("Pen") {
+                        Menu {
+                            Section("Line weight") {
+                                ForEach(widths, id: \.0) { name, w in
+                                    Button { model.penWidth = w; model.penActive = true } label: {
+                                        Label(name, systemImage: model.penWidth == w ? "checkmark" : "scribble")
+                                    }
                                 }
                             }
+                            Toggle("Apple Pencil only", isOn: $pencilOnly)
+                        } label: {
+                            Image(systemName: "pencil.tip")
+                        } primaryAction: { model.togglePen() }
+                        .foregroundStyle(model.penActive ? model.penColor : .primary)
+                    }
+                    captionedButton("Laser", "dot.circle.and.cursorarrow", active: model.laserActive) { model.toggleLaser() }
+                    colourStrip
+                    captionedButton("Undo", "arrow.uturn.backward",
+                                    disabled: model.isBoardActive ? !model.hasBoardInk : !model.hasInk) {
+                        model.isBoardActive ? model.boardUndoInk() : model.undoInk()
+                    }
+                    captionedButton("Clear", "trash",
+                                    disabled: model.isBoardActive ? !model.hasBoardInk : !model.hasInk) {
+                        model.isBoardActive ? model.boardClearInk() : model.clearInk()
+                    }
+                }
+
+                TimelineView(.periodic(from: .now, by: 1)) { _ in
+                    group {
+                        captionedButton(model.timerRunning ? "Pause" : "Start",
+                                        model.timerRunning ? "pause" : "play",
+                                        active: !model.timerRunning) { model.toggleTimer() }
+                        captionedButton("Reset", "arrow.counterclockwise") { model.resetTimer() }
+                        captioned("Elapsed") {
+                            Text(TimerControls.elapsedString(model.elapsed))
+                                .font(.callout.monospacedDigit().weight(.semibold))
+                                .lineLimit(1).fixedSize()
                         }
-                        Toggle("Apple Pencil only", isOn: $pencilOnly)
-                    } label: { Image(systemName: "lineweight") }
-                }
-                captionedButton("Undo", "arrow.uturn.backward",
-                                disabled: model.isBoardActive ? !model.hasBoardInk : !model.hasInk) {
-                    model.isBoardActive ? model.boardUndoInk() : model.undoInk()
-                }
-                captionedButton("Clear", "trash",
-                                disabled: model.isBoardActive ? !model.hasBoardInk : !model.hasInk) {
-                    model.isBoardActive ? model.boardClearInk() : model.clearInk()
-                }
-            }
-
-            Spacer(minLength: 14)
-
-            TimelineView(.periodic(from: .now, by: 1)) { _ in
-                group {
-                    captionedButton(model.timerRunning ? "Pause" : "Start",
-                                    model.timerRunning ? "pause" : "play",
-                                    active: !model.timerRunning) { model.toggleTimer() }
-                    captionedButton("Reset", "arrow.counterclockwise") { model.resetTimer() }
-                    captioned("Elapsed") {
-                        Text(TimerControls.elapsedString(model.elapsed))
-                            .font(.callout.monospacedDigit().weight(.semibold))
-                    }
-                    captioned("Time") {
-                        Text(TimerControls.clockString())
-                            .font(.callout.monospacedDigit()).foregroundStyle(.secondary)
+                        captioned("Time") {
+                            Text(TimerControls.clockString())
+                                .font(.callout.monospacedDigit()).foregroundStyle(.secondary)
+                                .lineLimit(1).fixedSize()
+                        }
                     }
                 }
             }
+            .padding(.horizontal, 22)
         }
         .font(.system(size: 18, weight: .regular))
-        .padding(.horizontal, 20)
         .padding(.vertical, 8)
         .background(.ultraThinMaterial)
     }
 
     /// A cluster of related controls, spaced for breathing room (Keynote-style).
     private func group<C: View>(@ViewBuilder _ content: () -> C) -> some View {
-        HStack(alignment: .top, spacing: 20) { content() }
+        HStack(alignment: .top, spacing: 18) { content() }
     }
 
     /// The pen colours as one tidy dot row under a single caption (no six labels).
@@ -475,6 +473,7 @@ struct PresenterView: View {
     @ViewBuilder private var overflowMenuContent: some View {
         Button { openPicker() } label: { Label("Open PDF…", systemImage: "folder") }
         Button { exportAndShare() } label: { Label("Export & Share…", systemImage: "square.and.arrow.up") }
+        Toggle(isOn: $doNotDisturb) { Label("Keep screen awake", systemImage: "moon") }
         Button { showSettings = true } label: { Label("Settings…", systemImage: "gearshape") }
         Divider()
         Button { model.close() } label: { Label("Back to start", systemImage: "house") }

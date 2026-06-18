@@ -56,6 +56,7 @@ struct SlideView: View {
                     .allowsHitTesting(false)
                 }
             }
+            .slideSwitch(index: model.index, forward: model.forward)
         }
     }
 
@@ -187,7 +188,37 @@ struct AudienceSlideView: View {
                     BlackoutView(model: model)
                 }
             }
+            .slideSwitch(index: model.index, forward: model.forward)
         }
+    }
+}
+
+/// A small switch animation when the slide index changes: the new slide nudges
+/// in from the side (direction of travel) with a brief fade.
+private struct SlideSwitch: ViewModifier {
+    let index: Int
+    let forward: Bool
+    @State private var offset: CGFloat = 0
+    @State private var opacity: Double = 1
+
+    func body(content: Content) -> some View {
+        content
+            .offset(x: offset)
+            .opacity(opacity)
+            .onChange(of: index) { _ in
+                offset = forward ? 34 : -34
+                opacity = 0.55
+                withAnimation(.easeOut(duration: 0.28)) {
+                    offset = 0
+                    opacity = 1
+                }
+            }
+    }
+}
+
+extension View {
+    func slideSwitch(index: Int, forward: Bool) -> some View {
+        modifier(SlideSwitch(index: index, forward: forward))
     }
 }
 
