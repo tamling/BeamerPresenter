@@ -318,6 +318,8 @@ struct PresenterView: View {
             TimerControls()
             Spacer(minLength: 8)
 
+            Button { model.penActive = false; model.laserActive = false } label: { Image(systemName: "cursorarrow") }
+                .foregroundStyle(!model.penActive && !model.laserActive ? Color.accentColor : .primary)
             Button { model.toggleLaser() } label: { Image(systemName: "dot.radiowaves.left.and.right") }
                 .foregroundStyle(model.laserActive ? .red : .primary)
 
@@ -389,6 +391,10 @@ struct PresenterView: View {
                 }
 
                 group {
+                    captionedButton("Cursor", "cursorarrow",
+                                    active: !model.penActive && !model.laserActive) {
+                        model.penActive = false; model.laserActive = false
+                    }
                     captioned("Pen") {
                         Menu {
                             Section("Line weight") {

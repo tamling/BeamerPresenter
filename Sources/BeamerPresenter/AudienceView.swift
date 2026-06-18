@@ -31,6 +31,7 @@ private struct BlackScreenView: View {
     @AppStorage("blackScreenImage") private var imagePath = ""
 
     @State private var now = Date()
+    @State private var dotOn = true
     private let tick = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     private var trimmed: String { message.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -55,10 +56,13 @@ private struct BlackScreenView: View {
                         Circle().fill(Theme.statusOk)
                             .frame(width: max(7, s * 0.012), height: max(7, s * 0.012))
                             .shadow(color: Theme.statusOk.opacity(0.7), radius: 4)
+                            .opacity(dotOn ? 1 : 0.2)
+                            .animation(.easeInOut(duration: 1.4).repeatForever(autoreverses: true), value: dotOn)
                         Text("Audience paused")
                             .font(.mono(max(11, s * 0.018))).textCase(.uppercase).tracking(2)
                             .foregroundStyle(Theme.textMuted)
                     }
+                    .onAppear { dotOn.toggle() }
                     if hasMessage {
                         Text(trimmed)
                             .font(.display(s * 0.10))

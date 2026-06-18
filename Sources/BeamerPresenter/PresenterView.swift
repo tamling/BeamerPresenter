@@ -388,6 +388,7 @@ private struct ControlBar: View {
             groupDivider
 
             // Annotate
+            tool("Cursor", "cursorarrow", active: state.tool == .none) { state.tool = .none }
             tool("Pen", "pencil.tip", active: state.tool == .pen) { state.toggleTool(.pen) }
             tool("Laser", "dot.circle.and.cursorarrow", active: state.tool == .laser) { state.toggleTool(.laser) }
 

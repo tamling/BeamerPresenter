@@ -114,39 +114,39 @@ struct WelcomeView: View {
     // MARK: - Right (library: favourites, recents, drop zone)
 
     private var library: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 26) {
-                VStack(alignment: .leading, spacing: 12) {
-                    sectionHeader("Favorite Folders") {
-                        smallKeyButton("plus") { addFavoriteFolder() }
-                            .help("Add a folder of presentations")
-                    }
-                    if favorites.isEmpty {
-                        dashedBox("No favourite folders yet — drop a folder here to pin it.")
-                    } else {
-                        VStack(spacing: 8) { ForEach(favorites, id: \.self) { favoriteCard($0) } }
-                    }
+        VStack(alignment: .leading, spacing: 26) {
+            VStack(alignment: .leading, spacing: 12) {
+                sectionHeader("Favorite Folders") {
+                    smallKeyButton("plus") { addFavoriteFolder() }
+                        .help("Add a folder of presentations")
                 }
-
-                VStack(alignment: .leading, spacing: 12) {
-                    sectionHeader("Recent") {
-                        if !recents.isEmpty {
-                            Button("Clear") { RecentFiles.clear(); recents = [] }
-                                .buttonStyle(.plain)
-                                .font(.ui(13, "Medium")).foregroundStyle(Theme.accent)
-                        }
-                    }
-                    if recents.isEmpty {
-                        dashedBox("No recent presentations yet.")
-                    } else {
-                        VStack(spacing: 8) { ForEach(recents, id: \.self) { recentCard($0) } }
-                    }
+                if favorites.isEmpty {
+                    dashedBox("No favourite folders yet — drop a folder here to pin it.")
+                } else {
+                    VStack(spacing: 8) { ForEach(favorites, id: \.self) { favoriteCard($0) } }
                 }
-
-                dropZone.frame(minHeight: 240)
             }
-            .padding(28)
+
+            VStack(alignment: .leading, spacing: 12) {
+                sectionHeader("Recent") {
+                    if !recents.isEmpty {
+                        Button("Clear") { RecentFiles.clear(); recents = [] }
+                            .buttonStyle(.plain)
+                            .font(.ui(13, "Medium")).foregroundStyle(Theme.accent)
+                    }
+                }
+                if recents.isEmpty {
+                    dashedBox("No recent presentations yet.")
+                } else {
+                    VStack(spacing: 8) {
+                        ForEach(Array(recents.prefix(5)), id: \.self) { recentCard($0) }
+                    }
+                }
+            }
+
+            dropZone.frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        .padding(28)
         .background(Theme.base)
     }
 
@@ -296,8 +296,10 @@ struct WelcomeView: View {
                 }
                 Text("Drop a PDF, .tex or .pptx to open")
                     .font(.display(18)).foregroundStyle(Theme.textPrimary)
+                    .multilineTextAlignment(.center)
                 Text("…or drop a folder to add it to favourites")
                     .font(.ui(13)).foregroundStyle(Theme.textFaint)
+                    .multilineTextAlignment(.center)
             }
         }
         .frame(maxWidth: .infinity, minHeight: 240)
