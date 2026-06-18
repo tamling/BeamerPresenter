@@ -46,9 +46,8 @@ struct WelcomeView: View {
     private var sidebarBranding: some View {
         VStack(alignment: .leading, spacing: 22) {
             VStack(alignment: .leading, spacing: 10) {
-                Image(systemName: "chart.bar.fill")
-                    .font(.system(size: 30, weight: .bold))
-                    .foregroundStyle(Theme.accent)
+                BrandMark()
+                    .padding(15)
                     .frame(width: 64, height: 64)
                     .background(Theme.key, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                     .overlay(RoundedRectangle(cornerRadius: 16).stroke(Theme.hairline, lineWidth: 1))

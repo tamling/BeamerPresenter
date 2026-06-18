@@ -90,6 +90,41 @@ struct LivePill: View {
     }
 }
 
+/// The app's brand mark — the glowing lime bar chart from the app icon (three
+/// rounded bars, the middle tallest, with a dot floating above it). Fills its
+/// frame; give it a key-tile background at the call site.
+struct BrandMark: View {
+    var color: Color = Theme.accent
+
+    var body: some View {
+        GeometryReader { geo in
+            let w = geo.size.width, h = geo.size.height
+            let bw = w * 0.18
+            let gap = w * 0.09
+            let total = 3 * bw + 2 * gap
+            let x0 = (w - total) / 2 + bw / 2
+            let baseY = h * 0.88
+            let heights = [h * 0.40, h * 0.62, h * 0.46]
+            let r = bw * 0.32
+            let midX = x0 + (bw + gap)
+            let dotR = w * 0.085
+
+            ZStack {
+                ForEach(0..<3, id: \.self) { i in
+                    RoundedRectangle(cornerRadius: r, style: .continuous)
+                        .fill(color)
+                        .frame(width: bw, height: heights[i])
+                        .position(x: x0 + CGFloat(i) * (bw + gap), y: baseY - heights[i] / 2)
+                }
+                Circle().fill(color)
+                    .frame(width: dotR * 2, height: dotR * 2)
+                    .position(x: midX, y: baseY - heights[1] - gap * 0.7 - dotR)
+            }
+            .shadow(color: color.opacity(0.5), radius: w * 0.045)
+        }
+    }
+}
+
 extension View {
     /// A standard Night card surface with hairline border.
     func nightCard(_ radius: CGFloat = 12) -> some View {

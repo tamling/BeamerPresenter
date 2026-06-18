@@ -80,9 +80,8 @@ struct StartView: View {
 
                 // Identity
                 VStack(spacing: 10) {
-                    Image(systemName: "chart.bar.fill")
-                        .font(.system(size: 40, weight: .bold))
-                        .foregroundStyle(Theme.accent)
+                    BrandMark()
+                        .padding(22)
                         .frame(width: 92, height: 92)
                         .background(Theme.key, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
                         .overlay(RoundedRectangle(cornerRadius: 22).stroke(Theme.hairline, lineWidth: 1))
