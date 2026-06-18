@@ -18,7 +18,7 @@ struct SlideView: View {
                 if model.isBoardActive, let board = model.activeBoard {
                     BoardCanvas(board: board, liveStroke: model.boardStroke,
                                 liveColor: model.penColor, liveWidth: model.penWidth,
-                                liveWidths: model.boardStrokeWidths)
+                                liveWidths: model.boardStrokeWidths, style: model.boardStyle)
                     // Pen → Apple-Pencil-aware overlay; otherwise laser / item handling.
                     if model.penActive {
                         InkingOverlay(pencilOnly: pencilOnly, baseWidth: model.penWidth,
@@ -251,7 +251,7 @@ struct AudienceSlideView: View {
             let size = geo.size
             ZStack {
                 if let board = model.activeBoard {
-                    BoardCanvas(board: board)
+                    BoardCanvas(board: board, style: model.boardStyle)
                 } else {
                     Color.black
                     PDFPageView(document: model.document, pageIndex: model.index,

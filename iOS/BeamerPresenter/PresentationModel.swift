@@ -160,6 +160,15 @@ final class PresentationModel: ObservableObject {
         lectureMinutes > 0 ? TimeInterval(lectureMinutes * 60) - elapsed : nil
     }
 
+    /// Whiteboard appearance on screen: a white board or the dark Night board.
+    /// Persisted across launches. The PDF/board export always stays light.
+    @Published var boardLight: Bool = UserDefaults.standard.bool(forKey: "boardLight") {
+        didSet { UserDefaults.standard.set(boardLight, forKey: "boardLight") }
+    }
+
+    /// The style the on-screen board renders in (presenter + audience).
+    var boardStyle: BoardStyle { boardLight ? .light : .dark }
+
     // Your own free-form notes for this deck, autosaved per deck in UserDefaults.
     @Published var scratch: String = ""
 

@@ -719,6 +719,12 @@ struct PresenterView: View {
                 }
             insertButton("QR", "qrcode") { model.addItem(.qr) }
 
+            Divider().frame(height: 22)
+            insertButton(model.boardLight ? "White" : "Black",
+                         model.boardLight ? "sun.max.fill" : "moon.stars.fill") {
+                model.boardLight.toggle()
+            }
+
             if let item = model.selectedItem(), item.kind != .table {
                 Divider().frame(height: 22)
                 TextField(item.kind == .qr ? "URL / text to encode" : "Text",
