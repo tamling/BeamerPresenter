@@ -12,9 +12,9 @@ enum DeckExporter {
     /// One board page as standalone single-page PDF data, via SwiftUI's
     /// `ImageRenderer` (board content is vector, so it stays crisp).
     static func renderBoardPDF(_ board: Whiteboard, size: CGSize) -> Data? {
-        let content = BoardCanvas(board: board)
+        let content = BoardCanvas(board: board, style: .light)
             .frame(width: size.width, height: size.height)
-            .background(Theme.stage)
+            .background(Color.white)
         let renderer = ImageRenderer(content: content)
         renderer.proposedSize = ProposedViewSize(size)
 

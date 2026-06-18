@@ -5,30 +5,76 @@ import UniformTypeIdentifiers
 
 // MARK: - Pure rendering (presenter, audience, and export all share this)
 
-/// Renders a board's white background, committed ink, and items at a given size.
+/// The palette a board renders in. Presenter and the audience screen use `.dark`
+/// (the Night look); the PDF/board export uses `.light` so printed pages stay
+/// ink-on-white and readable on paper.
+struct BoardStyle {
+    var background: Color
+    var showGrid: Bool
+    var gridDot: Color
+    var text: Color
+    var tableBorder: Color
+    var tableHeader: Color
+    var tableSurface: Color
+    var tableStripe: Color
+
+    func rowColor(_ r: Int) -> Color {
+        if r == 0 { return tableHeader }
+        return r.isMultiple(of: 2) ? tableSurface : tableStripe
+    }
+
+    /// Night look — presenter + audience.
+    static let dark = BoardStyle(
+        background: Theme.stage,
+        showGrid: true,
+        gridDot: Theme.textFaint.opacity(0.4),
+        text: Theme.textPrimary,
+        tableBorder: Theme.hairlineStrong,
+        tableHeader: Theme.key,
+        tableSurface: Theme.surface,
+        tableStripe: Color(hex: 0x21252C)
+    )
+
+    /// Printable look — PDF / board export. Ink-on-white, no grid.
+    static let light = BoardStyle(
+        background: .white,
+        showGrid: false,
+        gridDot: .clear,
+        text: .black,
+        tableBorder: Color(white: 0.80),
+        tableHeader: Color(white: 0.93),
+        tableSurface: .white,
+        tableStripe: Color(white: 0.975)
+    )
+}
+
+/// Renders a board's background, committed ink, and items at a given size.
 /// No environment or interaction — so it can also be handed to `ImageRenderer`
 /// for export. Apply `.aspectRatio` on the caller's side.
 struct BoardCanvas: View {
     let board: Whiteboard
     var liveStroke: [CGPoint] = []
     var liveColor: Color = .red
+    var style: BoardStyle = .dark
 
     var body: some View {
         GeometryReader { geo in
             let size = geo.size
             ZStack {
-                Theme.stage
-                Canvas { ctx, sz in
-                    let step = max(16, sz.width * 0.028)
-                    var y = step
-                    while y < sz.height {
-                        var x = step
-                        while x < sz.width {
-                            ctx.fill(Path(ellipseIn: CGRect(x: x - 1, y: y - 1, width: 2, height: 2)),
-                                     with: .color(Theme.textFaint.opacity(0.4)))
-                            x += step
+                style.background
+                if style.showGrid {
+                    Canvas { ctx, sz in
+                        let step = max(16, sz.width * 0.028)
+                        var y = step
+                        while y < sz.height {
+                            var x = step
+                            while x < sz.width {
+                                ctx.fill(Path(ellipseIn: CGRect(x: x - 1, y: y - 1, width: 2, height: 2)),
+                                         with: .color(style.gridDot))
+                                x += step
+                            }
+                            y += step
                         }
-                        y += step
                     }
                 }
                 Canvas { ctx, sz in
@@ -44,7 +90,7 @@ struct BoardCanvas: View {
                     }
                 }
                 ForEach(board.items) { item in
-                    BoardItemView(item: item, boardSize: size)
+                    BoardItemView(item: item, boardSize: size, style: style)
                         .position(x: item.center.x * size.width,
                                   y: item.center.y * size.height)
                 }
@@ -57,6 +103,7 @@ struct BoardCanvas: View {
 struct BoardItemView: View {
     let item: BoardItem
     let boardSize: CGSize
+    var style: BoardStyle = .dark
 
     private var pixelWidth: CGFloat { max(8, item.width * boardSize.width) }
     private var fontSize: CGFloat { max(6, item.fontScale * boardSize.width) }
@@ -66,25 +113,26 @@ struct BoardItemView: View {
         case .text:
             Text(item.text.isEmpty ? " " : item.text)
                 .font(.system(size: fontSize))
-                .foregroundStyle(Theme.textPrimary)
+                .foregroundStyle(style.text)
                 .multilineTextAlignment(.leading)
                 .frame(width: pixelWidth, alignment: .topLeading)
         case .qr:
             Group {
                 if let image = QRCode.image(from: item.text) {
-                    // QR stays on a white chip (with quiet zone) so it scans on the dark board.
+                    // QR always sits on a white chip with a quiet zone so it scans
+                    // on the dark board (and is seamless on the light export).
                     Image(nsImage: image).resizable().interpolation(.none).scaledToFit()
                         .padding(pixelWidth * 0.06)
                         .background(Color.white)
                         .clipShape(RoundedRectangle(cornerRadius: 6))
                 } else {
-                    RoundedRectangle(cornerRadius: 6).stroke(Theme.hairlineStrong)
-                        .overlay(Image(systemName: "qrcode").foregroundStyle(Theme.textMuted))
+                    RoundedRectangle(cornerRadius: 6).stroke(style.tableBorder)
+                        .overlay(Image(systemName: "qrcode").foregroundStyle(style.text.opacity(0.5)))
                 }
             }
             .frame(width: pixelWidth, height: pixelWidth)
         case .table:
-            TableItemView(text: item.text, width: pixelWidth, fontSize: fontSize)
+            TableItemView(text: item.text, width: pixelWidth, fontSize: fontSize, style: style)
         }
     }
 }
@@ -96,6 +144,7 @@ struct TableItemView: View {
     let text: String
     let width: CGFloat
     let fontSize: CGFloat
+    var style: BoardStyle = .dark
 
     private var rows: [[String]] {
         text.split(separator: "\n", omittingEmptySubsequences: false)
@@ -111,36 +160,25 @@ struct TableItemView: View {
                     ForEach(0..<cols, id: \.self) { c in
                         Text(c < rows[r].count ? rows[r][c] : "")
                             .font(.system(size: fontSize, weight: r == 0 ? .semibold : .regular))
-                            .foregroundStyle(Theme.textPrimary)
+                            .foregroundStyle(style.text)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.horizontal, fontSize * 0.5)
                             .padding(.vertical, fontSize * 0.32)
                             .overlay(alignment: .trailing) {
-                                if c < cols - 1 { Rectangle().fill(BoardTable.border).frame(width: 0.75) }
+                                if c < cols - 1 { Rectangle().fill(style.tableBorder).frame(width: 0.75) }
                             }
                     }
                 }
-                .background(BoardTable.rowColor(r))
+                .background(style.rowColor(r))
                 .overlay(alignment: .bottom) {
-                    if r < rows.count - 1 { Rectangle().fill(BoardTable.border).frame(height: 0.75) }
+                    if r < rows.count - 1 { Rectangle().fill(style.tableBorder).frame(height: 0.75) }
                 }
             }
         }
         .frame(width: width)
-        .background(Theme.surface)
+        .background(style.tableSurface)
         .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous).strokeBorder(BoardTable.border, lineWidth: 1))
-    }
-}
-
-/// Shared dark-table colours (presenter, audience and export use the same look).
-enum BoardTable {
-    static let border = Theme.hairlineStrong
-    static let header = Theme.key
-    static let stripe = Color(hex: 0x21252C)
-    static func rowColor(_ r: Int) -> Color {
-        if r == 0 { return header }
-        return r.isMultiple(of: 2) ? Theme.surface : stripe
+        .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous).strokeBorder(style.tableBorder, lineWidth: 1))
     }
 }
 
@@ -475,9 +513,9 @@ struct TableSizePicker: View {
 enum BoardExporter {
     /// One board page as standalone PDF data at the given point size.
     static func renderPDFData(board: Whiteboard, size: CGSize) -> Data? {
-        let content = BoardCanvas(board: board)
+        let content = BoardCanvas(board: board, style: .light)
             .frame(width: size.width, height: size.height)
-            .background(Theme.stage)
+            .background(Color.white)
 
         let renderer = ImageRenderer(content: content)
         renderer.proposedSize = ProposedViewSize(size)

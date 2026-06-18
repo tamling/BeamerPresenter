@@ -26,11 +26,13 @@ tactile keys, mono labels, a single electric-lime signal. Reference mock:
 - [x] **Thumbnail rail** — `key`-surface thumbs, current = lime 2.5px ring + glow.
 - [x] **Overview grid** — Night base, lime ring + glow on the current slide,
       mono numbers, key-surface thumbs (both platforms).
-- [x] **Whiteboard** — fully dark: `stage` background + faint dot-grid, lime/red
-      ink, dark tables (`BoardTable` shared tints), text in `textPrimary`; QR codes
-      sit on a white chip with a quiet zone so they still scan. The dark look is
-      deliberately shared by the presenter, the audience screen *and* the PDF
-      export. Chrome (macOS BoardBar / iPad insert bar) is on Night surfaces.
+- [x] **Whiteboard** — dark on screen, light on paper. A shared `BoardStyle`
+      drives the palette: `.dark` (Night `stage` + faint dot-grid, light text,
+      dark tables) for the presenter *and* the audience screen; `.light`
+      (ink-on-white, no grid, light tables) for the PDF / board export so printed
+      pages stay readable. QR codes always sit on a white chip with a quiet zone
+      so they scan on either background. Chrome (macOS BoardBar / iPad insert bar)
+      is on Night surfaces.
 - [x] **Black-out / audience** — `blackout` fill, blinking "● Audience paused"
       pill, centred Space Grotesk message + mono clock (both platforms).
 - [x] **Settings** — system dark form on the Night base with the lime accent.
@@ -43,6 +45,6 @@ tactile keys, mono labels, a single electric-lime signal. Reference mock:
   `python3 tools/make_fonts.py`. (`swift run` dev builds without the .app bundle
   fall back to system fonts.)
 - The chrome never recolours slide content — the deck stays as authored. The
-  whiteboard, however, *is* part of the Night system, so its dark look carries
-  through to export and the audience screen by design.
+  whiteboard is dark while presenting (presenter + audience) but exports light
+  (ink-on-white) so printed/handed-out PDFs stay readable — see `BoardStyle`.
 - macOS port of the same spec is a separate effort (shared tokens, AppKit shell).
