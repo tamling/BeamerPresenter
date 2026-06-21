@@ -1,9 +1,14 @@
 # Changelog
 
-## v2.0 — 2026-06-17
+## v3.0 — 2026-06-21
 
 BeamerPresenter for **macOS** and **iPadOS**: present LaTeX Beamer / PDF decks
 with a private presenter console and a clean audience screen.
+
+New since the first cut: a fully dark whiteboard with a black/white toggle (and
+a light, printable export), a lecture-length countdown with a custom value, a
+pairing code for the iPhone remote, a save prompt for unsaved annotations, the
+new "two screens" app logo, and a build date + commit stamp shown in About.
 
 ### Highlights
 

@@ -38,6 +38,18 @@ fi
 ARCH_FLAGS=()
 for a in $ARCHS; do ARCH_FLAGS+=(--arch "$a"); done
 
+# Stamp the build date + commit into BuildInfo.swift so the app can show them.
+echo "▶︎ Stamping build info…"
+BUILD_DATE="$(date -u +"%Y-%m-%d %H:%M UTC")"
+COMMIT="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
+cat > Sources/BeamerPresenter/BuildInfo.swift <<EOF
+// Generated at build time by build-app.sh — do not edit.
+enum BuildInfo {
+    static let date = "$BUILD_DATE"
+    static let commit = "$COMMIT"
+}
+EOF
+
 echo "▶︎ Building ($CONFIG, $ARCHS)…"
 swift build -c "$CONFIG" "${ARCH_FLAGS[@]}"
 

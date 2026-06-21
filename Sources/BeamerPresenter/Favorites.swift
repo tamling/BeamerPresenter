@@ -52,14 +52,16 @@ enum Favorites {
 /// App identity for the About panel, splash, and menus.
 enum AppInfo {
     static let name = "BeamerPresenter"
-    static let releaseDate = "2026-06-17"
 
     static var version: String {
-        (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "2.0"
+        (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "3.0"
     }
 
-    /// e.g. "Version 1.0 · 2026-06-17"
-    static var versionLine: String { "Version \(version) · \(releaseDate)" }
+    /// e.g. "Version 3.0"
+    static var versionLine: String { "Version \(version)" }
+
+    /// e.g. "Build 2026-06-21 · 644404c" — stamped at build time (see BuildInfo).
+    static var buildLine: String { "Build \(BuildInfo.date) · \(BuildInfo.commit)" }
 
     static var copyright: String { "© 2026" }
 }

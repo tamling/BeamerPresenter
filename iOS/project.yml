@@ -18,12 +18,25 @@ targets:
     platform: iOS
     sources:
       - BeamerPresenter
+    preBuildScripts:
+      - name: Stamp build date + commit
+        basedOnDependencyAnalysis: false
+        script: |
+          DATE=$(date -u +"%Y-%m-%d %H:%M UTC")
+          COMMIT=$(git -C "$SRCROOT" rev-parse --short HEAD 2>/dev/null || echo unknown)
+          cat > "$SRCROOT/BeamerPresenter/BuildInfo.swift" <<EOF
+          // Generated at build time — do not edit.
+          enum BuildInfo {
+              static let date = "$DATE"
+              static let commit = "$COMMIT"
+          }
+          EOF
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.beamerpresenter.ios
         TARGETED_DEVICE_FAMILY: "1,2"      # iPhone (remote) + iPad (presenter)
-        MARKETING_VERSION: "2.0"
-        CURRENT_PROJECT_VERSION: "2"
+        MARKETING_VERSION: "3.0"
+        CURRENT_PROJECT_VERSION: "3"
         GENERATE_INFOPLIST_FILE: NO
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
@@ -34,8 +47,8 @@ targets:
       path: BeamerPresenter/Info.plist
       properties:
         CFBundleDisplayName: BeamerPresenter
-        CFBundleShortVersionString: "2.0"
-        CFBundleVersion: "2"
+        CFBundleShortVersionString: "3.0"
+        CFBundleVersion: "3"
         UIAppFonts:
           - SpaceGrotesk-Bold.ttf
           - IBMPlexSans-Regular.ttf
