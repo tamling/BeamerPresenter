@@ -185,6 +185,7 @@ struct PresenterView: View {
     @State private var showTablePicker = false
     @State private var showCustomTarget = false
     @State private var customTargetText = ""
+    @State private var showCloseConfirm = false
     @AppStorage("doNotDisturb") private var doNotDisturb = false
     @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var landscape = false
@@ -271,6 +272,14 @@ struct PresenterView: View {
         } message: {
             Text("Lecture length in minutes.")
         }
+        .confirmationDialog("Save your changes?", isPresented: $showCloseConfirm,
+                            titleVisibility: .visible) {
+            Button("Export & Share…") { exportAndShare() }
+            Button("Discard & leave", role: .destructive) { model.close() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("You added ink or whiteboards. Export them as a PDF before leaving, or discard them.")
+        }
     }
 
     /// Bake ink + boards into a new PDF in the temp dir and present the share sheet.
@@ -281,14 +290,20 @@ struct PresenterView: View {
         if DeckExporter.export(model: model, to: dest) != nil {
             exportURL = dest
             showShare = true
+            model.markSaved()   // the ink + whiteboards are now in a shareable PDF
         }
+    }
+
+    /// Closing would discard unexported ink/whiteboards — ask first.
+    private func requestClose() {
+        if model.hasUnsavedChanges { showCloseConfirm = true } else { model.close() }
     }
 
     private var toolbar: some View {
         HStack(spacing: 14) {
             // Exit to the start screen (distinct icon so it's not confused with
             // the previous-slide arrow).
-            Button { model.close() } label: { Image(systemName: "xmark") }
+            Button { requestClose() } label: { Image(systemName: "xmark") }
 
             overflowMenu
 
@@ -368,7 +383,7 @@ struct PresenterView: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(alignment: .top, spacing: 30) {
                 group {
-                    captionedButton("Exit", "rectangle.portrait.and.arrow.right") { model.close() }
+                    captionedButton("Exit", "rectangle.portrait.and.arrow.right") { requestClose() }
                     captioned("More") {
                         Menu { overflowMenuContent } label: { keyGlyph("ellipsis.circle") }
                     }
@@ -648,7 +663,7 @@ struct PresenterView: View {
         Toggle(isOn: $doNotDisturb) { Label("Keep screen awake", systemImage: "moon") }
         Button { showSettings = true } label: { Label("Settings…", systemImage: "gearshape") }
         Divider()
-        Button { model.close() } label: { Label("Back to start", systemImage: "house") }
+        Button { requestClose() } label: { Label("Back to start", systemImage: "house") }
     }
 
     private var blackoutButton: some View {

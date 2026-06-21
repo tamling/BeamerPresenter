@@ -151,6 +151,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         !UserDefaults.standard.bool(forKey: Prefs.backgroundMode)
     }
 
+    /// On ⌘Q / Quit, offer to save unexported ink + whiteboards first.
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        confirmDiscardOrSave() ? .terminateNow : .terminateCancel
+    }
+
     func applicationWillTerminate(_ notification: Notification) {
         state.recordCurrentSession()
         state.saveScratch()
@@ -165,7 +170,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         alert.messageText = "Hide \(AppInfo.name) to the menu bar?"
         alert.informativeText = "It keeps running in the menu bar — click its icon to come back, "
             + "or Quit (⌘Q) to exit.\n\nSave & Hide also saves your notes"
-            + (state.hasAnnotations ? " and exports the ink + whiteboards as a PDF." : ".")
+            + (state.hasUnsavedChanges ? " and exports the ink + whiteboards as a PDF." : ".")
         alert.addButton(withTitle: "Save & Hide")
         alert.addButton(withTitle: "Hide")
         alert.addButton(withTitle: "Quit")
@@ -174,7 +179,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         switch alert.runModal() {
         case .alertFirstButtonReturn:           // Save & Hide
             state.saveScratch()
-            if state.hasAnnotations {           // export ink + boards as a new PDF
+            if state.hasUnsavedChanges {        // export ink + boards as a new PDF
                 runPresentationExport(showSummary: false)
             }
             hideToMenuBar()
@@ -404,7 +409,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
 
     @objc private func closePresentation(_ sender: Any?) {
         guard state.isLoaded else { return }
-        state.unload()
+        if confirmDiscardOrSave() { state.unload() }
+    }
+
+    /// If the open deck has unexported ink/whiteboards, ask whether to save them
+    /// (export to PDF), discard them, or cancel. Returns `true` if the caller may
+    /// proceed (saved or discarded), `false` if the user cancelled.
+    @discardableResult
+    private func confirmDiscardOrSave() -> Bool {
+        guard state.isLoaded, state.hasUnsavedChanges else { return true }
+        let alert = NSAlert()
+        let name = state.title.isEmpty ? "this presentation" : "“\(state.title)”"
+        alert.messageText = "Save your changes to \(name)?"
+        alert.informativeText = "You added ink or whiteboards. Save them as a new PDF "
+            + "(the original file is left untouched), or discard them."
+        alert.addButton(withTitle: "Save…")
+        alert.addButton(withTitle: "Discard")
+        alert.addButton(withTitle: "Cancel")
+        switch alert.runModal() {
+        case .alertFirstButtonReturn:   // Save… — proceed only if the export completes
+            return runPresentationExport(showSummary: false)
+        case .alertSecondButtonReturn:  // Discard
+            return true
+        default:                        // Cancel
+            return false
+        }
     }
 
     /// Exports a new PDF of the deck with the freehand ink and the whiteboards
@@ -434,6 +463,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             return false
         }
 
+        state.markSaved()   // the ink + whiteboards are now in a PDF on disk
         guard showSummary else { return true }
         let alert = NSAlert()
         alert.messageText = "Saved \(dest.lastPathComponent)"
@@ -585,6 +615,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     /// Opens a picked file: a `.pdf` directly; a `.tex` via its sibling PDF or by
     /// compiling it; a PowerPoint/ODP by converting it with LibreOffice.
     private func load(url rawURL: URL) {
+        // Opening another deck would discard the current one's edits — offer to save.
+        guard confirmDiscardOrSave() else { return }
         switch rawURL.pathExtension.lowercased() {
         case "tex":
             loadOrMake(rawURL, with: latexMaker)

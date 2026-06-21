@@ -26,9 +26,14 @@ final class PresentationModel: ObservableObject {
     @Published var penActive = false
     @Published var penColor: Color = .red
     @Published var penWidth: CGFloat = 0.004   // fraction of slide width
-    @Published var strokes: [Int: [InkStroke]] = [:]
+    @Published var strokes: [Int: [InkStroke]] = [:] { didSet { hasUnsavedChanges = true } }
     @Published var currentStroke: [CGPoint] = []
     @Published var currentWidths: [CGFloat] = []
+
+    /// True once the deck has unexported ink or whiteboard edits (set when the
+    /// strokes/boards change; cleared on open, close, and a successful export).
+    @Published private(set) var hasUnsavedChanges = false
+    func markSaved() { hasUnsavedChanges = false }
 
     // Laser pointer — a transient dot in unit coords, mirrored to the audience.
     // It is not persisted (not part of `strokes`).
@@ -41,7 +46,7 @@ final class PresentationModel: ObservableObject {
     @Published private(set) var notesSourceName: String?
 
     // Whiteboard (scratch boards)
-    @Published var boards: [Whiteboard] = []
+    @Published var boards: [Whiteboard] = [] { didSet { hasUnsavedChanges = true } }
     @Published var activeBoardIndex: Int?
     @Published var selectedItemID: UUID?
     @Published var boardStroke: [CGPoint] = []
@@ -258,6 +263,7 @@ final class PresentationModel: ObservableObject {
         applyDefaults()
         RecentStore.add(url)
         recents = RecentStore.load()
+        hasUnsavedChanges = false   // a freshly opened deck has nothing to save yet
     }
 
     /// Apply the user's Settings defaults when a deck opens.
@@ -318,6 +324,7 @@ final class PresentationModel: ObservableObject {
         boardStroke = []
         deckKey = nil
         scratch = ""
+        hasUnsavedChanges = false
     }
 
     // MARK: - Navigation

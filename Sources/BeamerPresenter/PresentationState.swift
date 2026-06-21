@@ -76,16 +76,24 @@ final class PresentationState: ObservableObject {
     // Annotation / laser
     @Published var tool: Tool = .none
     @Published var penColor: Color = .red
-    @Published var strokes: [Int: [Stroke]] = [:]
+    @Published var strokes: [Int: [Stroke]] = [:] { didSet { hasUnsavedChanges = true } }
     @Published var currentStroke: [CGPoint] = []
     @Published var laserPoint: CGPoint?
 
     // Whiteboards (blank scratch slides). `activeBoardIndex == nil` means the
     // deck is showing; a non-nil index overlays that board on both screens.
-    @Published var boards: [Whiteboard] = []
+    @Published var boards: [Whiteboard] = [] { didSet { hasUnsavedChanges = true } }
     @Published var activeBoardIndex: Int?
     @Published var selectedItemID: UUID?
     @Published var boardStroke: [CGPoint] = []   // in-progress ink on the board
+
+    /// True once the deck has unexported ink or whiteboard edits. Set whenever the
+    /// strokes/boards change, cleared on load, unload, and a successful export — so
+    /// the app can offer to save before the deck is closed or discarded.
+    @Published private(set) var hasUnsavedChanges = false
+
+    /// Call after the deck has been exported to a PDF: the edits are now saved.
+    func markSaved() { hasUnsavedChanges = false }
 
     private var thumbCache: [Int: NSImage] = [:]
 
@@ -127,6 +135,7 @@ final class PresentationState: ObservableObject {
         timerRunning = true
         startDate = Date()
         isLoaded = true
+        hasUnsavedChanges = false   // a freshly loaded deck has nothing to save yet
         return true
     }
 
@@ -153,6 +162,7 @@ final class PresentationState: ObservableObject {
         blackout = false
         showOverview = false
         isLoaded = false
+        hasUnsavedChanges = false
     }
 
     // MARK: - Scratch notes & session stats
