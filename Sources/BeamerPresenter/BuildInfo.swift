@@ -1,6 +1,7 @@
 // Build stamp. Overwritten at build time by build-app.sh (macOS); the committed
-// values are a fallback for `swift run` and fresh checkouts.
+// value is a fallback for `swift run` and fresh checkouts.
+//
+// The id is "<YYMMDD>-<commit>", where the commit is the short hash as a decimal.
 enum BuildInfo {
-    static let date = "2026-06-21"
-    static let commit = "644404c"
+    static let id = "260621-1901175"
 }
