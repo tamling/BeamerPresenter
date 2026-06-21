@@ -52,7 +52,6 @@ enum Favorites {
 /// App identity for the About panel, splash, and menus.
 enum AppInfo {
     static let name = "BeamerPresenter"
-    static let author = "Timo Amling"
     static let releaseDate = "2026-06-17"
 
     static var version: String {
@@ -62,5 +61,5 @@ enum AppInfo {
     /// e.g. "Version 1.0 · 2026-06-17"
     static var versionLine: String { "Version \(version) · \(releaseDate)" }
 
-    static var copyright: String { "© 2026 \(author)" }
+    static var copyright: String { "© 2026" }
 }
