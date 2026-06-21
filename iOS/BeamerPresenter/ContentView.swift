@@ -169,6 +169,7 @@ struct StartView: View {
 struct PresenterView: View {
     @EnvironmentObject var model: PresentationModel
     @EnvironmentObject var external: ExternalDisplayManager
+    @EnvironmentObject var presenterLink: RemoteLink
     @State private var showOverview = false
     @State private var showNotes = false
     @AppStorage("showThumbnails") private var showThumbnails = true
@@ -323,6 +324,12 @@ struct PresenterView: View {
             if external.isConnected {
                 Image(systemName: "tv.fill").foregroundStyle(.green)
             }
+            if presenterLink.connected {
+                Image(systemName: "iphone").foregroundStyle(Theme.statusOk)
+            } else if !presenterLink.pairingCode.isEmpty {
+                Label(presenterLink.pairingCode, systemImage: "lock")
+                    .font(.subheadline.monospacedDigit()).foregroundStyle(.secondary)
+            }
 
             Spacer(minLength: 8)
             TimerControls()
@@ -398,6 +405,7 @@ struct PresenterView: View {
                     if external.isConnected {
                         captioned("Display") { keyGlyph("tv.fill", active: true) }
                     }
+                    captioned(presenterLink.connected ? "Remote" : "Pair") { remoteChip }
                 }
 
                 group {
@@ -502,6 +510,28 @@ struct PresenterView: View {
                 .padding(.horizontal, 11).frame(height: 36)
                 .background(Theme.inset, in: RoundedRectangle(cornerRadius: 9))
                 .overlay(RoundedRectangle(cornerRadius: 9).stroke(line, lineWidth: 1))
+        }
+    }
+
+    /// The iPhone-remote pairing code (so a remote can connect), or a green dot
+    /// once a remote is paired. The remote must type this code — no silent peers.
+    @ViewBuilder private var remoteChip: some View {
+        if presenterLink.connected {
+            HStack(spacing: 5) {
+                Image(systemName: "iphone").font(.system(size: 12, weight: .bold))
+                Image(systemName: "checkmark").font(.system(size: 11, weight: .bold))
+            }
+            .foregroundStyle(Theme.statusOk)
+            .padding(.horizontal, 11).frame(height: 36)
+            .background(Theme.inset, in: RoundedRectangle(cornerRadius: 9))
+            .overlay(RoundedRectangle(cornerRadius: 9).stroke(Theme.statusOk.opacity(0.5), lineWidth: 1))
+        } else {
+            Text(presenterLink.pairingCode.isEmpty ? "––––" : presenterLink.pairingCode)
+                .font(.mono(15, bold: true)).foregroundStyle(Theme.textPrimary)
+                .lineLimit(1).fixedSize()
+                .padding(.horizontal, 11).frame(height: 36)
+                .background(Theme.inset, in: RoundedRectangle(cornerRadius: 9))
+                .overlay(RoundedRectangle(cornerRadius: 9).stroke(Theme.hairline, lineWidth: 1))
         }
     }
 

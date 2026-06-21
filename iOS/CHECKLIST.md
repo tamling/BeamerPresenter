@@ -78,6 +78,9 @@ Target device: **iPad Pro 2021** (USB‑C, external display capable), iPadOS 16+
         MultipeerConnectivity (Wi-Fi/Bluetooth, auto-discovery, encrypted). It
         shows the current slide number + speaker note and offers prev/next,
         black-out and timer. The iPad advertises automatically while a deck is open.
+        **Pairing:** the iPad shows a random 4-digit code; the remote must enter it
+        (sent in the invitation `context`) — the advertiser rejects any other
+        invitation, so no unknown device on the same network can silently connect.
 
 ## Notes / platform limits
 - **No on‑device LaTeX / PowerPoint compilation** — iOS can't spawn subprocesses.
