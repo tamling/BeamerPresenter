@@ -364,9 +364,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     }
 
     @objc private func showAbout(_ sender: Any?) {
-        // The © line is supplied by Info.plist's NSHumanReadableCopyright, so the
-        // credits only add the tagline and author (avoids showing it twice).
-        let credits = "Present LaTeX Beamer PDFs with speaker notes.\n\nBy \(AppInfo.author)"
+        // The © line is supplied by Info.plist's NSHumanReadableCopyright.
+        let credits = "Present LaTeX Beamer PDFs with speaker notes."
         NSApp.orderFrontStandardAboutPanel(options: [
             .applicationName: AppInfo.name,
             .applicationVersion: AppInfo.versionLine,

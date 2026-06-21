@@ -68,7 +68,6 @@ struct SettingsView: View {
 
             Section {
                 LabeledContent("Version", value: AppInfo.versionLine)
-                LabeledContent("Author", value: AppInfo.author)
             }
         }
         .formStyle(.grouped)
