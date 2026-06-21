@@ -6,12 +6,19 @@ import SwiftUI
 struct RemoteView: View {
     @StateObject private var link = RemoteLink(role: .remote)
     @Environment(\.dismiss) private var dismiss
+    @State private var code = ""
 
     var body: some View {
         NavigationStack {
             Group {
-                if link.connected, let state = link.presenterState {
-                    connected(state)
+                if link.connected {
+                    if let state = link.presenterState {
+                        connected(state)
+                    } else {
+                        waiting("Connecting…")
+                    }
+                } else if link.foundPresenter {
+                    pairing
                 } else {
                     searching
                 }
@@ -37,6 +44,52 @@ struct RemoteView: View {
             Text("Open a deck in BeamerPresenter on your iPad, on the same Wi-Fi.")
                 .font(.subheadline).foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
+            Spacer()
+        }
+        .padding(40)
+    }
+
+    private func waiting(_ text: String) -> some View {
+        VStack(spacing: 16) {
+            Spacer()
+            ProgressView()
+            Text(text).font(.headline)
+            Spacer()
+        }
+        .padding(40)
+    }
+
+    /// Presenter found: ask for the 4-digit code shown on the iPad before connecting.
+    private var pairing: some View {
+        VStack(spacing: 18) {
+            Spacer()
+            Image(systemName: "lock.shield").font(.system(size: 40, weight: .semibold))
+                .foregroundStyle(Color.brand)
+            Text("Enter pairing code").font(.headline)
+            Text("Type the 4-digit code shown on the iPad.")
+                .font(.subheadline).foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+
+            TextField("0000", text: $code)
+                .keyboardType(.numberPad)
+                .textContentType(.oneTimeCode)
+                .multilineTextAlignment(.center)
+                .font(.system(size: 38, design: .rounded).weight(.semibold).monospacedDigit())
+                .frame(width: 180)
+                .padding(.vertical, 10)
+                .background(Color(white: 0.14), in: RoundedRectangle(cornerRadius: 12))
+                .onChange(of: code) { newValue in
+                    code = String(newValue.filter(\.isNumber).prefix(4))
+                    if code.count == 4 { link.connect(code: code) }
+                }
+
+            if link.pairingFailed {
+                Text("Wrong code — try again.").font(.subheadline).foregroundStyle(.red)
+            }
+
+            Button("Connect") { link.connect(code: code) }
+                .buttonStyle(.borderedProminent)
+                .disabled(code.count != 4)
             Spacer()
         }
         .padding(40)
