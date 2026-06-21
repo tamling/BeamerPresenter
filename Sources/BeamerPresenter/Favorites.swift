@@ -43,6 +43,20 @@ enum Favorites {
             .sorted { $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending }
     }
 
+    /// Sub-folders and PDFs directly inside `folder`, each sorted by name —
+    /// folders first. Used by the favourite folder browser to navigate.
+    static func children(of folder: URL) -> (folders: [URL], pdfs: [URL]) {
+        let contents = (try? FileManager.default.contentsOfDirectory(
+            at: folder, includingPropertiesForKeys: [.isDirectoryKey],
+            options: [.skipsHiddenFiles])) ?? []
+        func byName(_ a: URL, _ b: URL) -> Bool {
+            a.lastPathComponent.localizedStandardCompare(b.lastPathComponent) == .orderedAscending
+        }
+        let folders = contents.filter { isDirectory($0) }.sorted(by: byName)
+        let pdfs = contents.filter { $0.pathExtension.lowercased() == "pdf" }.sorted(by: byName)
+        return (folders, pdfs)
+    }
+
     private static func isDirectory(_ url: URL) -> Bool {
         var isDir: ObjCBool = false
         return FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir) && isDir.boolValue

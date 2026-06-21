@@ -11,6 +11,7 @@ struct WelcomeView: View {
 
     @State private var recents: [URL] = RecentFiles.load()
     @State private var favorites: [URL] = Favorites.load()
+    @State private var browseTarget: BrowseTarget?
     @State private var dropTargeted = false
     @State private var statsTick = 0
     @State private var latexEngine: String?
@@ -38,6 +39,12 @@ struct WelcomeView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: Stats.didChange)) { _ in
             statsTick += 1
+        }
+        .sheet(item: $browseTarget) { target in
+            FolderBrowser(root: target.url) { url in
+                browseTarget = nil
+                onOpenURL(url)
+            }
         }
     }
 
@@ -204,34 +211,31 @@ struct WelcomeView: View {
         .buttonStyle(.plain)
     }
 
+    /// A favourite folder, right-aligned. Click it to browse and open files
+    /// inside (navigating sub-folders); the minus removes the favourite.
     private func favoriteCard(_ folder: URL) -> some View {
         HStack(spacing: 13) {
-            Menu {
-                let pdfs = Favorites.pdfs(in: folder)
-                if pdfs.isEmpty {
-                    Text("No PDFs in this folder")
-                } else {
-                    ForEach(pdfs, id: \.self) { p in
-                        Button(p.deletingPathExtension().lastPathComponent) { onOpenURL(p) }
-                    }
-                }
-            } label: {
+            Button { Favorites.remove(folder) } label: { Image(systemName: "minus.circle") }
+                .buttonStyle(.plain).foregroundStyle(Theme.textFaint)
+                .help("Remove from favorites")
+
+            Spacer(minLength: 0)
+
+            Button { browseTarget = BrowseTarget(url: folder) } label: {
                 HStack(spacing: 13) {
-                    tile { Image(systemName: "folder.fill").foregroundStyle(Theme.accent) }
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .trailing, spacing: 2) {
                         Text(folder.lastPathComponent)
                             .font(.ui(16, "SemiBold")).foregroundStyle(Theme.textPrimary).lineLimit(1)
                         Text("\(Favorites.pdfs(in: folder).count) presentations")
                             .font(.mono(11)).foregroundStyle(Theme.textMuted)
                     }
-                    Spacer()
+                    .multilineTextAlignment(.trailing)
+                    tile { Image(systemName: "folder.fill").foregroundStyle(Theme.accent) }
                 }
+                .contentShape(Rectangle())
             }
-            .menuStyle(.borderlessButton).menuIndicator(.hidden)
-
-            Button { Favorites.remove(folder) } label: { Image(systemName: "minus.circle") }
-                .buttonStyle(.plain).foregroundStyle(Theme.textFaint)
-                .help("Remove from favorites")
+            .buttonStyle(.plain)
+            .help("Browse this folder")
         }
         .padding(14).nightCard()
     }
@@ -346,5 +350,91 @@ struct DotGrid: View {
                 y += step
             }
         }
+    }
+}
+
+/// Identifies the favourite folder currently being browsed (for `.sheet(item:)`).
+struct BrowseTarget: Identifiable {
+    let id = UUID()
+    let url: URL
+}
+
+/// A small file browser for a favourite folder: navigate into sub-folders and
+/// open a PDF. Presented as a sheet from the welcome screen.
+struct FolderBrowser: View {
+    let root: URL
+    let onOpen: (URL) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var stack: [URL]
+
+    init(root: URL, onOpen: @escaping (URL) -> Void) {
+        self.root = root
+        self.onOpen = onOpen
+        _stack = State(initialValue: [root])
+    }
+
+    private var current: URL { stack.last ?? root }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 10) {
+                Button { if stack.count > 1 { stack.removeLast() } } label: {
+                    Image(systemName: "chevron.left")
+                }
+                .buttonStyle(.plain)
+                .disabled(stack.count <= 1)
+                .foregroundStyle(stack.count > 1 ? Theme.textPrimary : Theme.textFaint)
+
+                Image(systemName: "folder.fill").foregroundStyle(Theme.accent)
+                Text(current.lastPathComponent)
+                    .font(.ui(15, "SemiBold")).foregroundStyle(Theme.textPrimary).lineLimit(1)
+                Spacer()
+                Button("Done") { dismiss() }.buttonStyle(.plain).foregroundStyle(Theme.accent)
+            }
+            .padding(14)
+            Rectangle().fill(Theme.hairline).frame(height: 1)
+
+            let kids = Favorites.children(of: current)
+            if kids.folders.isEmpty && kids.pdfs.isEmpty {
+                Spacer()
+                Text("Empty folder").font(.ui(14)).foregroundStyle(Theme.textMuted)
+                Spacer()
+            } else {
+                ScrollView {
+                    VStack(spacing: 3) {
+                        ForEach(kids.folders, id: \.self) { f in
+                            row("folder.fill", f.lastPathComponent, isFolder: true) { stack.append(f) }
+                        }
+                        ForEach(kids.pdfs, id: \.self) { p in
+                            row("doc.text.fill", p.deletingPathExtension().lastPathComponent,
+                                isFolder: false) { onOpen(p) }
+                        }
+                    }
+                    .padding(8)
+                }
+            }
+        }
+        .frame(width: 360, height: 420)
+        .background(Theme.base)
+    }
+
+    private func row(_ icon: String, _ title: String, isFolder: Bool,
+                     action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 11) {
+                Image(systemName: icon)
+                    .foregroundStyle(isFolder ? Theme.accent : Theme.textSecondary)
+                    .frame(width: 20)
+                Text(title).font(.ui(14)).foregroundStyle(Theme.textPrimary).lineLimit(1)
+                Spacer()
+                Image(systemName: isFolder ? "chevron.right" : "arrow.up.forward.app")
+                    .font(.caption).foregroundStyle(Theme.textFaint)
+            }
+            .padding(.horizontal, 12).padding(.vertical, 9)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .background(Theme.surface, in: RoundedRectangle(cornerRadius: 8))
     }
 }
