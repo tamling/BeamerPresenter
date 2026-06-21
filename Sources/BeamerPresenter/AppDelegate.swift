@@ -369,11 +369,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     }
 
     @objc private func showAbout(_ sender: Any?) {
-        // The © line is supplied by Info.plist's NSHumanReadableCopyright.
+        // Show the same build ID as the welcome screen's bottom-right corner.
+        // `.version` is the parenthesised build slot (defaults to CFBundleVersion);
+        // override it so it doesn't show a different number than `BuildInfo.id`.
         let credits = "Present LaTeX Beamer PDFs with speaker notes.\n\n\(AppInfo.buildLine)"
         NSApp.orderFrontStandardAboutPanel(options: [
             .applicationName: AppInfo.name,
             .applicationVersion: AppInfo.versionLine,
+            .version: BuildInfo.id,
             .credits: NSAttributedString(
                 string: credits,
                 attributes: [.font: NSFont.systemFont(ofSize: 11),
