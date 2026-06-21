@@ -68,6 +68,7 @@ struct SettingsView: View {
 
             Section {
                 LabeledContent("Version", value: AppInfo.versionLine)
+                LabeledContent("Build", value: AppInfo.buildLine)
             }
         }
         .formStyle(.grouped)

@@ -249,7 +249,7 @@ struct WelcomeView: View {
             VStack(alignment: .trailing, spacing: 3) {
                 Text("\(AppInfo.name) \(AppInfo.version)")
                     .font(.ui(13.5, "Medium")).foregroundStyle(Theme.textSecondary)
-                Text(AppInfo.releaseDate).microLabel()
+                Text(AppInfo.buildLine).microLabel()
             }
         }
         .padding(.horizontal, 30)

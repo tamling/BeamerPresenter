@@ -370,7 +370,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
 
     @objc private func showAbout(_ sender: Any?) {
         // The © line is supplied by Info.plist's NSHumanReadableCopyright.
-        let credits = "Present LaTeX Beamer PDFs with speaker notes."
+        let credits = "Present LaTeX Beamer PDFs with speaker notes.\n\n\(AppInfo.buildLine)"
         NSApp.orderFrontStandardAboutPanel(options: [
             .applicationName: AppInfo.name,
             .applicationVersion: AppInfo.versionLine,

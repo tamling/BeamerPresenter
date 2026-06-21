@@ -149,7 +149,7 @@ struct StartView: View {
                 VStack(spacing: 4) {
                     Text("BeamerPresenter \(Self.version)")
                         .font(.ui(13.5, "Medium")).foregroundStyle(Theme.textSecondary)
-                    Text(Self.releaseDate).microLabel()
+                    Text("Build \(BuildInfo.date) · \(BuildInfo.commit)").microLabel()
                 }
             }
             .padding(34)
@@ -158,9 +158,8 @@ struct StartView: View {
         .sheet(isPresented: $showRemote) { RemoteView() }
     }
 
-    static let releaseDate = "2026-06-17"
     static var version: String {
-        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "2.0"
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "3.0"
     }
 }
 
