@@ -109,32 +109,39 @@ def glow_circle(buf, S, cx, cy, rad, color):
 def render(S):
     buf = bytearray(S * S * 4)               # transparent RGBA
 
+    m = S * 0.035                            # squircle margin
+
     def bg_grad(t):
         base = lerp(BG_TOP, BG_BOT, min(max(t, 0), 1))
         hi = max(0.0, 1 - t * 2.4) * 0.10
         return tuple(min(255, c + (255 - c) * hi) for c in base)
 
+    def bg_at(y):                           # background colour at absolute y
+        return bg_grad((y - m) / (S - 2 * m))
+
+    def hole(cx, cy, w, h, r):              # carve a background-matching cut-out
+        top = cy - h / 2
+        fill_rr(buf, S, S, cx, cy, w, h, r, grad=lambda tt: bg_at(top + tt * h))
+
     # Background squircle (full-bleed with a hair of margin).
-    m = S * 0.035
     fill_rr(buf, S, S, S / 2, S / 2, S - 2 * m, S - 2 * m, S * 0.2237, grad=bg_grad)
 
-    # Three lime bars, bottom-aligned, the middle one tallest.
-    bw = S * 0.135
-    gap = S * 0.052
-    total = 3 * bw + 2 * gap
-    x0 = S / 2 - total / 2 + bw / 2
-    base_y = S * 0.78
-    heights = [S * 0.31, S * 0.48, S * 0.35]
-    r = bw * 0.30
-    for i, h in enumerate(heights):
-        cx = x0 + i * (bw + gap)
-        glow_rr(buf, S, cx, base_y - h / 2, bw, h, r, LIME)
+    # "Two screens": a presenter screen (lime frame, behind, upper-right) and a
+    # clean audience screen (solid lime, front, lower-left) overlapping it.
+    bw, bh = S * 0.405, S * 0.300           # back screen
+    bcx, bcy = S * 0.590, S * 0.405
+    glow_rr(buf, S, bcx, bcy, bw, bh, S * 0.052, LIME)
+    hole(bcx, bcy, bw - S * 0.066, bh - S * 0.066, S * 0.030)
 
-    # A dot floating above the middle bar.
-    mid_cx = x0 + (bw + gap)
-    mid_top = base_y - heights[1]
-    dot_r = S * 0.050
-    glow_circle(buf, S, mid_cx, mid_top - S * 0.03 - dot_r, dot_r, LIME)
+    fw, fh = S * 0.430, S * 0.320           # front screen
+    fcx, fcy = S * 0.430, S * 0.585
+    # Punch a dark gap around the front screen so it reads as sitting in front.
+    hole(fcx, fcy, fw + S * 0.044, fh + S * 0.044, S * 0.080)
+    glow_rr(buf, S, fcx, fcy, fw, fh, S * 0.058, LIME)
+
+    # A small dark cursor dot on the front screen (a nod to the laser pointer).
+    fill_circle(buf, S, S, fcx + fw * 0.20, fcy + fh * 0.16, S * 0.030,
+                bg_at(fcy + fh * 0.16))
 
     return buf
 

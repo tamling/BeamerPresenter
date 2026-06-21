@@ -90,35 +90,34 @@ struct LivePill: View {
     }
 }
 
-/// The app's brand mark — the glowing lime bar chart from the app icon (three
-/// rounded bars, the middle tallest, with a dot floating above it). Fills its
-/// frame; give it a key-tile background at the call site.
+/// The app's brand mark — the glowing "two screens" glyph from the app icon: a
+/// clean solid audience screen overlapping a presenter-screen frame, with a
+/// small cursor dot. Fills its frame; give it a key-tile background at the call
+/// site. `dot` should match that background so the cursor reads as a punch-out.
 struct BrandMark: View {
     var color: Color = Theme.accent
+    var dot: Color = Theme.base
 
     var body: some View {
         GeometryReader { geo in
             let w = geo.size.width, h = geo.size.height
-            let bw = w * 0.18
-            let gap = w * 0.09
-            let total = 3 * bw + 2 * gap
-            let x0 = (w - total) / 2 + bw / 2
-            let baseY = h * 0.88
-            let heights = [h * 0.40, h * 0.62, h * 0.46]
-            let r = bw * 0.32
-            let midX = x0 + (bw + gap)
-            let dotR = w * 0.085
+            let bw = w * 0.42, bh = h * 0.30          // back (presenter) screen
+            let bcx = w * 0.59, bcy = h * 0.40
+            let fw = w * 0.45, fh = h * 0.34          // front (audience) screen
+            let fcx = w * 0.43, fcy = h * 0.585
 
             ZStack {
-                ForEach(0..<3, id: \.self) { i in
-                    RoundedRectangle(cornerRadius: r, style: .continuous)
-                        .fill(color)
-                        .frame(width: bw, height: heights[i])
-                        .position(x: x0 + CGFloat(i) * (bw + gap), y: baseY - heights[i] / 2)
-                }
-                Circle().fill(color)
-                    .frame(width: dotR * 2, height: dotR * 2)
-                    .position(x: midX, y: baseY - heights[1] - gap * 0.7 - dotR)
+                RoundedRectangle(cornerRadius: w * 0.05, style: .continuous)
+                    .stroke(color, lineWidth: w * 0.072)
+                    .frame(width: bw, height: bh)
+                    .position(x: bcx, y: bcy)
+                RoundedRectangle(cornerRadius: w * 0.06, style: .continuous)
+                    .fill(color)
+                    .frame(width: fw, height: fh)
+                    .position(x: fcx, y: fcy)
+                Circle().fill(dot)
+                    .frame(width: w * 0.06, height: w * 0.06)
+                    .position(x: fcx + fw * 0.22, y: fcy + fh * 0.16)
             }
             .shadow(color: color.opacity(0.5), radius: w * 0.045)
         }
