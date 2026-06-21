@@ -19,16 +19,16 @@ targets:
     sources:
       - BeamerPresenter
     preBuildScripts:
-      - name: Stamp build date + commit
+      - name: Stamp build ID
         basedOnDependencyAnalysis: false
         script: |
-          DATE=$(date -u +"%Y-%m-%d %H:%M UTC")
-          COMMIT=$(git -C "$SRCROOT" rev-parse --short HEAD 2>/dev/null || echo unknown)
+          DATE6=$(date -u +%y%m%d)
+          HEX=$(git -C "$SRCROOT" rev-parse --short=6 HEAD 2>/dev/null || echo 0)
+          BUILD_ID="${DATE6}-$(printf '%d' "0x$HEX" 2>/dev/null || echo 0)"
           cat > "$SRCROOT/BeamerPresenter/BuildInfo.swift" <<EOF
           // Generated at build time — do not edit.
           enum BuildInfo {
-              static let date = "$DATE"
-              static let commit = "$COMMIT"
+              static let id = "$BUILD_ID"
           }
           EOF
     settings:

@@ -75,7 +75,7 @@ struct SettingsView: View {
                 Section("About") {
                     LabeledContent("App", value: "BeamerPresenter for iPadOS")
                     LabeledContent("Version", value: appVersion)
-                    LabeledContent("Build", value: "\(BuildInfo.date) · \(BuildInfo.commit)")
+                    LabeledContent("Build", value: BuildInfo.id)
                 }
             }
             .scrollContentBackground(.hidden)

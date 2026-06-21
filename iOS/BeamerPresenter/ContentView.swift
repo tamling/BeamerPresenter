@@ -149,7 +149,7 @@ struct StartView: View {
                 VStack(spacing: 4) {
                     Text("BeamerPresenter \(Self.version)")
                         .font(.ui(13.5, "Medium")).foregroundStyle(Theme.textSecondary)
-                    Text("Build \(BuildInfo.date) · \(BuildInfo.commit)").microLabel()
+                    Text("Build \(BuildInfo.id)").microLabel()
                 }
             }
             .padding(34)

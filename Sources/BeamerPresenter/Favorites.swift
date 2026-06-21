@@ -60,8 +60,8 @@ enum AppInfo {
     /// e.g. "Version 3.0"
     static var versionLine: String { "Version \(version)" }
 
-    /// e.g. "Build 2026-06-21 · 644404c" — stamped at build time (see BuildInfo).
-    static var buildLine: String { "Build \(BuildInfo.date) · \(BuildInfo.commit)" }
+    /// e.g. "Build 260621-1901175" — stamped at build time (see BuildInfo).
+    static var buildLine: String { "Build \(BuildInfo.id)" }
 
     static var copyright: String { "© 2026" }
 }
