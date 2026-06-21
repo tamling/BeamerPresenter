@@ -33,19 +33,12 @@ enum Favorites {
         NotificationCenter.default.post(name: didChange, object: nil)
     }
 
-    /// PDFs directly inside a favourite folder, sorted by name.
-    static func pdfs(in folder: URL) -> [URL] {
-        let contents = (try? FileManager.default.contentsOfDirectory(
-            at: folder, includingPropertiesForKeys: nil,
-            options: [.skipsHiddenFiles])) ?? []
-        return contents
-            .filter { $0.pathExtension.lowercased() == "pdf" }
-            .sorted { $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending }
-    }
+    /// File extensions the browser offers to open (presentations + their source).
+    static let openableExtensions: Set<String> = ["pdf", "tex"]
 
-    /// Sub-folders and PDFs directly inside `folder`, each sorted by name —
-    /// folders first. Used by the favourite folder browser to navigate.
-    static func children(of folder: URL) -> (folders: [URL], pdfs: [URL]) {
+    /// Sub-folders and openable files (`.pdf` / `.tex`) directly inside `folder`,
+    /// each sorted by name. Used by the favourite folder browser to navigate.
+    static func children(of folder: URL) -> (folders: [URL], files: [URL]) {
         let contents = (try? FileManager.default.contentsOfDirectory(
             at: folder, includingPropertiesForKeys: [.isDirectoryKey],
             options: [.skipsHiddenFiles])) ?? []
@@ -53,8 +46,10 @@ enum Favorites {
             a.lastPathComponent.localizedStandardCompare(b.lastPathComponent) == .orderedAscending
         }
         let folders = contents.filter { isDirectory($0) }.sorted(by: byName)
-        let pdfs = contents.filter { $0.pathExtension.lowercased() == "pdf" }.sorted(by: byName)
-        return (folders, pdfs)
+        let files = contents
+            .filter { openableExtensions.contains($0.pathExtension.lowercased()) }
+            .sorted(by: byName)
+        return (folders, files)
     }
 
     private static func isDirectory(_ url: URL) -> Bool {

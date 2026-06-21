@@ -211,31 +211,29 @@ struct WelcomeView: View {
         .buttonStyle(.plain)
     }
 
-    /// A favourite folder, right-aligned. Click it to browse and open files
+    /// A favourite folder (left-aligned). Click it to browse and open the files
     /// inside (navigating sub-folders); the minus removes the favourite.
     private func favoriteCard(_ folder: URL) -> some View {
         HStack(spacing: 13) {
-            Button { Favorites.remove(folder) } label: { Image(systemName: "minus.circle") }
-                .buttonStyle(.plain).foregroundStyle(Theme.textFaint)
-                .help("Remove from favorites")
-
-            Spacer(minLength: 0)
-
             Button { browseTarget = BrowseTarget(url: folder) } label: {
                 HStack(spacing: 13) {
-                    VStack(alignment: .trailing, spacing: 2) {
+                    tile { Image(systemName: "folder.fill").foregroundStyle(Theme.accent) }
+                    VStack(alignment: .leading, spacing: 2) {
                         Text(folder.lastPathComponent)
                             .font(.ui(16, "SemiBold")).foregroundStyle(Theme.textPrimary).lineLimit(1)
-                        Text("\(Favorites.pdfs(in: folder).count) presentations")
+                        Text("\(Favorites.children(of: folder).files.count) files")
                             .font(.mono(11)).foregroundStyle(Theme.textMuted)
                     }
-                    .multilineTextAlignment(.trailing)
-                    tile { Image(systemName: "folder.fill").foregroundStyle(Theme.accent) }
+                    Spacer()
                 }
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .help("Browse this folder")
+
+            Button { Favorites.remove(folder) } label: { Image(systemName: "minus.circle") }
+                .buttonStyle(.plain).foregroundStyle(Theme.textFaint)
+                .help("Remove from favorites")
         }
         .padding(14).nightCard()
     }
@@ -360,13 +358,15 @@ struct BrowseTarget: Identifiable {
 }
 
 /// A small file browser for a favourite folder: navigate into sub-folders and
-/// open a PDF. Presented as a sheet from the welcome screen.
+/// open a `.pdf` or `.tex`. A search field and pinned section headers keep it
+/// organised when a folder holds many files. Presented as a sheet.
 struct FolderBrowser: View {
     let root: URL
     let onOpen: (URL) -> Void
 
     @Environment(\.dismiss) private var dismiss
     @State private var stack: [URL]
+    @State private var query = ""
 
     init(root: URL, onOpen: @escaping (URL) -> Void) {
         self.root = root
@@ -376,10 +376,19 @@ struct FolderBrowser: View {
 
     private var current: URL { stack.last ?? root }
 
+    private func matches(_ url: URL) -> Bool {
+        query.isEmpty || url.lastPathComponent.localizedCaseInsensitiveContains(query)
+    }
+
     var body: some View {
+        let kids = Favorites.children(of: current)
+        let folders = kids.folders.filter(matches)
+        let files = kids.files.filter(matches)
+
         VStack(spacing: 0) {
+            // Header: back · current folder · done.
             HStack(spacing: 10) {
-                Button { if stack.count > 1 { stack.removeLast() } } label: {
+                Button { if stack.count > 1 { stack.removeLast(); query = "" } } label: {
                     Image(systemName: "chevron.left")
                 }
                 .buttonStyle(.plain)
@@ -393,46 +402,83 @@ struct FolderBrowser: View {
                 Button("Done") { dismiss() }.buttonStyle(.plain).foregroundStyle(Theme.accent)
             }
             .padding(14)
+
+            // Search.
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass").foregroundStyle(Theme.textMuted)
+                TextField("Search", text: $query).textFieldStyle(.plain)
+            }
+            .padding(.horizontal, 10).padding(.vertical, 7)
+            .background(Theme.inset, in: RoundedRectangle(cornerRadius: 8))
+            .padding(.horizontal, 12).padding(.bottom, 10)
+
             Rectangle().fill(Theme.hairline).frame(height: 1)
 
-            let kids = Favorites.children(of: current)
-            if kids.folders.isEmpty && kids.pdfs.isEmpty {
+            if folders.isEmpty && files.isEmpty {
                 Spacer()
-                Text("Empty folder").font(.ui(14)).foregroundStyle(Theme.textMuted)
+                Text(query.isEmpty ? "Empty folder" : "No matches")
+                    .font(.ui(14)).foregroundStyle(Theme.textMuted)
                 Spacer()
             } else {
                 ScrollView {
-                    VStack(spacing: 3) {
-                        ForEach(kids.folders, id: \.self) { f in
-                            row("folder.fill", f.lastPathComponent, isFolder: true) { stack.append(f) }
+                    LazyVStack(alignment: .leading, spacing: 3, pinnedViews: [.sectionHeaders]) {
+                        if !folders.isEmpty {
+                            Section {
+                                ForEach(folders, id: \.self) { folderRow($0) }
+                            } header: { sectionLabel("Folders", folders.count) }
                         }
-                        ForEach(kids.pdfs, id: \.self) { p in
-                            row("doc.text.fill", p.deletingPathExtension().lastPathComponent,
-                                isFolder: false) { onOpen(p) }
+                        if !files.isEmpty {
+                            Section {
+                                ForEach(files, id: \.self) { fileRow($0) }
+                            } header: { sectionLabel("Files", files.count) }
                         }
                     }
                     .padding(8)
                 }
             }
         }
-        .frame(width: 360, height: 420)
+        .frame(width: 380, height: 460)
         .background(Theme.base)
     }
 
-    private func row(_ icon: String, _ title: String, isFolder: Bool,
-                     action: @escaping () -> Void) -> some View {
-        Button(action: action) {
+    private func sectionLabel(_ title: String, _ count: Int) -> some View {
+        HStack {
+            Text("\(title) · \(count)")
+                .font(.mono(10)).textCase(.uppercase).tracking(1).foregroundStyle(Theme.textMuted)
+            Spacer()
+        }
+        .padding(.horizontal, 6).padding(.vertical, 6)
+        .background(Theme.base)
+    }
+
+    private func folderRow(_ url: URL) -> some View {
+        Button { stack.append(url); query = "" } label: {
             HStack(spacing: 11) {
-                Image(systemName: icon)
-                    .foregroundStyle(isFolder ? Theme.accent : Theme.textSecondary)
-                    .frame(width: 20)
-                Text(title).font(.ui(14)).foregroundStyle(Theme.textPrimary).lineLimit(1)
+                Image(systemName: "folder.fill").foregroundStyle(Theme.accent).frame(width: 22)
+                Text(url.lastPathComponent).font(.ui(14)).foregroundStyle(Theme.textPrimary).lineLimit(1)
                 Spacer()
-                Image(systemName: isFolder ? "chevron.right" : "arrow.up.forward.app")
-                    .font(.caption).foregroundStyle(Theme.textFaint)
+                Image(systemName: "chevron.right").font(.caption).foregroundStyle(Theme.textFaint)
             }
-            .padding(.horizontal, 12).padding(.vertical, 9)
-            .contentShape(Rectangle())
+            .padding(.horizontal, 12).padding(.vertical, 9).contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .background(Theme.surface, in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    private func fileRow(_ url: URL) -> some View {
+        Button { onOpen(url) } label: {
+            HStack(spacing: 11) {
+                Text(url.pathExtension.uppercased())
+                    .font(.mono(9, bold: true)).foregroundStyle(Theme.accent)
+                    .frame(width: 30)
+                    .padding(.vertical, 4)
+                    .background(Theme.accentDim, in: RoundedRectangle(cornerRadius: 5))
+                Text(url.deletingPathExtension().lastPathComponent)
+                    .font(.ui(14)).foregroundStyle(Theme.textPrimary).lineLimit(1)
+                Spacer()
+                Image(systemName: "arrow.up.forward.app").font(.caption).foregroundStyle(Theme.textFaint)
+            }
+            .padding(.horizontal, 12).padding(.vertical, 8).contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .background(Theme.surface, in: RoundedRectangle(cornerRadius: 8))
