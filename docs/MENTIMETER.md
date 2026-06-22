@@ -85,7 +85,12 @@ inside an embedded `WKWebView` — no scraping or private-endpoint automation.
   (`Mentimeter/MentiBrowser.swift`, `MentimeterView.swift`) with a persistent,
   shared login session; back/forward/reload/home toolbar; sign in and present
   manually. Audience integration + downloads follow below.
-- **P2** — Variant A audience integration + control strip.
+- **P2 — done (macOS):** "Present on audience" pushes the browser's current page
+  to the audience screen (`MentiAudienceView`, shared session) and a control strip
+  drives it — Previous/Next send arrow-key events into the page (Mentimeter present
+  mode listens for them; best-effort, since synthetic keys may need adjusting),
+  plus Reload and Stop. The audience window is brought up even before a deck is
+  open and restored to the slides on Stop.
 - **P3** — download capture (save next to deck) + results list.
 - **P4** — quick-launch links, join-code overlay, black-out integration.
 - **P5** — iPadOS port.

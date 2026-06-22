@@ -45,6 +45,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
                 self?.updateDeckMenusVisibility(loaded: loaded)
             }
             .store(in: &cancellables)
+        // Presenting a Mentimeter poll needs the audience screen up even before a
+        // deck is open; hide it again afterwards if there's no deck to fall back to.
+        state.$mentiActive
+            .dropFirst()
+            .sink { [weak self] active in
+                guard let self else { return }
+                if active {
+                    self.buildAudienceWindowIfNeeded()
+                    self.positionWindows()
+                    self.audienceWindow?.orderFront(nil)
+                } else if !self.state.isLoaded {
+                    self.audienceWindow?.orderOut(nil)
+                }
+            }
+            .store(in: &cancellables)
         buildPresenterWindow()
         applyBackgroundMode()
         showSplash()
@@ -407,7 +422,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
                                   styleMask: [.titled, .closable, .resizable, .miniaturizable],
                                   backing: .buffered, defer: false)
             window.title = "Mentimeter"
-            window.contentView = NSHostingView(rootView: MentimeterView())
+            window.contentView = NSHostingView(rootView: MentimeterView().environmentObject(state))
             window.isReleasedWhenClosed = false
             window.center()
             mentimeterWindow = window

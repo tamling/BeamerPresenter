@@ -62,6 +62,9 @@ final class MentiBrowser: NSObject, ObservableObject {
     func goBack() { webView.goBack() }
     func goForward() { webView.goForward() }
     func reloadOrStop() { isLoading ? webView.stopLoading() : webView.reload() }
+
+    /// The page currently shown — captured when presenting on the audience screen.
+    var currentURL: URL? { webView.url }
 }
 
 // Login flows (e.g. "Sign in with Google/SSO") often try to open a new window;
