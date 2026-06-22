@@ -28,6 +28,7 @@ final class MentiBrowser: NSObject, ObservableObject {
     @Published private(set) var canGoForward = false
     @Published private(set) var isLoading = false
     @Published private(set) var urlString = ""
+    @Published private(set) var pageTitle = ""
 
     /// Where a result export should default to (the current deck's folder).
     var deckFolder: (() -> URL?)?
@@ -59,6 +60,9 @@ final class MentiBrowser: NSObject, ObservableObject {
             },
             webView.observe(\.url, options: [.initial, .new]) { [weak self] wv, _ in
                 self?.urlString = wv.url?.absoluteString ?? ""
+            },
+            webView.observe(\.title, options: [.initial, .new]) { [weak self] wv, _ in
+                self?.pageTitle = wv.title ?? ""
             }
         ]
     }

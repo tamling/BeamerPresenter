@@ -8,15 +8,28 @@ final class MentiControl {
     static let shared = MentiControl()
     weak var webView: WKWebView?
 
-    func next()   { sendKey("ArrowRight", keyCode: 39) }
-    func prev()   { sendKey("ArrowLeft",  keyCode: 37) }
+    func next()   { navigate(["next slide", "next question", "go forward"], key: "ArrowRight", keyCode: 39) }
+    func prev()   { navigate(["previous slide", "previous question", "go back"], key: "ArrowLeft", keyCode: 37) }
     func reload() { webView?.reload() }
 
-    private func sendKey(_ key: String, keyCode: Int) {
+    /// Click Mentimeter's on-screen nav button (matched by aria-label/title/test-id)
+    /// if present — that triggers the real handler. Only if none is found do we
+    /// fall back to a synthetic arrow key, so we never advance twice.
+    private func navigate(_ labels: [String], key: String, keyCode: Int) {
+        let list = labels.map { "'\($0)'" }.joined(separator: ",")
         let js = """
-        (function(){var o={key:'\(key)',code:'\(key)',keyCode:\(keyCode),which:\(keyCode),bubbles:true};
-        document.dispatchEvent(new KeyboardEvent('keydown',o));
-        document.dispatchEvent(new KeyboardEvent('keyup',o));})();
+        (function(){
+          var labels=[\(list)];
+          var els=document.querySelectorAll('button,a,[role=button]');
+          for(var i=0;i<els.length;i++){
+            var el=els[i];
+            var t=((el.getAttribute('aria-label')||'')+' '+(el.getAttribute('title')||'')+' '+(el.getAttribute('data-testid')||'')).toLowerCase();
+            for(var j=0;j<labels.length;j++){ if(t.indexOf(labels[j])>=0){ el.click(); return; } }
+          }
+          var o={key:'\(key)',code:'\(key)',keyCode:\(keyCode),which:\(keyCode),bubbles:true};
+          document.dispatchEvent(new KeyboardEvent('keydown',o));
+          document.dispatchEvent(new KeyboardEvent('keyup',o));
+        })();
         """
         webView?.evaluateJavaScript(js, completionHandler: nil)
     }

@@ -8,6 +8,7 @@ struct MentimeterView: View {
     @EnvironmentObject var state: PresentationState
     @StateObject private var browser = MentiBrowser()
     @State private var results = MentiResults.load()
+    @State private var recents = MentiLinks.load()
 
     var body: some View {
         VStack(spacing: 0) {
@@ -21,6 +22,7 @@ struct MentimeterView: View {
                 }
                 Button { browser.goHome() } label: { Image(systemName: "house") }
                     .help("Back to your Mentimeter dashboard")
+                recentsMenu
 
                 Text(browser.urlString)
                     .font(.caption.monospaced()).foregroundStyle(.secondary)
@@ -43,6 +45,34 @@ struct MentimeterView: View {
         .onReceive(NotificationCenter.default.publisher(for: MentiResults.didChange)) { _ in
             results = MentiResults.load()
         }
+        .onReceive(NotificationCenter.default.publisher(for: MentiLinks.didChange)) { _ in
+            recents = MentiLinks.load()
+        }
+    }
+
+    /// One-click relaunch of a recently presented menti.
+    private var recentsMenu: some View {
+        Menu {
+            if recents.isEmpty {
+                Text("No recent menti yet")
+            } else {
+                ForEach(recents) { link in
+                    Button(link.title) {
+                        browser.load(link.url)
+                        state.startMenti(link.url)
+                    }
+                }
+                Divider()
+                Button("Clear recents", role: .destructive) {
+                    recents.forEach { MentiLinks.remove($0.url) }
+                }
+            }
+        } label: {
+            Image(systemName: "clock.arrow.circlepath")
+        }
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("Recently presented mentis")
     }
 
     /// Recently downloaded result files → reveal in Finder.
@@ -83,7 +113,10 @@ struct MentimeterView: View {
                     .font(.callout).foregroundStyle(.secondary)
                 Spacer()
                 Button {
-                    if let url = browser.currentURL { state.startMenti(url) }
+                    if let url = browser.currentURL {
+                        MentiLinks.add(title: browser.pageTitle, url: url)
+                        state.startMenti(url)
+                    }
                 } label: {
                     Label("Present on audience", systemImage: "play.rectangle.on.rectangle")
                 }

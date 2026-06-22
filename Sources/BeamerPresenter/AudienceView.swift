@@ -20,10 +20,13 @@ struct AudienceView: View {
                             BoardLaserDot(point: laser, color: state.penColor)
                         }
                     }
-            } else if state.blackout {
-                BlackScreenView(message: blackMessage)
             } else {
                 SlideView(pageIndex: state.index, interactive: false)
+            }
+            // Black-out is an overlay so `B` also covers a live Mentimeter poll
+            // (without tearing down the web view / losing the session underneath).
+            if state.blackout {
+                BlackScreenView(message: blackMessage)
             }
         }
         .ignoresSafeArea()
