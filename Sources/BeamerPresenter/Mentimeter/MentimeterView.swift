@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 /// The Mentimeter window: an embedded browser with a persistent login, plus a
 /// bar to push the current page onto the audience screen and drive it (next /
@@ -6,6 +7,7 @@ import SwiftUI
 struct MentimeterView: View {
     @EnvironmentObject var state: PresentationState
     @StateObject private var browser = MentiBrowser()
+    @State private var results = MentiResults.load()
 
     var body: some View {
         VStack(spacing: 0) {
@@ -26,6 +28,7 @@ struct MentimeterView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
 
                 if browser.isLoading { ProgressView().controlSize(.small) }
+                resultsMenu
             }
             .buttonStyle(.borderless)
             .padding(.horizontal, 12).padding(.vertical, 8)
@@ -36,6 +39,30 @@ struct MentimeterView: View {
             audienceBar
         }
         .frame(minWidth: 760, minHeight: 520)
+        .onAppear { browser.deckFolder = { state.sourceURL?.deletingLastPathComponent() } }
+        .onReceive(NotificationCenter.default.publisher(for: MentiResults.didChange)) { _ in
+            results = MentiResults.load()
+        }
+    }
+
+    /// Recently downloaded result files → reveal in Finder.
+    private var resultsMenu: some View {
+        Menu {
+            if results.isEmpty {
+                Text("No downloaded results yet")
+            } else {
+                ForEach(results, id: \.self) { url in
+                    Button(url.lastPathComponent) {
+                        NSWorkspace.shared.activateFileViewerSelecting([url])
+                    }
+                }
+            }
+        } label: {
+            Image(systemName: "tray.and.arrow.down")
+        }
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("Downloaded Mentimeter results")
     }
 
     /// Push the current page to the projector and control it, or stop.
