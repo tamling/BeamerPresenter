@@ -10,6 +10,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     private var audienceWindow: NSWindow?
     private var splashWindow: NSWindow?
     private var settingsWindow: NSWindow?
+    private var mentimeterWindow: NSWindow?
     private var compileHUD: NSWindow?
     private var statusItem: NSStatusItem?
     private weak var statusInfoItem: NSMenuItem?
@@ -228,6 +229,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         let fileMenu = addSubmenu(to: mainMenu, "File")
         add(to: fileMenu, "Open…", #selector(openDocument(_:)), "o")
         add(to: fileMenu, "Add Folder to Favorites…", #selector(addFavoriteFolder(_:)), "d")
+        add(to: fileMenu, "Mentimeter…", #selector(showMentimeter(_:)))
         fileMenu.addItem(.separator())
         add(to: fileMenu, "Save Presentation As… (with ink & boards)", #selector(savePresentationAs(_:)), "S")
         add(to: fileMenu, "Save Notes…", #selector(saveNotes(_:)))
@@ -396,6 +398,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             settingsWindow = window
         }
         settingsWindow?.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    @objc private func showMentimeter(_ sender: Any?) {
+        if mentimeterWindow == nil {
+            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 900, height: 640),
+                                  styleMask: [.titled, .closable, .resizable, .miniaturizable],
+                                  backing: .buffered, defer: false)
+            window.title = "Mentimeter"
+            window.contentView = NSHostingView(rootView: MentimeterView())
+            window.isReleasedWhenClosed = false
+            window.center()
+            mentimeterWindow = window
+        }
+        mentimeterWindow?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
 
