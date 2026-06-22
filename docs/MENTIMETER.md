@@ -91,6 +91,9 @@ inside an embedded `WKWebView` — no scraping or private-endpoint automation.
   mode listens for them; best-effort, since synthetic keys may need adjusting),
   plus Reload and Stop. The audience window is brought up even before a deck is
   open and restored to the slides on Stop.
-- **P3** — download capture (save next to deck) + results list.
+- **P3 — done (macOS):** result exports (Excel, or PDF/anything sent as an
+  "attachment") are captured via `WKDownloadDelegate`; a save panel opens
+  pre-pointed at the current deck's folder. Saved files are remembered
+  (`MentiResults`) and listed in the window's tray menu → reveal in Finder.
 - **P4** — quick-launch links, join-code overlay, black-out integration.
 - **P5** — iPadOS port.

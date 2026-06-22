@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import WebKit
 
 /// A shared, persistent web session for Mentimeter so the presenter window — and,
@@ -28,13 +29,18 @@ final class MentiBrowser: NSObject, ObservableObject {
     @Published private(set) var isLoading = false
     @Published private(set) var urlString = ""
 
+    /// Where a result export should default to (the current deck's folder).
+    var deckFolder: (() -> URL?)?
+
     private var observations: [NSKeyValueObservation] = []
+    private var downloadDestinations: [ObjectIdentifier: URL] = [:]
 
     override init() {
         webView = WKWebView(frame: .zero, configuration: MentiSession.configuration())
         super.init()
         webView.allowsBackForwardNavigationGestures = true
         webView.uiDelegate = self
+        webView.navigationDelegate = self
         observe()
         load(Self.home)
     }
@@ -65,6 +71,56 @@ final class MentiBrowser: NSObject, ObservableObject {
 
     /// The page currently shown — captured when presenting on the audience screen.
     var currentURL: URL? { webView.url }
+}
+
+// Route result exports (Excel/PDF "attachment" responses) to a download.
+extension MentiBrowser: WKNavigationDelegate {
+    func webView(_ webView: WKWebView, decidePolicyFor navigationResponse: WKNavigationResponse,
+                 decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void) {
+        if let http = navigationResponse.response as? HTTPURLResponse,
+           let disposition = http.value(forHTTPHeaderField: "Content-Disposition"),
+           disposition.lowercased().contains("attachment") {
+            decisionHandler(.download)
+            return
+        }
+        decisionHandler(navigationResponse.canShowMIMEType ? .allow : .download)
+    }
+
+    func webView(_ webView: WKWebView, navigationResponse: WKNavigationResponse, didBecome download: WKDownload) {
+        download.delegate = self
+    }
+
+    func webView(_ webView: WKWebView, navigationAction: WKNavigationAction, didBecome download: WKDownload) {
+        download.delegate = self
+    }
+}
+
+// Ask where to save the export (defaulting to the deck's folder) and remember it.
+extension MentiBrowser: WKDownloadDelegate {
+    func download(_ download: WKDownload, decideDestinationUsing response: URLResponse,
+                  suggestedFilename: String, completionHandler: @escaping (URL?) -> Void) {
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = suggestedFilename
+        panel.canCreateDirectories = true
+        if let folder = deckFolder?() { panel.directoryURL = folder }
+        guard panel.runModal() == .OK, let url = panel.url else {
+            completionHandler(nil)
+            return
+        }
+        try? FileManager.default.removeItem(at: url)   // WKDownload won't overwrite
+        downloadDestinations[ObjectIdentifier(download)] = url
+        completionHandler(url)
+    }
+
+    func downloadDidFinish(_ download: WKDownload) {
+        let id = ObjectIdentifier(download)
+        if let url = downloadDestinations[id] { MentiResults.add(url) }
+        downloadDestinations[id] = nil
+    }
+
+    func download(_ download: WKDownload, didFailWithError error: Error, resumeData: Data?) {
+        downloadDestinations[ObjectIdentifier(download)] = nil
+    }
 }
 
 // Login flows (e.g. "Sign in with Google/SSO") often try to open a new window;
