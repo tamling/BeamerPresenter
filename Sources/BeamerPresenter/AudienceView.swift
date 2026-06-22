@@ -10,7 +10,9 @@ struct AudienceView: View {
     var body: some View {
         ZStack {
             Color.black
-            if let board = state.activeBoard {
+            if state.mentiActive, let url = state.mentiPresentURL {
+                MentiAudienceView(url: url)
+            } else if let board = state.activeBoard {
                 BoardCanvas(board: board, style: state.boardStyle)
                     .aspectRatio(state.slideAspect, contentMode: .fit)
                     .overlay {

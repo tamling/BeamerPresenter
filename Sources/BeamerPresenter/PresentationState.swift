@@ -73,6 +73,13 @@ final class PresentationState: ObservableObject {
     /// The style the on-screen board renders in (presenter + audience).
     var boardStyle: BoardStyle { boardLight ? .light : .dark }
 
+    // Mentimeter: when active, the audience screen shows the live present view.
+    @Published var mentiActive = false
+    @Published var mentiPresentURL: URL?
+
+    func startMenti(_ url: URL) { mentiPresentURL = url; mentiActive = true }
+    func stopMenti() { mentiActive = false }
+
     // Annotation / laser
     @Published var tool: Tool = .none
     @Published var penColor: Color = .red
@@ -163,6 +170,8 @@ final class PresentationState: ObservableObject {
         showOverview = false
         isLoaded = false
         hasUnsavedChanges = false
+        mentiActive = false
+        mentiPresentURL = nil
     }
 
     // MARK: - Scratch notes & session stats
