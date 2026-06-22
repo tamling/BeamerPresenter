@@ -8,12 +8,9 @@ import WebKit
 /// itself never sees the password: the user signs in on the real Mentimeter page
 /// inside the web view.
 enum MentiSession {
-    static let processPool = WKProcessPool()
-
     static func configuration() -> WKWebViewConfiguration {
         let config = WKWebViewConfiguration()
-        config.websiteDataStore = .default()      // persistent cookies (shared)
-        config.processPool = processPool          // shared so views stay in sync
+        config.websiteDataStore = .default()      // persistent cookies → shared login
         return config
     }
 }
@@ -71,7 +68,9 @@ final class MentiBrowser: NSObject, ObservableObject {
     func goHome() { load(Self.home) }
     func goBack() { webView.goBack() }
     func goForward() { webView.goForward() }
-    func reloadOrStop() { isLoading ? webView.stopLoading() : webView.reload() }
+    func reloadOrStop() {
+        if isLoading { webView.stopLoading() } else { webView.reload() }
+    }
 
     /// The page currently shown — captured when presenting on the audience screen.
     var currentURL: URL? { webView.url }
