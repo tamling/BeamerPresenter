@@ -88,7 +88,10 @@ extension MentiBrowser: WKDownloadDelegate {
                   suggestedFilename: String, completionHandler: @escaping (URL?) -> Void) {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("Menti", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        let name = suggestedFilename.isEmpty ? "mentimeter-results" : suggestedFilename
+        // Reduce the server-supplied name to a single safe path component (defense
+        // in depth on top of WebKit's own sanitisation) so it can't escape `dir`.
+        var name = (suggestedFilename as NSString).lastPathComponent
+        if name.isEmpty || name == "." || name == ".." { name = "mentimeter-results" }
         let dest = dir.appendingPathComponent(name)
         try? FileManager.default.removeItem(at: dest)      // WKDownload won't overwrite
         downloadDestinations[ObjectIdentifier(download)] = dest
