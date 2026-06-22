@@ -250,7 +250,9 @@ struct AudienceSlideView: View {
         GeometryReader { geo in
             let size = geo.size
             ZStack {
-                if let board = model.activeBoard {
+                if model.mentiActive, let url = model.mentiPresentURL {
+                    MentiAudienceView(url: url)
+                } else if let board = model.activeBoard {
                     BoardCanvas(board: board, style: model.boardStyle)
                 } else {
                     Color.black

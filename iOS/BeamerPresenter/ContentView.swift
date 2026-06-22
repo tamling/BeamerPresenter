@@ -64,6 +64,7 @@ struct StartView: View {
     @EnvironmentObject var model: PresentationModel
     @State private var showSettings = false
     @State private var showRemote = false
+    @State private var showMenti = false
     let open: () -> Void
 
     var body: some View {
@@ -113,6 +114,10 @@ struct StartView: View {
                         Label("Use as remote", systemImage: "dot.radiowaves.left.and.right")
                     }
                     .buttonStyle(GhostButtonStyle())
+                    Button { showMenti = true } label: {
+                        Label("Mentimeter", systemImage: "chart.bar.xaxis")
+                    }
+                    .buttonStyle(GhostButtonStyle())
                 }
                 .frame(maxWidth: 380)
 
@@ -156,6 +161,7 @@ struct StartView: View {
         }
         .sheet(isPresented: $showSettings) { SettingsView() }
         .sheet(isPresented: $showRemote) { RemoteView() }
+        .fullScreenCover(isPresented: $showMenti) { MentimeterView() }
     }
 
     static var version: String {
@@ -185,6 +191,7 @@ struct PresenterView: View {
     @State private var showCustomTarget = false
     @State private var customTargetText = ""
     @State private var showCloseConfirm = false
+    @State private var showMenti = false
     @AppStorage("doNotDisturb") private var doNotDisturb = false
     @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var landscape = false
@@ -279,6 +286,7 @@ struct PresenterView: View {
         } message: {
             Text("You added ink or whiteboards. Export them as a PDF before leaving, or discard them.")
         }
+        .fullScreenCover(isPresented: $showMenti) { MentimeterView() }
     }
 
     /// Bake ink + boards into a new PDF in the temp dir and present the share sheet.
@@ -660,6 +668,7 @@ struct PresenterView: View {
         Button { exportAndShare() } label: { Label("Export & Share…", systemImage: "square.and.arrow.up") }
         Toggle(isOn: $showThumbnails.animation()) { Label("Slide strip", systemImage: "rectangle.grid.1x2") }
         Toggle(isOn: $doNotDisturb) { Label("Keep screen awake", systemImage: "moon") }
+        Button { showMenti = true } label: { Label("Mentimeter…", systemImage: "chart.bar.xaxis") }
         Button { showSettings = true } label: { Label("Settings…", systemImage: "gearshape") }
         Divider()
         Button { requestClose() } label: { Label("Back to start", systemImage: "house") }

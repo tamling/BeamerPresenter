@@ -103,4 +103,8 @@ inside an embedded `WKWebView` — no scraping or private-endpoint automation.
   only falls back to a synthetic arrow key otherwise (no double-advance). The
   join-code overlay is intentionally skipped: Mentimeter already shows the code in
   its present view, and scraping it would be fragile.
-- **P5** — iPadOS port.
+- **P5 — done (iPadOS):** the same flow ported to the iPad (`iOS/.../Mentimeter/`,
+  `UIViewRepresentable` web views): a full-screen Mentimeter browser (launcher
+  "Mentimeter" button + presenter overflow menu) with persistent login, recents,
+  "Present on display" onto the external screen + a control strip, and result
+  exports captured and handed to the share sheet.
