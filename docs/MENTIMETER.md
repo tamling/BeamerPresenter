@@ -95,5 +95,12 @@ inside an embedded `WKWebView` — no scraping or private-endpoint automation.
   "attachment") are captured via `WKDownloadDelegate`; a save panel opens
   pre-pointed at the current deck's folder. Saved files are remembered
   (`MentiResults`) and listed in the window's tray menu → reveal in Finder.
-- **P4** — quick-launch links, join-code overlay, black-out integration.
+- **P4 — done (macOS):** quick-launch — recently presented mentis are remembered
+  (`MentiLinks`, by page title) and relaunched in one click from the toolbar's
+  recents menu. Black-out integration — `B` now overlays the black screen over a
+  live poll (the web view stays alive underneath). More robust Next/Previous —
+  the control clicks Mentimeter's actual on-screen nav button when found, and
+  only falls back to a synthetic arrow key otherwise (no double-advance). The
+  join-code overlay is intentionally skipped: Mentimeter already shows the code in
+  its present view, and scraping it would be fragile.
 - **P5** — iPadOS port.
