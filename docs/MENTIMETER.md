@@ -81,7 +81,10 @@ inside an embedded `WKWebView` — no scraping or private-endpoint automation.
 - Leaving Menti must always restore the normal audience output and black-out.
 
 ## Phases
-- **P1** — macOS Mentimeter window + persistent login + manual present.
+- **P1 — done (macOS):** File → Mentimeter… opens an embedded browser window
+  (`Mentimeter/MentiBrowser.swift`, `MentimeterView.swift`) with a persistent,
+  shared login session; back/forward/reload/home toolbar; sign in and present
+  manually. Audience integration + downloads follow below.
 - **P2** — Variant A audience integration + control strip.
 - **P3** — download capture (save next to deck) + results list.
 - **P4** — quick-launch links, join-code overlay, black-out integration.
