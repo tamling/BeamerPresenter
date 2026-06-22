@@ -174,6 +174,12 @@ final class PresentationModel: ObservableObject {
     /// The style the on-screen board renders in (presenter + audience).
     var boardStyle: BoardStyle { boardLight ? .light : .dark }
 
+    // Mentimeter: when active, the external display shows the live present view.
+    @Published var mentiActive = false
+    @Published var mentiPresentURL: URL?
+    func startMenti(_ url: URL) { mentiPresentURL = url; mentiActive = true }
+    func stopMenti() { mentiActive = false }
+
     // Your own free-form notes for this deck, autosaved per deck in UserDefaults.
     @Published var scratch: String = ""
 
@@ -325,6 +331,8 @@ final class PresentationModel: ObservableObject {
         deckKey = nil
         scratch = ""
         hasUnsavedChanges = false
+        mentiActive = false
+        mentiPresentURL = nil
     }
 
     // MARK: - Navigation
