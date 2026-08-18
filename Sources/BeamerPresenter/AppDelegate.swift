@@ -805,9 +805,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     }
 
     /// Whether the audience window fills the external display (borderless) or is a
-    /// normal, resizable window. Defaults to full screen on a second display.
+    /// normal, resizable window. Defaults to a normal window — borderless fill is
+    /// opt-in via the menu/settings (and needs a second display).
     private var audienceFillsExternal: Bool {
-        (UserDefaults.standard.object(forKey: Prefs.audienceFullscreen) as? Bool ?? true)
+        (UserDefaults.standard.object(forKey: Prefs.audienceFullscreen) as? Bool ?? false)
             && NSScreen.screens.count > 1
     }
 
@@ -826,9 +827,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         audience.contentMinSize = NSSize(width: 320, height: 200)
         audience.contentView = NSHostingView(rootView: AudienceView().environmentObject(state))
         if fill {
-            // Keep it above ordinary windows on the projector, but below the
-            // menu-bar level so the menu bar stays visible during the talk.
-            audience.level = .floating
+            // Cover everything on the projector, including the menu bar —
+            // nothing of the desktop should peek through during the talk.
+            audience.level = NSWindow.Level(rawValue: NSWindow.Level.mainMenu.rawValue + 1)
             audience.collectionBehavior = [.fullScreenAuxiliary, .canJoinAllSpaces]
         } else {
             // A normal, resizable window whose green button enters real macOS
@@ -850,7 +851,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     }
 
     @objc private func toggleAudienceFullscreen(_ sender: Any?) {
-        let current = UserDefaults.standard.object(forKey: Prefs.audienceFullscreen) as? Bool ?? true
+        let current = UserDefaults.standard.object(forKey: Prefs.audienceFullscreen) as? Bool ?? false
         UserDefaults.standard.set(!current, forKey: Prefs.audienceFullscreen)
         rebuildAudienceWindow()
         updateAudienceMenuTitle()
