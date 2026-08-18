@@ -22,17 +22,13 @@ struct BlackoutView: View {
                     Color.black.opacity(0.45)
                 }
                 VStack(spacing: s * 0.035) {
-                    HStack(spacing: s * 0.012) {
-                        Circle().fill(Theme.statusOk)
-                            .frame(width: max(7, s * 0.012), height: max(7, s * 0.012))
-                            .shadow(color: Theme.statusOk.opacity(0.7), radius: 4)
-                            .opacity(dotOn ? 1 : 0.2)
-                            .animation(.easeInOut(duration: 1.4).repeatForever(autoreverses: true), value: dotOn)
-                        Text("Audience paused")
-                            .font(.mono(max(11, s * 0.018))).textCase(.uppercase).tracking(2)
-                            .foregroundStyle(Theme.textMuted)
-                    }
-                    .onAppear { dotOn.toggle() }
+                    // Just the quiet pulsing dot — no label.
+                    Circle().fill(Theme.statusOk)
+                        .frame(width: max(7, s * 0.012), height: max(7, s * 0.012))
+                        .shadow(color: Theme.statusOk.opacity(0.7), radius: 4)
+                        .opacity(dotOn ? 1 : 0.2)
+                        .animation(.easeInOut(duration: 1.4).repeatForever(autoreverses: true), value: dotOn)
+                        .onAppear { dotOn.toggle() }
                     if !message.isEmpty {
                         Text(message)
                             .font(.display(s * 0.10))
