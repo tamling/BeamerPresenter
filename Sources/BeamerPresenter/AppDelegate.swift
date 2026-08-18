@@ -831,7 +831,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             audience.level = .floating
             audience.collectionBehavior = [.fullScreenAuxiliary, .canJoinAllSpaces]
         } else {
-            audience.collectionBehavior = [.fullScreenNone]   // a normal, resizable window
+            // A normal, resizable window whose green button enters real macOS
+            // full screen (not just zoom/maximise).
+            audience.collectionBehavior = [.fullScreenPrimary]
         }
         audienceWindow = audience
     }
@@ -873,7 +875,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
 
         if audienceFillsExternal {
             audienceWindow?.setFrame(screens[1].frame, display: true)
-        } else if let audience = audienceWindow {
+        } else if let audience = audienceWindow, !audience.styleMask.contains(.fullScreen) {
+            // (Skip reframing while the user has it in native full screen.)
             let visible = screens[1].visibleFrame
             let size = NSSize(width: visible.width * 0.85, height: visible.height * 0.85)
             audience.setFrame(NSRect(x: visible.midX - size.width / 2,
