@@ -795,9 +795,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         presenter.isReleasedWhenClosed = false   // we hold a strong ref; avoid an ARC over-release crash
         presenter.contentView = NSHostingView(rootView: root)
         presenter.contentMinSize = NSSize(width: 560, height: 380)   // allow shrinking
-        // Disable full screen so the green button zooms (maximises) and the
-        // window stays freely resizable instead of taking over the screen.
-        presenter.collectionBehavior = [.fullScreenNone]
+        // A normal, resizable window whose green button enters real macOS
+        // full screen (not just zoom/maximise).
+        presenter.collectionBehavior = [.fullScreenPrimary]
         presenter.delegate = self
         presenter.center()
         // Stays hidden behind the launch splash; shown once the splash fades.
@@ -884,7 +884,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
                                      y: visible.midY - size.height / 2,
                                      width: size.width, height: size.height), display: true)
         }
-        if let presenter = presenterWindow {
+        if let presenter = presenterWindow, !presenter.styleMask.contains(.fullScreen) {
+            // (Skip repositioning while the user has it in native full screen.)
             let visible = (NSScreen.main ?? screens[0]).visibleFrame
             let size = presenter.frame.size
             presenter.setFrameOrigin(NSPoint(x: visible.midX - size.width / 2,
