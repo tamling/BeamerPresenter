@@ -1,7 +1,6 @@
 # BeamerPresenter
 
-A native macOS (Apple Silicon) presenter app for LaTeX **Beamer** decks,
-modelled on [magicPresenter](https://www.magicpresenter.app). The audience
+A native macOS (Apple Silicon) presenter app for LaTeX **Beamer** decks. The audience
 screen shows the slide; your laptop shows a full presenter console: current
 slide, next slide, speaker notes, a thumbnail strip, a slide overview, and a
 timer.
