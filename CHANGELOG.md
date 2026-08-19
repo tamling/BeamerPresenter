@@ -1,5 +1,21 @@
 # Changelog
 
+## v3.1 — 2026-08-19
+
+Window-behaviour polish on macOS.
+
+- The audience window now opens as a normal, resizable window by default; the
+  borderless edge-to-edge fill on the external display is opt-in via
+  Presentation ▸ Enter Audience Full Screen or the settings toggle — and then
+  covers the menu bar completely.
+- The green traffic-light button enters real macOS full screen on both the
+  presenter and the audience window (it previously only zoomed).
+- Fixed: unplugging the projector while the borderless audience window was up
+  stranded it — uncloseable — on the main screen. It now converts to a normal
+  window; replugging restores the fill mode.
+- The blacked-out audience screen keeps its pulsing green dot but no longer
+  shows the "Audience paused" label (macOS and iPadOS).
+
 ## v3.0 — 2026-06-21
 
 BeamerPresenter for **macOS** and **iPadOS**: present LaTeX Beamer / PDF decks
