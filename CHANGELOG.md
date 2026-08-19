@@ -1,5 +1,11 @@
 # Changelog
 
+## v3.2 — 2026-08-19
+
+- Drop a PDF, .tex, or .pptx anywhere on the home screen to open it (and a
+  folder anywhere to pin it as a favourite) — the drop zone stays as the
+  visual anchor and still lights up while dragging.
+
 ## v3.1 — 2026-08-19
 
 Window-behaviour polish on macOS.

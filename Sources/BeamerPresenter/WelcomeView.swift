@@ -34,6 +34,9 @@ struct WelcomeView: View {
         .frame(minWidth: 680, minHeight: 460)
         .background(Theme.base)
         .tint(Theme.accent)
+        // Accept drops anywhere on the home screen — the drop zone below is
+        // just the visual anchor (it still lights up while dragging).
+        .onDrop(of: [UTType.fileURL], isTargeted: $dropTargeted) { handleDrop($0) }
         .onReceive(NotificationCenter.default.publisher(for: Favorites.didChange)) { _ in
             favorites = Favorites.load()
         }
@@ -309,24 +312,27 @@ struct WelcomeView: View {
         .overlay(RoundedRectangle(cornerRadius: 14)
             .strokeBorder(dropTargeted ? Theme.accent : Theme.hairlineStrong,
                           style: StrokeStyle(lineWidth: 1.5, dash: [5])))
-        .onDrop(of: [UTType.fileURL], isTargeted: $dropTargeted) { providers in
-                for provider in providers {
-                    _ = provider.loadDataRepresentation(forTypeIdentifier: UTType.fileURL.identifier) { data, _ in
-                        guard let data, let url = URL(dataRepresentation: data, relativeTo: nil) else { return }
-                        var isDir: ObjCBool = false
-                        let exists = FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir)
-                        DispatchQueue.main.async {
-                            if exists, isDir.boolValue {
-                                Favorites.add(url)            // a folder → favorite
-                            } else {
-                                let ext = url.pathExtension.lowercased()
-                                if ["pdf", "tex", "pptx", "ppt", "odp"].contains(ext) { onOpenURL(url) }
-                            }
-                        }
+    }
+
+    /// Handles a file drop anywhere on the home screen: a folder becomes a
+    /// favourite, a presentation file opens.
+    private func handleDrop(_ providers: [NSItemProvider]) -> Bool {
+        for provider in providers {
+            _ = provider.loadDataRepresentation(forTypeIdentifier: UTType.fileURL.identifier) { data, _ in
+                guard let data, let url = URL(dataRepresentation: data, relativeTo: nil) else { return }
+                var isDir: ObjCBool = false
+                let exists = FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir)
+                DispatchQueue.main.async {
+                    if exists, isDir.boolValue {
+                        Favorites.add(url)            // a folder → favorite
+                    } else {
+                        let ext = url.pathExtension.lowercased()
+                        if ["pdf", "tex", "pptx", "ppt", "odp"].contains(ext) { onOpenURL(url) }
                     }
                 }
-                return true
             }
+        }
+        return true
     }
 }
 
