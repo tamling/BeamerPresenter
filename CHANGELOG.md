@@ -1,5 +1,10 @@
 # Changelog
 
+## v3.3 — 2026-08-19
+
+- Removed the reference/link to the magicPresenter project from the README
+  (and a code comment).
+
 ## v3.2 — 2026-08-19
 
 - Drop a PDF, .tex, or .pptx anywhere on the home screen to open it (and a

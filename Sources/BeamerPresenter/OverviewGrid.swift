@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Full-window grid of every slide (magicPresenter-style overview). Click a
+/// Full-window grid of every slide. Click a
 /// slide to jump to it and dismiss the overview.
 struct OverviewGrid: View {
     @EnvironmentObject var state: PresentationState
