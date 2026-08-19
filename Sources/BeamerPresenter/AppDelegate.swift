@@ -16,6 +16,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     private weak var statusInfoItem: NSMenuItem?
     private var deckMenuItems: [NSMenuItem] = []   // Presentation/Tools/Whiteboard menus
     private weak var audienceFSItem: NSMenuItem?
+    /// One-shot observer used to finish an audience rebuild after the window
+    /// has left native full screen.
+    private var fullScreenExitObserver: NSObjectProtocol?
     private var keyMonitor: Any?
     private var cancellables = Set<AnyCancellable>()
 
@@ -840,15 +843,46 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         audienceWindow = audience
     }
 
-    /// Recreates the audience window after its full-screen/windowed mode changes.
+    /// Recreates the audience window after its full-screen/windowed mode was
+    /// changed explicitly (menu item / settings) — always shows the result.
     @objc private func rebuildAudienceWindow() {
-        guard state.isLoaded || state.mentiActive else { return }
-        let wasVisible = audienceWindow?.isVisible ?? true
+        rebuildAudience(showEvenIfHidden: true)
+    }
+
+    /// Tears the audience window down and recreates it in the style matching
+    /// the current preference and screen setup. `showEvenIfHidden` separates
+    /// explicit user actions (always show the rebuilt window) from automatic
+    /// screen-change housekeeping (a hidden window stays hidden).
+    private func rebuildAudience(showEvenIfHidden: Bool) {
+        if let audience = audienceWindow, audience.styleMask.contains(.fullScreen) {
+            // Closing a window while it is in native full screen can strand an
+            // empty Space — leave full screen first, finish the rebuild after.
+            guard fullScreenExitObserver == nil else { return }
+            fullScreenExitObserver = NotificationCenter.default.addObserver(
+                forName: NSWindow.didExitFullScreenNotification, object: audience, queue: .main
+            ) { [weak self] _ in
+                Task { @MainActor in
+                    guard let self else { return }
+                    if let token = self.fullScreenExitObserver {
+                        NotificationCenter.default.removeObserver(token)
+                        self.fullScreenExitObserver = nil
+                    }
+                    self.rebuildAudience(showEvenIfHidden: showEvenIfHidden)
+                }
+            }
+            audience.toggleFullScreen(nil)
+            return
+        }
+
+        // Always drop the stale window, even with nothing loaded — the next
+        // deck would otherwise inherit a window built for the old screen setup.
+        let wasVisible = audienceWindow?.isVisible ?? false
         audienceWindow?.close()
         audienceWindow = nil
+        guard state.isLoaded || state.mentiActive else { return }
         buildAudienceWindowIfNeeded()
         positionWindows()
-        guard wasVisible else { return }   // e.g. hidden to the menu bar
+        guard showEvenIfHidden || wasVisible else { return }   // e.g. hidden to the menu bar
         audienceWindow?.orderFront(nil)
         presenterWindow?.makeKeyAndOrderFront(nil)
     }
@@ -872,9 +906,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         // fill window on the main screen — above the menu bar, with no title
         // bar, impossible to close. (Replugging restores the fill mode.)
         if let audience = audienceWindow,
-           !audience.styleMask.contains(.titled) != audienceFillsExternal {
-            rebuildAudienceWindow()
+           audience.styleMask.contains(.titled) == audienceFillsExternal {
+            rebuildAudience(showEvenIfHidden: false)
         }
+        // Reposition unconditionally: a completed rebuild positions its own
+        // windows, but the deferred/early-return paths and the presenter
+        // window still need it (double positioning is idempotent).
         positionWindows()
         updateAudienceMenuTitle()
     }
