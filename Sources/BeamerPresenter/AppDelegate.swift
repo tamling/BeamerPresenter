@@ -835,17 +835,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             // A normal, resizable window whose green button enters real macOS
             // full screen (not just zoom/maximise).
             audience.collectionBehavior = [.fullScreenPrimary]
+            audience.center()   // sensible spot on a single screen (positionWindows handles two)
         }
         audienceWindow = audience
     }
 
     /// Recreates the audience window after its full-screen/windowed mode changes.
     @objc private func rebuildAudienceWindow() {
-        guard state.isLoaded else { return }
+        guard state.isLoaded || state.mentiActive else { return }
+        let wasVisible = audienceWindow?.isVisible ?? true
         audienceWindow?.close()
         audienceWindow = nil
         buildAudienceWindowIfNeeded()
         positionWindows()
+        guard wasVisible else { return }   // e.g. hidden to the menu bar
         audienceWindow?.orderFront(nil)
         presenterWindow?.makeKeyAndOrderFront(nil)
     }
@@ -864,6 +867,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     }
 
     @objc private func screensChanged() {
+        // If the audience window's style no longer matches the screen setup,
+        // rebuild it: unplugging the projector otherwise strands the borderless
+        // fill window on the main screen — above the menu bar, with no title
+        // bar, impossible to close. (Replugging restores the fill mode.)
+        if let audience = audienceWindow,
+           !audience.styleMask.contains(.titled) != audienceFillsExternal {
+            rebuildAudienceWindow()
+        }
         positionWindows()
         updateAudienceMenuTitle()
     }
