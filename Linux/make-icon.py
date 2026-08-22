@@ -26,7 +26,10 @@ d.rounded_rectangle([188, 226, 424, 394], radius=26, fill=KEY,
 # A "slide" line on the front screen.
 d.rounded_rectangle([228, 286, 384, 306], radius=10, fill=ACCENT)
 
-out = Path(__file__).parent / "src-tauri" / "icons" / "icon.png"
-out.parent.mkdir(parents=True, exist_ok=True)
-img.save(out)
-print(f"wrote {out}")
+icons = Path(__file__).parent / "src-tauri" / "icons"
+icons.mkdir(parents=True, exist_ok=True)
+img.save(icons / "icon.png")
+# The sizes the Tauri bundler expects for the .deb / desktop entry.
+for name, px in [("32x32.png", 32), ("128x128.png", 128), ("128x128@2x.png", 256)]:
+    img.resize((px, px), Image.LANCZOS).save(icons / name)
+print(f"wrote {icons}/icon.png + 32/128/256 sizes")

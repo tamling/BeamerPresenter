@@ -58,6 +58,18 @@ cargo run            # development
 cargo build --release   # → target/release/beamerpresenter
 ```
 
+### .deb package
+
+```sh
+Linux/build-deb.sh   # → Linux/src-tauri/target/release/bundle/deb/*.deb
+sudo apt install ./BeamerPresenter_*.deb
+```
+
+Install with `apt install ./…` (not bare `dpkg -i`) so dependencies are
+resolved: WebKitGTK, GTK and the XDG portal are hard `Depends`, and
+LibreOffice Impress + latexmk/TeX Live are `Recommends` — apt installs them
+by default, `--no-install-recommends` skips them for a minimal install.
+
 No Node/npm needed — the frontend is plain HTML/CSS/JS served from `ui/`,
 with pdf.js vendored under `ui/vendor/pdfjs/`.
 
