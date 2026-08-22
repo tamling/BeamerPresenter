@@ -1,5 +1,17 @@
 # Changelog
 
+## v4.2 — 2026-08-22
+
+**Whiteboard for Linux** (`W`): free-form scratch boards during a talk, live on
+the projector.
+
+- Freehand ink with the four pen colours, smoothed strokes, undo (`Z`) and
+  clear (`C`); drawing streams to the audience window in real time.
+- Multiple boards (new / previous / next / delete) with a board counter.
+- Dark Night-look board with the dot grid, plus a light ink-on-white toggle
+  for bright projectors — same styles as the macOS app.
+- Blackout still covers the board; `Esc` returns to the slides.
+
 ## v4.1 — 2026-08-22
 
 PowerPoint support with speaker notes, on macOS and Linux.

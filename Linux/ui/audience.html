@@ -25,6 +25,10 @@
 </head>
 <body>
   <div id="stage"><canvas id="slide"></canvas></div>
+  <div id="board-stage" style="position:fixed; inset:0; display:none; align-items:center;
+       justify-content:center; background:#000; z-index:5;">
+    <canvas id="board"></canvas>
+  </div>
   <div id="blackout">
     <div class="pulse-dot"></div>
     <div id="black-clock">00:00</div>
@@ -37,6 +41,7 @@
     window.dispatchEvent(new Event("pdfjs-ready"));
   </script>
   <script src="js/slides.js" defer></script>
+  <script src="js/whiteboard.js" defer></script>
   <script src="js/audience.js" defer></script>
 </body>
 </html>

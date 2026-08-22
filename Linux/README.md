@@ -22,6 +22,9 @@ Built with [Tauri 2](https://tauri.app) (Rust + WebKitGTK) and
 - **PowerPoint** — `.pptx`/`.ppt`/`.odp` convert via headless LibreOffice;
   `.pptx` **speaker notes** are read straight from the file and shown in the
   console (the converted PDF alone wouldn't carry them).
+- **Whiteboard** (`W`) — free-form scratch boards, drawn in the console and
+  mirrored live on the projector: four pen colours, undo/clear, multiple
+  boards, dark (dot grid) or light (ink-on-white) style.
 - **Blackout** (`B`) — audience shows a quiet pulsing dot and the clock.
 - **Overview grid** (`G`), slide counter, wall clock, start/stop/reset timer.
 - Drop a PDF or `.tex` **anywhere** on the home screen to open it; recents list.
@@ -29,6 +32,7 @@ Built with [Tauri 2](https://tauri.app) (Rust + WebKitGTK) and
 ### Keys
 
 `←`/`→`/`Space` slides · `Home`/`End` first/last · `B` blackout · `G` overview ·
+`W` whiteboard · `Z` undo stroke · `C` clear board ·
 `F` audience full screen · `T` timer start/stop · `R` timer reset
 
 ## Building

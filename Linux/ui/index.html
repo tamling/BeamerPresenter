@@ -99,6 +99,25 @@
              font-family: var(--font-mono); font-size: 10.5px; color: var(--text-faint); }
     .hints b { color: var(--text-muted); font-weight: 600; }
 
+    /* ---- Whiteboard ---- */
+    #board-wrap { display: none; flex: 1; min-width: 0; flex-direction: column;
+                  padding: 12px 18px 18px; gap: 10px; }
+    #board-wrap.active { display: flex; }
+    #board-toolbar { display: flex; align-items: center; gap: 8px; }
+    #board-toolbar .sep { width: 1px; height: 20px; background: var(--hairline-strong); }
+    .wb-btn { padding: 5px 10px; font-size: 12px; }
+    .wb-btn.on { background: var(--accent-dim); border-color: var(--accent);
+                 color: var(--accent); }
+    .wb-color { width: 26px; height: 26px; border-radius: 50%; padding: 0;
+                border: 2px solid transparent; }
+    .wb-color.on { border-color: var(--text-primary); }
+    #board-counter { font-family: var(--font-mono); font-size: 12px;
+                     color: var(--text-muted); min-width: 34px; text-align: center; }
+    #board-area { flex: 1; min-height: 0; display: flex; align-items: center;
+                  justify-content: center; }
+    #board-canvas { cursor: crosshair; border-radius: 6px;
+                    box-shadow: 0 0 0 1px var(--hairline); touch-action: none; }
+
     /* ---- Overview overlay ---- */
     #overview { position: fixed; inset: 0; background: rgba(12,13,16,.96); display: none;
                 overflow-y: auto; padding: 26px; z-index: 40; }
@@ -171,10 +190,30 @@
       <button id="timer-btn" title="Start / stop the elapsed timer (T)">Start</button>
       <button id="timer-reset" title="Reset the timer (R)">Reset</button>
       <span class="live" id="live">LIVE</span>
+      <button id="board-btn" title="Toggle the whiteboard (W)">Board</button>
       <button id="close-btn" title="Back to the home screen">Close</button>
     </div>
     <div class="deck">
       <div class="current-pane"><canvas id="current"></canvas></div>
+      <div id="board-wrap">
+        <div id="board-toolbar">
+          <!-- colour dots are added by presenter.js -->
+          <span class="sep"></span>
+          <button class="wb-btn" id="wb-undo" title="Undo stroke (Z)">Undo</button>
+          <button class="wb-btn" id="wb-clear" title="Clear this board (C)">Clear</button>
+          <span class="sep"></span>
+          <button class="wb-btn" id="wb-prev" title="Previous board">‹</button>
+          <span id="board-counter">1/1</span>
+          <button class="wb-btn" id="wb-next" title="Next board">›</button>
+          <button class="wb-btn" id="wb-new" title="New board">+</button>
+          <button class="wb-btn" id="wb-delete" title="Delete this board">Delete</button>
+          <span class="sep"></span>
+          <button class="wb-btn" id="wb-style" title="Dark / light board">Light</button>
+          <span style="flex:1"></span>
+          <button class="wb-btn" id="wb-close" title="Back to the slides (W)">Slides</button>
+        </div>
+        <div id="board-area"><canvas id="board-canvas"></canvas></div>
+      </div>
       <div class="side">
         <div class="side-slot">
           <div class="micro-label" style="margin-bottom:8px">Next</div>
@@ -190,6 +229,7 @@
     </div>
     <div class="hints">
       <span><b>←→</b> slides</span><span><b>B</b> black</span><span><b>G</b> overview</span>
+      <span><b>W</b> whiteboard</span><span><b>Z</b> undo</span>
       <span><b>F</b> audience fullscreen</span><span><b>T</b> timer</span>
       <span><b>Home/End</b> first/last</span>
     </div>
@@ -213,6 +253,7 @@
   </script>
   <script src="js/texnotes.js" defer></script>
   <script src="js/slides.js" defer></script>
+  <script src="js/whiteboard.js" defer></script>
   <script src="js/presenter.js" defer></script>
 </body>
 </html>
