@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Audience</title>
+  <link rel="stylesheet" href="css/night.css" />
+  <style>
+    html, body { background: #000; }
+    #stage { position: fixed; inset: 0; display: flex; align-items: center;
+             justify-content: center; background: #000; }
+    /* Black-out overlay: just the quiet pulsing dot and the clock — no label
+       (matches the macOS audience screen). */
+    #blackout { position: fixed; inset: 0; background: var(--blackout); display: none;
+                flex-direction: column; align-items: center; justify-content: center;
+                gap: 4vmin; z-index: 10; }
+    #blackout.active { display: flex; }
+    .pulse-dot { width: 1.4vmin; height: 1.4vmin; min-width: 8px; min-height: 8px;
+                 border-radius: 50%; background: var(--status-ok);
+                 box-shadow: 0 0 8px rgba(91,208,138,.7);
+                 animation: pulse 2.8s ease-in-out infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .2; } }
+    #black-clock { font-family: var(--font-mono); font-weight: 700; font-size: 15vmin;
+                   color: var(--text-faint); }
+  </style>
+</head>
+<body>
+  <div id="stage"><canvas id="slide"></canvas></div>
+  <div id="blackout">
+    <div class="pulse-dot"></div>
+    <div id="black-clock">00:00</div>
+  </div>
+
+  <script type="module">
+    import * as pdfjs from "./vendor/pdfjs/pdf.min.mjs";
+    pdfjs.GlobalWorkerOptions.workerSrc = "vendor/pdfjs/pdf.worker.min.mjs";
+    window.pdfjsLib = pdfjs;
+    window.dispatchEvent(new Event("pdfjs-ready"));
+  </script>
+  <script src="js/slides.js" defer></script>
+  <script src="js/audience.js" defer></script>
+</body>
+</html>

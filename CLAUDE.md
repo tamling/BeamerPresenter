@@ -17,6 +17,9 @@ The version lives in all of these places — keep them in sync:
   `CURRENT_PROJECT_VERSION` / `CFBundleVersion`
 - Code fallbacks: `Sources/BeamerPresenter/Favorites.swift` (`AppInfo.version`)
   and `iOS/BeamerPresenter/ContentView.swift`
+- Linux port: `Linux/src-tauri/tauri.conf.json` (`version`),
+  `Linux/src-tauri/Cargo.toml` (`package.version`), and the version string in
+  `Linux/ui/js/presenter.js`
 
 Add a matching entry at the top of `CHANGELOG.md` (`## vX.Y — YYYY-MM-DD`)
 describing the change.

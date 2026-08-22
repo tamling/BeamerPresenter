@@ -1,5 +1,20 @@
 # Changelog
 
+## v4.0 — 2026-08-22
+
+**Linux port** (`Linux/`): the core presenter console as a native Linux app,
+built with Tauri 2 (Rust + WebKitGTK) and a vendored pdf.js — no Node needed.
+
+- Two windows: presenter console (current + next slide, notes, clock,
+  start/stop/reset timer, overview grid) and a clean audience window that
+  moves to a second monitor full screen automatically (`F` toggles).
+- Speaker notes in both Beamer flavours: split double-width PDFs
+  (`show notes on second screen=right`) and `\note{…}` read from the `.tex`
+  (with exact `.nav` page mapping) — same logic as the macOS app.
+- Opens `.pdf` and `.tex` (sibling PDF or on-the-fly LaTeX compile), drop
+  anywhere on the home screen, recents, blackout (`B`) with the pulsing dot
+  and clock, Night Console theme throughout.
+
 ## v3.3 — 2026-08-19
 
 - Removed the reference/link to the magicPresenter project from the README
