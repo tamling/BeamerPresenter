@@ -19,6 +19,9 @@ Built with [Tauri 2](https://tauri.app) (Rust + WebKitGTK) and
     (exact page mapping via the sibling `.nav` file when present).
 - **.tex opening** — uses the sibling PDF, or compiles via
   `latexmk`/`pdflatex`/`xelatex`/`lualatex`.
+- **PowerPoint** — `.pptx`/`.ppt`/`.odp` convert via headless LibreOffice;
+  `.pptx` **speaker notes** are read straight from the file and shown in the
+  console (the converted PDF alone wouldn't carry them).
 - **Blackout** (`B`) — audience shows a quiet pulsing dot and the clock.
 - **Overview grid** (`G`), slide counter, wall clock, start/stop/reset timer.
 - Drop a PDF or `.tex` **anywhere** on the home screen to open it; recents list.
@@ -55,7 +58,8 @@ No Node/npm needed — the frontend is plain HTML/CSS/JS served from `ui/`,
 with pdf.js vendored under `ui/vendor/pdfjs/`.
 
 Optional: `latexmk`/TeX Live for compiling `.tex` files
-(`sudo apt install latexmk texlive-latex-extra`).
+(`sudo apt install latexmk texlive-latex-extra`), and LibreOffice for opening
+`.pptx`/`.ppt`/`.odp` (`sudo apt install libreoffice-impress`).
 
 ## Layout
 

@@ -1,5 +1,18 @@
 # Changelog
 
+## v4.1 — 2026-08-22
+
+PowerPoint support with speaker notes, on macOS and Linux.
+
+- **Linux**: opens `.pptx`/`.ppt`/`.odp` via headless LibreOffice conversion
+  (sibling PDF is reused when present), with a LibreOffice status light on the
+  home screen — matching the macOS flow.
+- **Both platforms**: PowerPoint **speaker notes now show in the presenter
+  console** — read directly from the `.pptx` next to the converted PDF
+  (slide order, per-slide notes pages, XML entities all handled; covered by a
+  unit test on the Linux side). LibreOffice's PDF only carries the slides, so
+  this fills the gap; `.tex` notes take precedence when both exist.
+
 ## v4.0 — 2026-08-22
 
 **Linux port** (`Linux/`): the core presenter console as a native Linux app,
