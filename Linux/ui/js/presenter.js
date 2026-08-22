@@ -73,20 +73,29 @@
   el("hud-close").addEventListener("click", hideHud);
 
   // A picked/dropped file: a .pdf directly; a .tex via its sibling PDF or by
-  // compiling it (mirrors the macOS open flow).
+  // compiling it; a PowerPoint/ODP via its sibling PDF or a LibreOffice
+  // conversion (mirrors the macOS open flow).
   async function openAny(path) {
     const lower = path.toLowerCase();
-    if (lower.endsWith(".tex")) {
-      const sibling = path.replace(/\.tex$/i, ".pdf");
+    const viaSiblingOr = async (extRe, title, detail, command, arg) => {
+      const sibling = path.replace(extRe, ".pdf");
       if (await invoke("file_exists", { path: sibling })) return openPDF(sibling);
-      hud(`Compiling ${path.split("/").pop()}…`, "Running LaTeX…");
-      const result = await invoke("compile_tex", { texPath: path });
+      hud(title, detail);
+      const result = await invoke(command, arg);
       hideHud();
       if (result.ok) return openPDF(result.pdf_path);
-      return hud("Could not compile the .tex", result.log, true);
+      hud(`Could not open ${path.split("/").pop()}`, result.log, true);
+    };
+    if (lower.endsWith(".tex")) {
+      return viaSiblingOr(/\.tex$/i, `Compiling ${path.split("/").pop()}…`,
+        "Running LaTeX…", "compile_tex", { texPath: path });
+    }
+    if (/\.(pptx|ppt|odp)$/.test(lower)) {
+      return viaSiblingOr(/\.(pptx|ppt|odp)$/i, `Converting ${path.split("/").pop()}…`,
+        "Using LibreOffice…", "convert_office", { path });
     }
     if (lower.endsWith(".pdf")) return openPDF(path);
-    hud("Unsupported file", "Drop a .pdf or a .tex.", true);
+    hud("Unsupported file", "Drop a .pdf, .tex, .pptx, .ppt or .odp.", true);
   }
 
   async function openPDF(path) {
@@ -97,9 +106,16 @@
       state.split = info.split;
       state.page = 0;
       state.blackout = false;
-      // Plain single-screen PDFs pull \note{} text from the .tex next to them;
+      // Plain single-screen PDFs pull \note{} text from the .tex next to them
+      // — or PowerPoint speaker notes from a sibling .pptx (converted decks);
       // split decks carry their notes on the page's right half already.
       state.notes = info.split ? new Map() : await TexNotes.load(path, info.pageCount);
+      if (!info.split && state.notes.size === 0) {
+        const pptxNotes = await invoke("pptx_notes", { pdfPath: path });
+        state.notes = new Map(pptxNotes
+          .map((text, i) => [i, text])
+          .filter(([, text]) => text && text.trim() !== ""));
+      }
     } catch (e) {
       return hud("Could not open PDF", String(e), true);
     }
@@ -331,6 +347,13 @@
       : "LaTeX not found — install TeX Live to compile .tex";
   });
 
-  el("version").textContent = "BeamerPresenter 4.0 · Linux";
+  invoke("office_engine").then((engine) => {
+    el("office-dot").className = "dot " + (engine ? "ok" : "warn");
+    el("office-status").textContent = engine
+      ? "LibreOffice ready — .pptx supported"
+      : "LibreOffice not found — needed to open .pptx";
+  });
+
+  el("version").textContent = "BeamerPresenter 4.1 · Linux";
   renderRecents();
 })();

@@ -16,7 +16,7 @@ fn read_text_lossy(path: &Path) -> Option<String> {
 #[tauri::command]
 async fn pick_file() -> Option<String> {
     rfd::AsyncFileDialog::new()
-        .add_filter("Presentations", &["pdf", "tex"])
+        .add_filter("Presentations", &["pdf", "tex", "pptx", "ppt", "odp"])
         .pick_file()
         .await
         .map(|f| f.path().to_string_lossy().into_owned())
@@ -114,6 +114,50 @@ fn compile_tex(tex_path: String) -> CompileResult {
     }
 }
 
+/// Converts a PowerPoint/ODP to a sibling PDF via headless LibreOffice.
+#[tauri::command]
+fn convert_office(path: String) -> CompileResult {
+    let source = PathBuf::from(&path);
+    let dir = source.parent().unwrap_or(Path::new("."));
+    let Some(soffice) = office_binary() else {
+        return CompileResult {
+            ok: false,
+            pdf_path: None,
+            log: "LibreOffice not found — install it (e.g. libreoffice-impress) to open .pptx.".into(),
+        };
+    };
+    match Command::new(soffice)
+        .args(["--headless", "--convert-to", "pdf", "--outdir"])
+        .arg(dir)
+        .arg(&source)
+        .output()
+    {
+        Ok(out) => {
+            let pdf = source.with_extension("pdf");
+            if out.status.success() && pdf.is_file() {
+                CompileResult { ok: true, pdf_path: Some(pdf.to_string_lossy().into_owned()), log: String::new() }
+            } else {
+                let log = String::from_utf8_lossy(&out.stdout).into_owned()
+                    + &String::from_utf8_lossy(&out.stderr);
+                CompileResult { ok: false, pdf_path: None, log: tail(&log, 40) }
+            }
+        }
+        Err(e) => CompileResult { ok: false, pdf_path: None, log: e.to_string() },
+    }
+}
+
+/// Which LibreOffice binary (if any) is installed — shown on the home screen.
+#[tauri::command]
+fn office_engine() -> Option<String> {
+    office_binary().map(|s| s.to_string())
+}
+
+fn office_binary() -> Option<&'static str> {
+    ["soffice", "libreoffice"]
+        .into_iter()
+        .find(|name| which(name).is_some())
+}
+
 /// Which LaTeX engine (if any) is installed — shown on the home screen.
 #[tauri::command]
 fn latex_engine() -> Option<String> {
@@ -135,6 +179,108 @@ fn tail(s: &str, lines: usize) -> String {
     let all: Vec<&str> = s.lines().collect();
     let start = all.len().saturating_sub(lines);
     all[start..].join("\n")
+}
+
+// ---- PowerPoint speaker notes -----------------------------------------------
+//
+// A .pptx is a ZIP: slide order comes from ppt/presentation.xml
+// (<p:sldIdLst>), each slide's _rels file points to its notes page
+// (ppt/notesSlides/notesSlideN.xml), and the note text lives in that page's
+// body-placeholder shape. Mirrors Sources/BeamerPresenter/PptxNotes.swift.
+
+/// Speaker notes per slide (in presentation order, "" where a slide has none)
+/// for the .pptx with the same base name as the given PDF.
+#[tauri::command]
+fn pptx_notes(pdf_path: String) -> Vec<String> {
+    let pptx = PathBuf::from(&pdf_path).with_extension("pptx");
+    let Ok(file) = fs::File::open(&pptx) else { return vec![] };
+    let Ok(mut archive) = zip::ZipArchive::new(file) else { return vec![] };
+
+    let Some(presentation) = zip_text(&mut archive, "ppt/presentation.xml") else { return vec![] };
+    let Some(pres_rels) = zip_text(&mut archive, "ppt/_rels/presentation.xml.rels") else { return vec![] };
+    let rel_targets = relationships(&pres_rels);
+
+    let slide_re = regex::Regex::new(r#"<p:sldId\b[^>]*r:id="([^"]+)""#).unwrap();
+    let slide_files: Vec<String> = slide_re
+        .captures_iter(&presentation)
+        .filter_map(|c| rel_targets.get(&c[1]).cloned()) // e.g. "slides/slide1.xml"
+        .collect();
+
+    slide_files
+        .iter()
+        .map(|slide_file| {
+            let name = slide_file.rsplit('/').next().unwrap_or(slide_file);
+            let Some(slide_rels) = zip_text(&mut archive, &format!("ppt/slides/_rels/{name}.rels"))
+            else { return String::new() };
+            let Some(notes_target) = relationships(&slide_rels)
+                .into_values()
+                .find(|t| t.contains("notesSlide"))
+            else { return String::new() };
+            let notes_name = notes_target.rsplit('/').next().unwrap_or(&notes_target).to_string();
+            zip_text(&mut archive, &format!("ppt/notesSlides/{notes_name}"))
+                .map(|xml| notes_text(&xml))
+                .unwrap_or_default()
+        })
+        .collect()
+}
+
+fn zip_text(archive: &mut zip::ZipArchive<fs::File>, name: &str) -> Option<String> {
+    use std::io::Read;
+    let mut entry = archive.by_name(name).ok()?;
+    let mut s = String::new();
+    entry.read_to_string(&mut s).ok()?;
+    Some(s)
+}
+
+/// `Id → Target` for every `<Relationship …/>`, attribute order independent.
+fn relationships(xml: &str) -> std::collections::HashMap<String, String> {
+    let element_re = regex::Regex::new(r"<Relationship\b[^>]*>").unwrap();
+    let id_re = regex::Regex::new(r#"\bId="([^"]+)""#).unwrap();
+    let target_re = regex::Regex::new(r#"\bTarget="([^"]+)""#).unwrap();
+    element_re
+        .find_iter(xml)
+        .filter_map(|m| {
+            let e = m.as_str();
+            Some((
+                id_re.captures(e)?[1].to_string(),
+                target_re.captures(e)?[1].to_string(),
+            ))
+        })
+        .collect()
+}
+
+/// The note text of a notes page: the `<p:sp>` shape whose placeholder is
+/// `type="body"` — paragraphs (`<a:p>`) joined by newlines, runs (`<a:t>`)
+/// concatenated, entities unescaped.
+fn notes_text(xml: &str) -> String {
+    let shape_re = regex::Regex::new(r"(?s)<p:sp>.*?</p:sp>").unwrap();
+    let para_re = regex::Regex::new(r"(?s)<a:p>.*?</a:p>").unwrap();
+    let run_re = regex::Regex::new(r"(?s)<a:t>(.*?)</a:t>").unwrap();
+    for shape in shape_re.find_iter(xml) {
+        if !shape.as_str().contains(r#"type="body""#) {
+            continue;
+        }
+        let text = para_re
+            .find_iter(shape.as_str())
+            .map(|p| {
+                run_re
+                    .captures_iter(p.as_str())
+                    .map(|c| unescape(&c[1]))
+                    .collect::<String>()
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        return text.trim().to_string();
+    }
+    String::new()
+}
+
+fn unescape(s: &str) -> String {
+    s.replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", "\"")
+        .replace("&apos;", "'")
+        .replace("&amp;", "&") // last, so &amp;lt; doesn't double-decode
 }
 
 // ---- Audience window control -----------------------------------------------
@@ -188,6 +334,43 @@ fn second_monitor(app: &tauri::AppHandle) -> Option<tauri::Monitor> {
         .find(|m| current.as_ref().map(|c| c.position() != m.position()).unwrap_or(true))
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+
+    /// Builds a minimal two-slide .pptx (second slide reordered first, notes on
+    /// one slide only) and checks the whole extraction chain.
+    #[test]
+    fn extracts_pptx_notes_in_presentation_order() {
+        let dir = std::env::temp_dir().join(format!("pptx-notes-test-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let pptx = dir.join("deck.pptx");
+        let file = fs::File::create(&pptx).unwrap();
+        let mut z = zip::ZipWriter::new(file);
+        let o = zip::write::SimpleFileOptions::default();
+
+        // Presentation order: slide2 first, then slide1.
+        z.start_file("ppt/presentation.xml", o).unwrap();
+        z.write_all(br#"<p:sldIdLst><p:sldId id="257" r:id="rIdB"/><p:sldId id="256" r:id="rIdA"/></p:sldIdLst>"#).unwrap();
+        z.start_file("ppt/_rels/presentation.xml.rels", o).unwrap();
+        z.write_all(br#"<Relationships><Relationship Id="rIdA" Target="slides/slide1.xml"/><Relationship Target="slides/slide2.xml" Id="rIdB"/></Relationships>"#).unwrap();
+        // Only slide2 (shown first) has a notes page.
+        z.start_file("ppt/slides/_rels/slide2.xml.rels", o).unwrap();
+        z.write_all(br#"<Relationships><Relationship Id="rId9" Target="../notesSlides/notesSlide1.xml"/></Relationships>"#).unwrap();
+        z.start_file("ppt/notesSlides/notesSlide1.xml", o).unwrap();
+        z.write_all(br#"<p:sp><p:ph type="sldImg"/></p:sp><p:sp><p:nvSpPr><p:ph type="body" idx="1"/></p:nvSpPr><p:txBody><a:p><a:r><a:t>Greet the </a:t></a:r><a:r><a:t>audience &amp; smile</a:t></a:r></a:p><a:p><a:r><a:t>Second line</a:t></a:r></a:p></p:txBody></p:sp>"#).unwrap();
+        z.finish().unwrap();
+
+        let notes = pptx_notes(dir.join("deck.pdf").to_string_lossy().into_owned());
+        fs::remove_dir_all(&dir).ok();
+
+        assert_eq!(notes.len(), 2);
+        assert_eq!(notes[0], "Greet the audience & smile\nSecond line");
+        assert_eq!(notes[1], "");
+    }
+}
+
 pub fn run() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
@@ -197,6 +380,9 @@ pub fn run() {
             tex_candidates,
             compile_tex,
             latex_engine,
+            convert_office,
+            office_engine,
+            pptx_notes,
             show_audience,
             hide_audience,
             toggle_audience_fullscreen

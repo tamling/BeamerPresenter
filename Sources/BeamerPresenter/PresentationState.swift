@@ -121,8 +121,14 @@ final class PresentationState: ObservableObject {
         slideAspect = box.width / max(box.height, 1)
         pageCount = doc.pageCount
         // A split deck already carries its notes in the right half; for a plain
-        // PDF, fall back to `\note{}` text from a sibling `.tex` if one exists.
-        textNotes = split ? [:] : TexNotes.load(forPDF: url, pageCount: doc.pageCount)
+        // PDF, fall back to `\note{}` text from a sibling `.tex`, then to
+        // PowerPoint speaker notes from a sibling `.pptx` (converted decks).
+        if split {
+            textNotes = [:]
+        } else {
+            let tex = TexNotes.load(forPDF: url, pageCount: doc.pageCount)
+            textNotes = tex.isEmpty ? PptxNotes.load(forPDF: url, pageCount: doc.pageCount) : tex
+        }
         title = url.deletingPathExtension().lastPathComponent
         loadScratch()
         thumbCache.removeAll()
