@@ -1,0 +1,82 @@
+/* Night Console design tokens — mirrors Sources/BeamerPresenter/Theme.swift.
+   A single fixed dark theme: near-black surface ladder, cool text ladder,
+   hairlines, and one electric-lime signal colour. */
+
+:root {
+  --base:       #15171C;   /* window bg, primary surface */
+  --raised:     #1B1E24;   /* title bar, toolbar */
+  --surface:    #1E2228;   /* cards, list rows */
+  --key:        #23272E;   /* tactile keys, thumbnails */
+  --inset:      #0F1115;   /* wells: counter, scratch field */
+  --stage:      #0C0D10;   /* slide mat behind the deck */
+  --blackout:   #08090B;   /* audience black-out */
+
+  --text-primary:   #E9ECF0;
+  --text-secondary: #8B939E;
+  --text-muted:     #6F7682;
+  --text-faint:     #5B636E;
+  --hairline:        rgba(255, 255, 255, 0.06);
+  --hairline-strong: rgba(255, 255, 255, 0.08);
+
+  --accent:     #C7F24E;   /* LIVE, active tool, primary btn, timer */
+  --accent-dim: rgba(199, 242, 78, 0.14);
+  --on-accent:  #15171C;
+  --status-ok:  #5BD08A;
+  --status-warn:#E0B341;
+
+  --font-display: "Space Grotesk", "Inter", system-ui, sans-serif;
+  --font-ui:      "IBM Plex Sans", "Inter", system-ui, sans-serif;
+  --font-mono:    "JetBrains Mono", "Fira Mono", monospace;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  height: 100%;
+  background: var(--base);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  overflow: hidden;
+  user-select: none;
+  cursor: default;
+}
+
+.micro-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1.6px;
+  color: var(--text-muted);
+}
+
+.mono { font-family: var(--font-mono); }
+
+button {
+  font-family: var(--font-ui);
+  border: 1px solid var(--hairline);
+  background: var(--key);
+  color: var(--text-primary);
+  border-radius: 8px;
+  padding: 7px 14px;
+  font-size: 13px;
+}
+button:hover { border-color: var(--hairline-strong); filter: brightness(1.15); }
+button.primary {
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 600;
+  border: none;
+  padding: 11px 18px;
+  font-size: 14px;
+  border-radius: 10px;
+}
+button.primary:hover { filter: brightness(1.06); }
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+}
+
+.hairline-h { height: 1px; background: var(--hairline); }
+.hairline-v { width: 1px; background: var(--hairline); }

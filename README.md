@@ -9,7 +9,9 @@ It works directly off a compiled PDF; it can also compile a `.tex` (via a local
 LaTeX install) or convert a PowerPoint `.pptx` (via LibreOffice) on the fly, and
 pull `\note{}` speaker notes straight from a `.tex`.
 
-**Version 3.0** (2026-06-21).
+**Version 4.0** — see `CHANGELOG.md`. Also available: an iPad version
+(`iOS/`) and a **Linux port** of the core console (`Linux/`, Tauri 2 +
+WebKitGTK — see `Linux/README.md`).
 
 ## GUI
 

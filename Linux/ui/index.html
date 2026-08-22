@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>BeamerPresenter</title>
+  <link rel="stylesheet" href="css/night.css" />
+  <style>
+    /* ---- Home screen ---- */
+    #home { display: flex; flex-direction: column; height: 100%; }
+    #home.hidden { display: none; }
+    .home-main { flex: 1; display: flex; min-height: 0; }
+
+    .branding {
+      width: 380px; padding: 30px; display: flex; flex-direction: column; gap: 20px;
+      border-right: 1px solid var(--hairline);
+    }
+    .brand-name { font-family: var(--font-display); font-size: 30px; letter-spacing: -0.3px; }
+    .tagline { font-family: var(--font-mono); font-size: 10px; text-transform: uppercase;
+               letter-spacing: 1.6px; color: var(--accent); }
+    .blurb { font-size: 15px; color: var(--text-secondary); line-height: 1.45; }
+    .status-row { display: flex; align-items: center; gap: 8px; font-size: 12px;
+                  color: var(--text-secondary); }
+    .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+    .dot.ok   { background: var(--status-ok);   box-shadow: 0 0 6px rgba(91,208,138,.6); }
+    .dot.warn { background: var(--status-warn); box-shadow: 0 0 6px rgba(224,179,65,.6); }
+    .tip { margin-top: auto; border-top: 1px solid var(--hairline); padding-top: 10px;
+           font-size: 13px; color: var(--text-faint); line-height: 1.4; }
+
+    .library { flex: 1; padding: 28px; display: flex; flex-direction: column; gap: 14px;
+               min-width: 0; overflow: hidden; }
+    .recent-card { display: flex; align-items: center; gap: 13px; padding: 12px 14px;
+                   cursor: pointer; }
+    .recent-card:hover { border-color: var(--hairline-strong); background: var(--key); }
+    .recent-ext { font-family: var(--font-mono); font-size: 10px; font-weight: 700;
+                  color: var(--accent); width: 48px; height: 40px; display: flex;
+                  align-items: center; justify-content: center;
+                  background: var(--key); border: 1px solid var(--hairline); border-radius: 9px; }
+    .recent-name { font-weight: 600; font-size: 15px; }
+    .recent-path { font-family: var(--font-mono); font-size: 11px; color: var(--text-muted);
+                   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    #dropzone { flex: 1; min-height: 140px; display: flex; flex-direction: column;
+                align-items: center; justify-content: center; gap: 12px;
+                border: 1.5px dashed var(--hairline-strong); border-radius: 14px; }
+    #dropzone.targeted { border-color: var(--accent); background: var(--accent-dim); }
+    .drop-ring { width: 56px; height: 56px; border-radius: 50%;
+                 border: 1.5px solid rgba(199,242,78,.7); display: flex; align-items: center;
+                 justify-content: center; color: var(--accent); font-size: 19px;
+                 box-shadow: 0 0 10px rgba(199,242,78,.25); }
+    #dropzone.targeted .drop-ring { border-color: var(--accent);
+                                    box-shadow: 0 0 10px rgba(199,242,78,.6); }
+    .drop-title { font-family: var(--font-display); font-size: 18px; }
+    .drop-sub { font-size: 13px; color: var(--text-faint); }
+
+    .home-footer { display: flex; align-items: center; justify-content: space-between;
+                   height: 56px; padding: 0 30px; background: var(--raised);
+                   border-top: 1px solid var(--hairline);
+                   font-size: 13px; color: var(--text-secondary); }
+
+    /* ---- Console ---- */
+    #console { display: none; flex-direction: column; height: 100%; }
+    #console.active { display: flex; }
+
+    .bar { display: flex; align-items: center; gap: 18px; height: 54px; padding: 0 18px;
+           background: var(--raised); border-bottom: 1px solid var(--hairline); }
+    .bar .title { font-weight: 600; font-size: 14px; overflow: hidden;
+                  text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
+    .counter { font-family: var(--font-mono); font-size: 15px; background: var(--inset);
+               border: 1px solid var(--hairline); border-radius: 8px; padding: 5px 12px; }
+    .clock, .timer { font-family: var(--font-mono); font-size: 15px; }
+    .timer { color: var(--accent); }
+    .timer.stopped { color: var(--text-muted); }
+    .live { font-family: var(--font-mono); font-size: 10px; letter-spacing: 1.6px;
+            padding: 4px 9px; border-radius: 6px; background: var(--accent-dim);
+            color: var(--accent); }
+    .live.black { background: rgba(255,255,255,.06); color: var(--text-muted); }
+    .bar button { padding: 5px 10px; font-size: 12px; }
+
+    .deck { flex: 1; display: flex; min-height: 0; background: var(--stage); }
+    .current-pane { flex: 1; display: flex; align-items: center; justify-content: center;
+                    min-width: 0; padding: 18px; }
+    .side { width: 34%; min-width: 260px; max-width: 480px; display: flex;
+            flex-direction: column; border-left: 1px solid var(--hairline);
+            background: var(--base); }
+    .side-slot { padding: 14px; }
+    .next-frame { display: flex; align-items: center; justify-content: center;
+                  background: var(--stage); border: 1px solid var(--hairline);
+                  border-radius: 10px; padding: 8px; }
+    #notes { flex: 1; min-height: 0; overflow-y: auto; padding: 14px; white-space: pre-wrap;
+             font-size: 15px; line-height: 1.5; color: var(--text-primary); user-select: text; }
+    #notes.empty { color: var(--text-faint); font-style: italic; }
+    #notes-canvas-wrap { flex: 1; min-height: 0; display: flex; align-items: flex-start;
+                         justify-content: center; overflow-y: auto; padding: 12px; }
+
+    canvas { display: block; border-radius: 4px; }
+
+    .hints { display: flex; gap: 18px; height: 34px; align-items: center; padding: 0 18px;
+             background: var(--raised); border-top: 1px solid var(--hairline);
+             font-family: var(--font-mono); font-size: 10.5px; color: var(--text-faint); }
+    .hints b { color: var(--text-muted); font-weight: 600; }
+
+    /* ---- Overview overlay ---- */
+    #overview { position: fixed; inset: 0; background: rgba(12,13,16,.96); display: none;
+                overflow-y: auto; padding: 26px; z-index: 40; }
+    #overview.active { display: block; }
+    .ov-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+               gap: 14px; }
+    .ov-cell { cursor: pointer; border: 2px solid transparent; border-radius: 8px;
+               padding: 3px; }
+    .ov-cell.current { border-color: var(--accent); }
+    .ov-cell:hover { border-color: var(--hairline-strong); }
+    .ov-cell.current:hover { border-color: var(--accent); }
+    .ov-num { font-family: var(--font-mono); font-size: 10px; color: var(--text-muted);
+              text-align: center; padding-top: 4px; }
+
+    /* ---- Compile HUD ---- */
+    #hud { position: fixed; inset: 0; display: none; align-items: center;
+           justify-content: center; background: rgba(12,13,16,.7); z-index: 60; }
+    #hud.active { display: flex; }
+    .hud-card { background: var(--surface); border: 1px solid var(--hairline-strong);
+                border-radius: 14px; padding: 26px 34px; text-align: center;
+                max-width: 640px; }
+    .hud-title { font-family: var(--font-display); font-size: 17px; margin-bottom: 8px; }
+    .hud-detail { font-size: 13px; color: var(--text-secondary); white-space: pre-wrap;
+                  text-align: left; max-height: 300px; overflow-y: auto;
+                  font-family: var(--font-mono); font-size: 11px; user-select: text; }
+  </style>
+</head>
+<body>
+  <!-- Home screen -->
+  <div id="home">
+    <div class="home-main">
+      <div class="branding">
+        <div>
+          <div class="brand-name">BeamerPresenter</div>
+          <div class="tagline">Present · Notes · Two screens</div>
+        </div>
+        <div class="blurb">Present LaTeX Beamer PDFs with speaker notes — your
+          console on one screen, clean slides on the other.</div>
+        <button class="primary" id="open-btn">Open PDF · .tex</button>
+        <div class="status-row"><span class="dot warn" id="latex-dot"></span>
+          <span id="latex-status">Checking for LaTeX…</span></div>
+        <div class="tip"><span class="micro-label">Tip</span><br />
+          Keep the .tex with \note{…} next to the PDF — or just open the .tex.</div>
+      </div>
+      <div class="library">
+        <div class="micro-label">Recent</div>
+        <div id="recents"></div>
+        <div id="dropzone">
+          <div class="drop-ring">↓</div>
+          <div class="drop-title">Drop a PDF or .tex anywhere to open</div>
+          <div class="drop-sub">The whole window is a drop target.</div>
+        </div>
+      </div>
+    </div>
+    <div class="home-footer">
+      <span id="footer-hint">← console here · slides on the beamer →</span>
+      <span class="mono" id="version">BeamerPresenter</span>
+    </div>
+  </div>
+
+  <!-- Presenter console -->
+  <div id="console">
+    <div class="bar">
+      <span class="title" id="deck-title"></span>
+      <span class="counter" id="counter">– / –</span>
+      <span class="clock" id="clock">00:00</span>
+      <span class="timer stopped" id="timer">00:00</span>
+      <button id="timer-btn" title="Start / stop the elapsed timer (T)">Start</button>
+      <button id="timer-reset" title="Reset the timer (R)">Reset</button>
+      <span class="live" id="live">LIVE</span>
+      <button id="close-btn" title="Back to the home screen">Close</button>
+    </div>
+    <div class="deck">
+      <div class="current-pane"><canvas id="current"></canvas></div>
+      <div class="side">
+        <div class="side-slot">
+          <div class="micro-label" style="margin-bottom:8px">Next</div>
+          <div class="next-frame"><canvas id="next"></canvas></div>
+        </div>
+        <div class="hairline-h"></div>
+        <div class="side-slot" style="padding-bottom:6px">
+          <div class="micro-label">Notes</div>
+        </div>
+        <div id="notes" class="empty">No notes for this slide.</div>
+        <div id="notes-canvas-wrap" style="display:none"><canvas id="notes-canvas"></canvas></div>
+      </div>
+    </div>
+    <div class="hints">
+      <span><b>←→</b> slides</span><span><b>B</b> black</span><span><b>G</b> overview</span>
+      <span><b>F</b> audience fullscreen</span><span><b>T</b> timer</span>
+      <span><b>Home/End</b> first/last</span>
+    </div>
+  </div>
+
+  <!-- Overview grid -->
+  <div id="overview"><div class="ov-grid" id="ov-grid"></div></div>
+
+  <!-- Compile / error HUD -->
+  <div id="hud"><div class="hud-card">
+    <div class="hud-title" id="hud-title"></div>
+    <div class="hud-detail" id="hud-detail"></div>
+    <button id="hud-close" style="margin-top:14px; display:none">Close</button>
+  </div></div>
+
+  <script type="module">
+    import * as pdfjs from "./vendor/pdfjs/pdf.min.mjs";
+    pdfjs.GlobalWorkerOptions.workerSrc = "vendor/pdfjs/pdf.worker.min.mjs";
+    window.pdfjsLib = pdfjs;
+    window.dispatchEvent(new Event("pdfjs-ready"));
+  </script>
+  <script src="js/texnotes.js" defer></script>
+  <script src="js/slides.js" defer></script>
+  <script src="js/presenter.js" defer></script>
+</body>
+</html>

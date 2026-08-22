@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "BeamerPresenter",
+  "version": "4.0.0",
+  "identifier": "app.beamerpresenter.linux",
+  "build": {
+    "frontendDist": "../ui"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "label": "presenter",
+        "title": "BeamerPresenter",
+        "url": "index.html",
+        "width": 1280,
+        "height": 820,
+        "minWidth": 680,
+        "minHeight": 460,
+        "backgroundColor": "#15171C"
+      },
+      {
+        "label": "audience",
+        "title": "Audience",
+        "url": "audience.html",
+        "width": 1024,
+        "height": 640,
+        "minWidth": 320,
+        "minHeight": 200,
+        "visible": false,
+        "closable": false,
+        "backgroundColor": "#000000"
+      }
+    ],
+    "security": {
+      "csp": null,
+      "assetProtocol": {
+        "enable": true,
+        "scope": ["**"]
+      }
+    }
+  },
+  "bundle": {
+    "active": false
+  }
+}
