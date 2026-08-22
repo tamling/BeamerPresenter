@@ -1,6 +1,6 @@
 [package]
 name = "beamerpresenter"
-version = "4.2.0"
+version = "4.3.0"
 description = "Present LaTeX Beamer PDFs with speaker notes — Linux port"
 edition = "2021"
 
