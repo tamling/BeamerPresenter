@@ -16,7 +16,12 @@
     count: 0,
     split: false,    // Beamer "show notes on second screen=right" layout
     blackout: false,
-    notes: new Map() // pageIndex -> note text (plain-PDF decks only)
+    notes: new Map(), // pageIndex -> note text (plain-PDF decks only)
+    // Whiteboard: boards live outside the PDF, in-memory for the session.
+    boards: [],       // [{ strokes: [{color, width, points}] }]
+    boardIndex: null, // active board while the whiteboard is up, else null
+    boardLight: false,
+    penColor: Board.PENS[0].color
   };
 
   const el = (id) => document.getElementById(id);
@@ -28,6 +33,15 @@
   }
   function pushState() {
     emitTo("audience", "state", { page: state.page, blackout: state.blackout });
+  }
+  function pushBoard() {
+    const active = state.boardIndex !== null;
+    emitTo("audience", "board", {
+      active,
+      light: state.boardLight,
+      aspect: Slides.slideAspect(),
+      strokes: active ? state.boards[state.boardIndex].strokes : []
+    });
   }
 
   // ---- Home screen ---------------------------------------------------------
@@ -134,6 +148,9 @@
     Slides.close();
     state.path = null;
     state.blackout = false;
+    state.boards = [];
+    if (boardActive()) { state.boardIndex = null; setBoardVisible(false); }
+    pushBoard();
     invoke("hide_audience");
     el("console").classList.remove("active");
     el("overview").classList.remove("active");
@@ -187,8 +204,148 @@
   let resizeTimer = null;
   window.addEventListener("resize", () => {
     clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(renderAll, 120);
+    resizeTimer = setTimeout(() => { renderAll(); renderBoard(); }, 120);
   });
+
+  // ---- Whiteboard ----------------------------------------------------------
+
+  const boardActive = () => state.boardIndex !== null;
+  const activeBoard = () => state.boards[state.boardIndex];
+
+  function renderBoard(live = null) {
+    if (!boardActive()) return;
+    const area = el("board-area");
+    Board.draw(el("board-canvas"), activeBoard(),
+      state.boardLight ? "light" : "dark",
+      area.clientWidth, area.clientHeight, Slides.slideAspect(), live);
+    el("board-counter").textContent = `${state.boardIndex + 1}/${state.boards.length}`;
+  }
+
+  function setBoardVisible(on) {
+    document.querySelector(".current-pane").style.display = on ? "none" : "flex";
+    el("board-wrap").classList.toggle("active", on);
+    el("board-btn").classList.toggle("on", on);
+  }
+
+  function toggleBoard() {
+    if (!state.path) return;
+    if (boardActive()) {
+      state.boardIndex = null;
+      setBoardVisible(false);
+    } else {
+      if (state.boards.length === 0) state.boards.push({ strokes: [] });
+      state.boardIndex = state.boards.length - 1;
+      setBoardVisible(true);
+      renderBoard();
+    }
+    pushBoard();
+  }
+
+  function switchBoard(delta) {
+    if (!boardActive()) return;
+    const n = state.boards.length;
+    state.boardIndex = (state.boardIndex + delta + n) % n;
+    renderBoard();
+    pushBoard();
+  }
+
+  function newBoard() {
+    if (!boardActive()) return;
+    state.boards.push({ strokes: [] });
+    state.boardIndex = state.boards.length - 1;
+    renderBoard();
+    pushBoard();
+  }
+
+  function deleteBoard() {
+    if (!boardActive()) return;
+    state.boards.splice(state.boardIndex, 1);
+    if (state.boards.length === 0) state.boards.push({ strokes: [] });
+    state.boardIndex = Math.min(state.boardIndex, state.boards.length - 1);
+    renderBoard();
+    pushBoard();
+  }
+
+  function undoStroke() {
+    if (!boardActive()) return;
+    activeBoard().strokes.pop();
+    renderBoard();
+    pushBoard();
+  }
+
+  function clearBoard() {
+    if (!boardActive()) return;
+    activeBoard().strokes = [];
+    renderBoard();
+    pushBoard();
+  }
+
+  function toggleBoardStyle() {
+    state.boardLight = !state.boardLight;
+    el("wb-style").textContent = state.boardLight ? "Dark" : "Light";
+    renderBoard();
+    pushBoard();
+  }
+
+  // Drawing: pointer events on the board canvas, in unit coordinates.
+  let stroke = null;      // in-progress {color, width, points}
+  let lastLiveEmit = 0;
+
+  function boardPoint(e) {
+    const rect = el("board-canvas").getBoundingClientRect();
+    return [
+      Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width)),
+      Math.min(1, Math.max(0, (e.clientY - rect.top) / rect.height))
+    ];
+  }
+
+  el("board-canvas").addEventListener("pointerdown", (e) => {
+    if (!boardActive() || e.button !== 0) return;
+    el("board-canvas").setPointerCapture(e.pointerId);
+    stroke = { color: state.penColor, width: Board.RELATIVE_WIDTH, points: [boardPoint(e)] };
+  });
+  el("board-canvas").addEventListener("pointermove", (e) => {
+    if (!stroke) return;
+    stroke.points.push(boardPoint(e));
+    renderBoard(stroke);
+    const now = performance.now();
+    if (now - lastLiveEmit > 40) {   // ~25 fps live ink on the projector
+      lastLiveEmit = now;
+      emitTo("audience", "board-live", stroke);
+    }
+  });
+  const endStroke = () => {
+    if (!stroke) return;
+    if (stroke.points.length > 1) activeBoard().strokes.push(stroke);
+    stroke = null;
+    renderBoard();
+    pushBoard();                      // full state; also clears the live stroke
+  };
+  el("board-canvas").addEventListener("pointerup", endStroke);
+  el("board-canvas").addEventListener("pointercancel", endStroke);
+
+  // Toolbar: colour dots + buttons.
+  for (const pen of Board.PENS) {
+    const dot = document.createElement("button");
+    dot.className = "wb-color" + (pen.color === state.penColor ? " on" : "");
+    dot.style.background = pen.color;
+    dot.title = `Pen: ${pen.name}`;
+    dot.addEventListener("click", () => {
+      state.penColor = pen.color;
+      document.querySelectorAll(".wb-color").forEach((b) => b.classList.remove("on"));
+      dot.classList.add("on");
+    });
+    el("board-toolbar").insertBefore(dot, el("board-toolbar").querySelector(".sep"));
+  }
+  el("board-btn").addEventListener("click", toggleBoard);
+  el("wb-close").addEventListener("click", toggleBoard);
+  el("wb-undo").addEventListener("click", undoStroke);
+  el("wb-clear").addEventListener("click", clearBoard);
+  el("wb-prev").addEventListener("click", () => switchBoard(-1));
+  el("wb-next").addEventListener("click", () => switchBoard(1));
+  el("wb-new").addEventListener("click", newBoard);
+  el("wb-delete").addEventListener("click", deleteBoard);
+  el("wb-style").addEventListener("click", toggleBoardStyle);
 
   // ---- Navigation ----------------------------------------------------------
 
@@ -304,11 +461,15 @@
       case "End": goTo(state.count - 1); break;
       case "b": case "B": toggleBlackout(); break;
       case "g": case "G": toggleOverview(); break;
+      case "w": case "W": toggleBoard(); break;
+      case "z": case "Z": undoStroke(); break;
+      case "c": case "C": clearBoard(); break;
       case "t": case "T": toggleTimer(); break;
       case "r": case "R": resetTimer(); break;
       case "f": case "F": invoke("toggle_audience_fullscreen"); break;
       case "Escape":
         if (el("overview").classList.contains("active")) toggleOverview();
+        else if (boardActive()) toggleBoard();
         else if (state.blackout) toggleBlackout();
         break;
       default: return;
@@ -330,7 +491,7 @@
 
   // The audience window asks for the deck once its scripts are up.
   listen("audience-ready", () => {
-    if (state.path) { pushDeck(); pushState(); }
+    if (state.path) { pushDeck(); pushState(); pushBoard(); }
   });
 
   // ---- Startup -------------------------------------------------------------
@@ -354,6 +515,6 @@
       : "LibreOffice not found — needed to open .pptx";
   });
 
-  el("version").textContent = "BeamerPresenter 4.1 · Linux";
+  el("version").textContent = "BeamerPresenter 4.2 · Linux";
   renderRecents();
 })();

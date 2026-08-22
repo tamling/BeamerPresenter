@@ -38,10 +38,34 @@
     render();
   });
 
+  // ---- Whiteboard (drawn live by the presenter) ----------------------------
+
+  let board = { active: false, light: false, aspect: 16 / 9, strokes: [] };
+  let liveStroke = null;
+
+  function renderBoard() {
+    if (!board.active) return;
+    Board.draw(el("board"), { strokes: board.strokes },
+      board.light ? "light" : "dark",
+      window.innerWidth, window.innerHeight, board.aspect, liveStroke);
+  }
+
+  listen("board", (event) => {
+    board = event.payload;
+    liveStroke = null;   // the full state includes any just-committed stroke
+    el("board-stage").style.display = board.active ? "flex" : "none";
+    renderBoard();
+  });
+
+  listen("board-live", (event) => {
+    liveStroke = event.payload;
+    renderBoard();
+  });
+
   let resizeTimer = null;
   window.addEventListener("resize", () => {
     clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(render, 120);
+    resizeTimer = setTimeout(() => { render(); renderBoard(); }, 120);
   });
 
   // Black-out clock.
