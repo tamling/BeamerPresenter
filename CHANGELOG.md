@@ -1,5 +1,11 @@
 # Changelog
 
+## v4.7 — 2026-08-23
+
+- CI now publishes a GitHub **Release** (`v<version>`) with the built `.deb`
+  attached on every push to `main` — the package is always downloadable from
+  the repo's Releases page.
+
 ## v4.6 — 2026-08-22
 
 - `build-deb.sh` checks its prerequisites up front (Rust, dpkg-deb, WebKitGTK

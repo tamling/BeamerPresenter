@@ -36,8 +36,18 @@ jobs:
           path: Linux/src-tauri/target/release/bundle/deb/*.deb
           if-no-files-found: error
 
-      - name: Attach to release (tags only)
-        if: startsWith(github.ref, 'refs/tags/')
+      - name: Read app version
+        id: appver
+        run: |
+          echo "version=$(sed -n 's/^version = "\(.*\)"/\1/p' Linux/src-tauri/Cargo.toml | head -1)" >> "$GITHUB_OUTPUT"
+
+      # Every push to main publishes/updates the release for the current app
+      # version, with the .deb attached — so the download always sits on the
+      # repo's Releases page, no local toolchain needed.
+      - name: Publish release with .deb
+        if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: v${{ steps.appver.outputs.version }}
+          name: BeamerPresenter ${{ steps.appver.outputs.version }}
           files: Linux/src-tauri/target/release/bundle/deb/*.deb
