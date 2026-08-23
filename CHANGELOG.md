@@ -1,5 +1,13 @@
 # Changelog
 
+## v4.6 — 2026-08-22
+
+- `build-deb.sh` checks its prerequisites up front (Rust, dpkg-deb, WebKitGTK
+  dev) and prints install instructions instead of failing mid-build.
+- **CI**: a GitHub Actions workflow builds the Linux .deb on every push to
+  `main` (downloadable under Actions → artifacts) and attaches it to releases
+  on `v*` tags — no local toolchain needed to get a package.
+
 ## v4.5 — 2026-08-22
 
 - `Linux/build-deb.sh` no longer needs Node: without a Tauri CLI it packages
