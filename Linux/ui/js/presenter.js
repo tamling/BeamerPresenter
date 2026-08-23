@@ -47,29 +47,53 @@
   // ---- Home screen ---------------------------------------------------------
 
   const RECENTS_KEY = "recents";
+  const RECENTS_MAX = 10;
+  const CARDS_MAX = 3;   // up to here: rich cards; more: a compact list
   const loadRecents = () => JSON.parse(localStorage.getItem(RECENTS_KEY) || "[]");
   function addRecent(path) {
-    const list = [path, ...loadRecents().filter((p) => p !== path)].slice(0, 5);
+    const list = [path, ...loadRecents().filter((p) => p !== path)].slice(0, RECENTS_MAX);
     localStorage.setItem(RECENTS_KEY, JSON.stringify(list));
+  }
+
+  function splitName(path) {
+    const name = path.split("/").pop();
+    const dot = name.lastIndexOf(".");
+    return {
+      base: dot > 0 ? name.slice(0, dot) : name,
+      ext: dot > 0 ? name.slice(dot + 1).toUpperCase() : "PDF",
+      dir: path.slice(0, path.length - name.length - 1) || "/"
+    };
   }
 
   function renderRecents() {
     const box = el("recents");
+    const list = loadRecents();
     box.innerHTML = "";
-    for (const path of loadRecents()) {
-      const name = path.split("/").pop();
-      const dot = name.lastIndexOf(".");
+    const compact = list.length > CARDS_MAX;
+    box.classList.toggle("compact", compact);
+    for (const path of list) {
+      const { base, ext, dir } = splitName(path);
       const cell = document.createElement("div");
-      cell.className = "recent-card card";
-      cell.innerHTML =
-        `<div class="recent-ext"></div>
-         <div style="min-width:0">
-           <div class="recent-name"></div><div class="recent-path"></div>
-         </div>`;
-      cell.querySelector(".recent-ext").textContent =
-        dot > 0 ? name.slice(dot + 1).toUpperCase() : "PDF";
-      cell.querySelector(".recent-name").textContent = dot > 0 ? name.slice(0, dot) : name;
-      cell.querySelector(".recent-path").textContent = path;
+      if (compact) {
+        cell.className = "recent-row";
+        cell.innerHTML =
+          `<span class="row-ext"></span><span class="row-name"></span>
+           <span class="row-path"></span>`;
+        cell.querySelector(".row-ext").textContent = ext;
+        cell.querySelector(".row-name").textContent = base;
+        cell.querySelector(".row-path").textContent = dir;
+      } else {
+        cell.className = "recent-card card";
+        cell.innerHTML =
+          `<div class="recent-ext"></div>
+           <div style="min-width:0">
+             <div class="recent-name"></div><div class="recent-path"></div>
+           </div>`;
+        cell.querySelector(".recent-ext").textContent = ext;
+        cell.querySelector(".recent-name").textContent = base;
+        cell.querySelector(".recent-path").textContent = path;
+      }
+      cell.title = path;
       cell.addEventListener("click", () => openAny(path));
       box.appendChild(cell);
     }
@@ -515,6 +539,6 @@
       : "LibreOffice not found — needed to open .pptx";
   });
 
-  el("version").textContent = "BeamerPresenter 4.3 · Linux";
+  el("version").textContent = "BeamerPresenter 4.4 · Linux";
   renderRecents();
 })();

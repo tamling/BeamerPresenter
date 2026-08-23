@@ -38,6 +38,23 @@
     .recent-name { font-weight: 600; font-size: 15px; }
     .recent-path { font-family: var(--font-mono); font-size: 11px; color: var(--text-muted);
                    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    #recents { display: flex; flex-direction: column; gap: 8px; }
+    #recents.compact { gap: 3px; max-height: 240px; overflow-y: auto; }
+    /* From the 4th entry on, recents render as a compact single-line list. */
+    .recent-row { display: flex; align-items: center; gap: 10px; padding: 6px 10px;
+                  border-radius: 8px; cursor: pointer; min-width: 0;
+                  background: var(--surface); border: 1px solid var(--hairline); }
+    .recent-row:hover { background: var(--key); border-color: var(--hairline-strong); }
+    .recent-row .row-ext { font-family: var(--font-mono); font-size: 9px; font-weight: 700;
+                           color: var(--accent); background: var(--accent-dim);
+                           border-radius: 5px; padding: 3px 6px; flex: none; width: 34px;
+                           text-align: center; }
+    .recent-row .row-name { font-size: 13.5px; font-weight: 600; white-space: nowrap;
+                            overflow: hidden; text-overflow: ellipsis; flex: none;
+                            max-width: 45%; }
+    .recent-row .row-path { font-family: var(--font-mono); font-size: 10.5px;
+                            color: var(--text-muted); white-space: nowrap; overflow: hidden;
+                            text-overflow: ellipsis; direction: rtl; text-align: left; }
 
     #dropzone { flex: 1; min-height: 140px; display: flex; flex-direction: column;
                 align-items: center; justify-content: center; gap: 12px;
