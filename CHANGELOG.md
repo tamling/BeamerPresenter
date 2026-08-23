@@ -1,5 +1,11 @@
 # Changelog
 
+## v4.4 — 2026-08-22
+
+- **Linux home screen**: with more than 3 recent presentations the recents
+  switch from rich cards to a compact, scrollable single-line list; up to 10
+  recents are kept (was 5).
+
 ## v4.3 — 2026-08-22
 
 - **Linux .deb package**: `Linux/build-deb.sh` builds an installable Debian
