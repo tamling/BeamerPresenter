@@ -539,6 +539,6 @@
       : "LibreOffice not found — needed to open .pptx";
   });
 
-  el("version").textContent = "BeamerPresenter 4.5 · Linux";
+  el("version").textContent = "BeamerPresenter 4.6 · Linux";
   renderRecents();
 })();

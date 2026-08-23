@@ -7,6 +7,24 @@
 set -euo pipefail
 cd "$(dirname "$0")/src-tauri"
 
+# ---- Preflight: fail early, with instructions, not mid-build. --------------
+missing=()
+command -v cargo >/dev/null || missing+=(
+  "Rust (cargo):      curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+                     (then restart the shell)")
+command -v dpkg-deb >/dev/null || missing+=(
+  "dpkg-deb:          sudo apt install dpkg-dev")
+{ command -v pkg-config >/dev/null && pkg-config --exists webkit2gtk-4.1; } || missing+=(
+  "WebKitGTK dev:     sudo apt install libwebkit2gtk-4.1-dev build-essential pkg-config")
+if [ ${#missing[@]} -gt 0 ]; then
+    echo "Cannot build — missing prerequisites:" >&2
+    printf ' * %s\n' "${missing[@]}" >&2
+    echo >&2
+    echo "No toolchain? Grab a prebuilt .deb instead: GitHub → Actions →" >&2
+    echo "'Linux .deb' → latest run → Artifacts (built on every push to main)." >&2
+    exit 1
+fi
+
 if command -v cargo-tauri >/dev/null; then
     cargo tauri build --bundles deb
     echo; echo "Package:"; ls -1 target/release/bundle/deb/*.deb
