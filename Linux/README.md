@@ -63,6 +63,8 @@ cargo build --release   # → target/release/beamerpresenter
 ```sh
 Linux/build-deb.sh   # → Linux/src-tauri/target/release/bundle/deb/*.deb
 sudo apt install ./BeamerPresenter_*.deb
+# Needs only Rust + dpkg; a Tauri CLI (cargo-tauri or Node/npx) is used
+# when present but is not required.
 ```
 
 Install with `apt install ./…` (not bare `dpkg -i`) so dependencies are
