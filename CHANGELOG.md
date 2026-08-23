@@ -1,5 +1,11 @@
 # Changelog
 
+## v4.5 — 2026-08-22
+
+- `Linux/build-deb.sh` no longer needs Node: without a Tauri CLI it packages
+  the .deb itself via `cargo build --release` + `dpkg-deb` (same contents and
+  dependency metadata).
+
 ## v4.4 — 2026-08-22
 
 - **Linux home screen**: with more than 3 recent presentations the recents
