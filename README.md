@@ -10,7 +10,7 @@ LaTeX install) or convert a PowerPoint `.pptx` (via LibreOffice) on the fly, and
 pull speaker notes straight from the `.tex` (`\note{…}`) or from the `.pptx`
 (PowerPoint speaker notes).
 
-**Version 4.12** — see `CHANGELOG.md`. Also available: an iPad version
+**Version 4.13** — see `CHANGELOG.md`. Also available: an iPad version
 (`iOS/`) and a **Linux port** of the core console (`Linux/`, Tauri 2 +
 WebKitGTK — see `Linux/README.md`; prebuilt `.deb` packages are attached to
 the GitHub Releases, rebuilt by CI on every push to `main`).
@@ -222,6 +222,22 @@ everything with `Info.plist`:
 ./build-app.sh
 open build/BeamerPresenter.app
 ```
+
+### Stop the repeated folder-access prompts
+
+macOS remembers your "Allow" for Documents/Downloads/Desktop **per code
+signature**. An unsigned or ad-hoc-signed build gets a new identity on every
+rebuild, so the "would like to access files in your Documents folder" dialog
+keeps coming back. Create a stable self-signed identity **once**:
+
+```bash
+Tools/make-signing-cert.sh   # creates "BeamerPresenter Dev" in your keychain
+./build-app.sh               # picks it up automatically from now on
+```
+
+After one final prompt, macOS keeps the permission across all future rebuilds.
+(If a real "Developer ID Application" or "Apple Development" identity exists
+in your keychain, `build-app.sh` prefers that automatically.)
 
 To codesign for distribution, pass your Developer ID:
 

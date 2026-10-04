@@ -73,11 +73,33 @@ cp Resources/BeamerPresenter.icns "$APP/Contents/Resources/BeamerPresenter.icns"
 [ -d Resources/Fonts ] && cp -R Resources/Fonts "$APP/Contents/Resources/Fonts"
 printf 'APPL????' > "$APP/Contents/PkgInfo"
 
+if [ -z "$SIGN_IDENTITY" ]; then
+    # macOS remembers folder permissions (TCC) per code signature — a *stable*
+    # identity stops the repeated "access files in your Documents folder"
+    # prompts after rebuilds. Prefer a real identity, then the self-signed one
+    # from Tools/make-signing-cert.sh.
+    IDENTITIES="$(security find-identity -v -p codesigning 2>/dev/null || true)"
+    for candidate in "Developer ID Application" "Apple Development" "BeamerPresenter Dev"; do
+        match="$(echo "$IDENTITIES" | grep "$candidate" | head -1 || true)"
+        if [ -n "$match" ]; then
+            SIGN_IDENTITY="$(echo "$match" | sed 's/.*"\(.*\)".*/\1/')"
+            break
+        fi
+    done
+fi
+
 if [ -n "$SIGN_IDENTITY" ]; then
     echo "▶︎ Codesigning with: $SIGN_IDENTITY"
-    codesign --force --options runtime --timestamp \
-        --sign "$SIGN_IDENTITY" "$APP"
+    # Self-signed identities can't get an Apple timestamp — fall back quietly.
+    codesign --force --options runtime --timestamp --sign "$SIGN_IDENTITY" "$APP" 2>/dev/null \
+        || codesign --force --sign "$SIGN_IDENTITY" "$APP"
     codesign --verify --verbose "$APP"
+else
+    echo "▶︎ Codesigning ad-hoc (no identity found)."
+    echo "  ⚠︎ macOS will re-ask for Documents/Downloads access after every"
+    echo "    rebuild, because ad-hoc signatures change each build. Create a"
+    echo "    stable identity once:  Tools/make-signing-cert.sh"
+    codesign --force --sign - "$APP"
 fi
 
 echo "✓ Built $APP"
