@@ -7,11 +7,13 @@ timer.
 
 It works directly off a compiled PDF; it can also compile a `.tex` (via a local
 LaTeX install) or convert a PowerPoint `.pptx` (via LibreOffice) on the fly, and
-pull `\note{}` speaker notes straight from a `.tex`.
+pull speaker notes straight from the `.tex` (`\note{…}`) or from the `.pptx`
+(PowerPoint speaker notes).
 
-**Version 4.0** — see `CHANGELOG.md`. Also available: an iPad version
+**Version 4.9** — see `CHANGELOG.md`. Also available: an iPad version
 (`iOS/`) and a **Linux port** of the core console (`Linux/`, Tauri 2 +
-WebKitGTK — see `Linux/README.md`).
+WebKitGTK — see `Linux/README.md`; prebuilt `.deb` packages are attached to
+the GitHub Releases, rebuilt by CI on every push to `main`).
 
 ## GUI
 
@@ -46,12 +48,20 @@ the slide it was created on. It defaults to the source folder (next to the
   large current slide, next slide, notes pane, and a **scratch-notes** field
   autosaved as `<pdf>.notes.txt` (resizable, with quick-insert of time/deck/slide,
   or exported to a chosen `.txt` via its button / *File ▸ Save Notes…*). Arrow keys
-  still flip slides while the notes field is focused. **Exit** returns to the home
-  screen; closing the presenter
-  window also closes the audience window. The slide/sidebar and next/notes splits
-  are **draggable** and persist. The same commands are also in the menu bar. The
+  still flip slides while the notes field is focused. **Exit** (and *Close
+  Presentation* / ⌘W) asks whether to go back to the **home screen** or **quit**
+  the app; closing the presenter window also closes the audience window. The
+  slide/sidebar and next/notes splits are **draggable** and persist. The same
+  commands are also in the menu bar. The
   red close button asks first, then hides the app to the menu bar (Quit with ⌘Q).
 - **Thumbnail strip** — click any slide to jump; auto-scrolls to the current one.
+  **Zoomable**: drag the handle above the strip to enlarge the thumbnails
+  (the size persists).
+- **Resume** — reopening a deck continues on the slide you left; the position is
+  remembered per file.
+- **Remembered folder access** — opened files and favourite folders are stored
+  as bookmarks in `~/Library/Application Support/BeamerPresenter/` and restored
+  at launch, so macOS doesn't re-ask for access to the same folders.
 - **Overview grid** — press `G` for a full grid of every slide; click to jump.
 - **Ink & laser** — draw freehand on a slide (pen, 4 colours, undo/clear) or use
   a laser pointer (which uses the selected colour); both mirror live onto the
@@ -64,10 +74,13 @@ the slide it was created on. It defaults to the source folder (next to the
   export any of them to its own PDF, or **insert** one after the current slide
   into a *copy* of the deck PDF (the original is untouched). The board toolbar is
   a compact, Safari-like rounded bar.
-- **Audience window** — full-bleed slide; fills the external display by default,
-  or switch it to a normal resizable window via *Presentation ▸ Audience Full
-  Screen* (or Settings). Starts **blacked out** by default; the black screen shows
-  an optional centered message or, when empty, the clock.
+- **Audience window** — full-bleed slide; opens as a normal, resizable window
+  whose green button enters real macOS full screen. The borderless
+  edge-to-edge fill of the external display is opt-in via *Presentation ▸
+  Audience Full Screen* (or Settings) — and converts back to a normal,
+  closable window automatically if the projector is unplugged. Starts
+  **blacked out** by default; the black screen shows an optional centered
+  message or, when empty, the clock.
 
 ## How notes work
 
@@ -114,6 +127,14 @@ so overlays line up); otherwise each frame is treated as one page. A plain PDF
 with neither notes layout nor a `.tex` still presents fine — the notes pane just
 shows a hint instead.
 
+### PowerPoint speaker notes
+
+A `.pptx` (or `.ppt`/`.odp`) is converted to a PDF via LibreOffice on open —
+and since that PDF carries only the slides, the app additionally reads the
+**PowerPoint speaker notes** straight out of the `.pptx` next to it (slide
+order and per-slide notes pages are resolved from the file's XML) and shows
+them in the notes pane. `.tex` notes take precedence when both exist.
+
 ## Run it (development)
 
 Requires Xcode / the Swift toolchain on macOS 13+.
@@ -123,8 +144,9 @@ cd BeamerPresenter
 swift run
 ```
 
-An open panel appears — pick your compiled PDF. The audience window goes
-fullscreen on your external display (or the only display if there's just one).
+An open panel appears — pick your compiled PDF. The audience window opens as a
+normal window (use its green button for full screen, or turn on the borderless
+projector fill via *Presentation ▸ Audience Full Screen*).
 
 ## Keyboard / remote controls
 
@@ -154,6 +176,8 @@ Bluetooth presenter remotes emit Page Up / Page Down, so they work out of the bo
 | `PresentationState.swift` | Shared state (index, timer, blackout, overview, thumbnails) |
 | `PDFModel.swift` | Loads the PDF and crops each page into halves |
 | `TexNotes.swift` | Parses `\note{}` from a sibling `.tex` (+ `.nav` page ranges) |
+| `PptxNotes.swift` | Reads PowerPoint speaker notes from a sibling `.pptx` |
+| `AccessBookmarks.swift` | Persists file/folder access bookmarks in the config folder |
 | `PDFPageView.swift` | Renders one non-interactive page (SwiftUI ↔ PDFKit) |
 | `SlideView.swift` | Aspect-correct slide + ink/laser annotation layer |
 | `Whiteboard.swift` | Whiteboard model, items, and QR-code generation |
@@ -208,7 +232,7 @@ bundle.
 ## Roadmap ideas
 
 - Embedded links and videos in the PDF
-- Persisting ink between sessions / exporting an annotated PDF
+- Persisting ink between sessions
 - Larger / scrollable / markdown notes via the `pdfpc` embedded-notes format
 - Per-slide timing and a rehearsal mode
 - Notarized release build
