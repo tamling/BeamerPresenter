@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 
 /// What the projector/external display shows: the slide full-bleed, the active
 /// whiteboard, or — when blacked out (press `B`) — a black screen with an
