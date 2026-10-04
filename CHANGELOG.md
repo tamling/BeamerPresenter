@@ -1,5 +1,12 @@
 # Changelog
 
+## v4.14 — 2026-10-04
+
+- Build warnings fixed: `import Combine` added where `Timer.publish` is used
+  (AudienceView, PresenterView); `build-app.sh` defaults to Apple Silicon
+  (arm64) only — newer SDKs deprecate x86_64, which stays available via
+  `ARCHS="arm64 x86_64"`.
+
 ## v4.13 — 2026-10-04
 
 - **Fix for the recurring folder-access prompts on macOS**: TCC remembers the

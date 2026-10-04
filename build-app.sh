@@ -3,12 +3,10 @@
 # Builds a release binary with SwiftPM and wraps it into a double-clickable
 # BeamerPresenter.app bundle. Run on macOS:
 #
-#   ./build-app.sh                 # universal (Apple Silicon + Intel) — default
-#   ARCHS="arm64" ./build-app.sh   # Apple Silicon only
-#   ARCHS="x86_64" ./build-app.sh  # Intel only
-#
-# A universal build runs on both Apple Silicon and Intel Macs from one .app.
-# (The x86_64 slice cross-compiles fine on an Apple Silicon Mac.)
+#   ./build-app.sh                       # Apple Silicon (arm64) — default
+#   ARCHS="arm64 x86_64" ./build-app.sh  # universal (adds Intel; needs full Xcode,
+#                                        #  and newer SDKs warn that x86_64 is deprecated)
+#   ARCHS="x86_64" ./build-app.sh        # Intel only
 #
 # Optional: pass a Developer ID to codesign the result:
 #
@@ -19,7 +17,7 @@ cd "$(dirname "$0")"
 
 APP_NAME="BeamerPresenter"
 CONFIG="release"
-ARCHS="${ARCHS:-arm64 x86_64}"        # space-separated list of architectures
+ARCHS="${ARCHS:-arm64}"               # space-separated; add x86_64 for Intel
 SIGN_IDENTITY="${1:-}"
 
 # A universal (multi-arch) build uses Xcode's build system (xcbuild), which is
