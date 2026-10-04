@@ -8,7 +8,13 @@ import Foundation
 /// bookmarks.json`). At launch the bookmarks are resolved and access is
 /// re-established, so macOS doesn't ask again for locations the user already
 /// granted (e.g. after a drag & drop from Downloads, or an app restart).
+///
+/// The list is capped to the most recently used entries: security scopes are
+/// a limited kernel resource, so the app never holds more than `maxEntries`
+/// open at once.
 enum AccessBookmarks {
+    private static let maxEntries = 40
+
     /// The app's config folder, created on demand.
     static var configDir: URL {
         let base = FileManager.default.urls(for: .applicationSupportDirectory,
@@ -19,6 +25,11 @@ enum AccessBookmarks {
     }
 
     private static var file: URL { configDir.appendingPathComponent("bookmarks.json") }
+
+    private struct Entry: Codable {
+        var data: Data
+        var lastUsed: Date
+    }
 
     /// URLs whose security scope we opened this run (kept so the scope stays
     /// alive for the app's lifetime; macOS closes it on exit).
@@ -37,34 +48,55 @@ enum AccessBookmarks {
         saveMap(map)
     }
 
-    /// Re-establishes access to everything remembered; prunes dead entries.
+    /// Re-establishes access to everything remembered (newest first, capped);
+    /// prunes dead entries and refreshes stale or broken-but-recreatable ones.
     /// Call once early at launch.
     static func restoreAll() {
         var map = loadMap()
-        var changed = false
-        for (path, data) in map {
+
+        for (path, entry) in map {
             var stale = false
-            if let url = resolve(data, stale: &stale) {
+            if let url = resolve(entry.data, stale: &stale) {
                 if url.startAccessingSecurityScopedResource() { accessed.append(url) }
-                if stale { store(url, into: &map); changed = true }
-            } else if !FileManager.default.fileExists(atPath: path) {
+                if stale || url.path != path {
+                    // The file moved: re-store under its new path and drop the
+                    // old key (it must not linger under the dead path).
+                    map[path] = nil
+                    map[url.path] = Entry(data: bookmarkData(for: url) ?? entry.data,
+                                          lastUsed: entry.lastUsed)
+                }
+            } else if FileManager.default.fileExists(atPath: path) {
+                // Bookmark broke but the file is still there — re-create it
+                // from the path instead of carrying the dead data forever.
+                let url = URL(fileURLWithPath: path)
+                if let data = bookmarkData(for: url) {
+                    map[path] = Entry(data: data, lastUsed: entry.lastUsed)
+                } else {
+                    map[path] = nil
+                }
+            } else {
                 map[path] = nil
-                changed = true
             }
         }
-        if changed { saveMap(map) }
+
+        trim(&map)
+        saveMap(map)
     }
 
     // MARK: - Bookmark plumbing
 
+    private static func store(_ url: URL, into map: inout [String: Entry]) {
+        guard let data = bookmarkData(for: url) else { return }
+        map[url.path] = Entry(data: data, lastUsed: Date())
+        trim(&map)
+    }
+
     /// Security-scoped where available (sandbox), plain otherwise — both keep
     /// working, resolution tries the scoped flavour first.
-    private static func store(_ url: URL, into map: inout [String: Data]) {
-        let data = (try? url.bookmarkData(options: [.withSecurityScope],
-                                          includingResourceValuesForKeys: nil,
-                                          relativeTo: nil))
+    private static func bookmarkData(for url: URL) -> Data? {
+        (try? url.bookmarkData(options: [.withSecurityScope],
+                               includingResourceValuesForKeys: nil, relativeTo: nil))
             ?? (try? url.bookmarkData())
-        if let data { map[url.path] = data }
     }
 
     private static func resolve(_ data: Data, stale: inout Bool) -> URL? {
@@ -76,12 +108,27 @@ enum AccessBookmarks {
                         relativeTo: nil, bookmarkDataIsStale: &stale)
     }
 
-    private static func loadMap() -> [String: Data] {
-        guard let data = try? Data(contentsOf: file) else { return [:] }
-        return (try? JSONDecoder().decode([String: Data].self, from: data)) ?? [:]
+    /// Keeps only the most recently used entries.
+    private static func trim(_ map: inout [String: Entry]) {
+        guard map.count > maxEntries else { return }
+        let drop = map.sorted { $0.value.lastUsed < $1.value.lastUsed }
+            .prefix(map.count - maxEntries)
+        drop.forEach { map[$0.key] = nil }
     }
 
-    private static func saveMap(_ map: [String: Data]) {
+    private static func loadMap() -> [String: Entry] {
+        guard let data = try? Data(contentsOf: file) else { return [:] }
+        if let map = try? JSONDecoder().decode([String: Entry].self, from: data) {
+            return map
+        }
+        // Migrate the v4.8 format (plain path → bookmark data).
+        if let old = try? JSONDecoder().decode([String: Data].self, from: data) {
+            return old.mapValues { Entry(data: $0, lastUsed: Date()) }
+        }
+        return [:]
+    }
+
+    private static func saveMap(_ map: [String: Entry]) {
         if let data = try? JSONEncoder().encode(map) {
             try? data.write(to: file, options: .atomic)
         }

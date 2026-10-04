@@ -1,5 +1,22 @@
 # Changelog
 
+## v4.11 — 2026-10-04
+
+Peer-review fixes (macOS) and Linux feature parity.
+
+- **macOS fixes** from the code review: the thumbnail strip now scrolls to the
+  resumed slide on open; a failed load of a second deck no longer leaves
+  half-mutated state (and can no longer mis-key saved slide positions); the
+  access-bookmark store is capped at 40 most-recently-used entries with proper
+  stale/moved-file handling; the thumbnail cache is bounded (NSCache); slide
+  positions save only on actual changes and dead entries are pruned at launch;
+  strip/overview cells are accessible again (VoiceOver/keyboard); shared
+  Prefs key for the strip height.
+- **Linux parity**: per-deck resume, the exit dialog (home screen / quit /
+  cancel), and a zoomable thumbnail strip at the bottom of the console —
+  single-click to jump, drag the handle to zoom, bucketed rendering for a
+  fluid drag (same approach as macOS).
+
 ## v4.10 — 2026-10-04
 
 - **Fluid thumbnail zoom** (macOS): while dragging the strip handle the

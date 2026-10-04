@@ -37,6 +37,17 @@ enum SlidePositions {
         let map = UserDefaults.standard.dictionary(forKey: key) as? [String: Int] ?? [:]
         return min(max(0, map[url.path] ?? 0), max(0, pageCount - 1))
     }
+
+    /// Drops entries whose files no longer exist (run once at launch, so the
+    /// map doesn't grow forever).
+    static func prune() {
+        guard var map = UserDefaults.standard.dictionary(forKey: key) as? [String: Int],
+              !map.isEmpty else { return }
+        let dead = map.keys.filter { !FileManager.default.fileExists(atPath: $0) }
+        guard !dead.isEmpty else { return }
+        dead.forEach { map[$0] = nil }
+        UserDefaults.standard.set(map, forKey: key)
+    }
 }
 
 /// Single source of truth shared by both windows. A keypress or click mutates
@@ -119,20 +130,31 @@ final class PresentationState: ObservableObject {
     /// Call after the deck has been exported to a PDF: the edits are now saved.
     func markSaved() { hasUnsavedChanges = false }
 
-    private var thumbCache: [String: NSImage] = [:]
+    /// Bounded thumbnail cache (pages × size buckets would otherwise pile up
+    /// across zoom levels for the whole session).
+    private let thumbCache: NSCache<NSString, NSImage> = {
+        let cache = NSCache<NSString, NSImage>()
+        cache.countLimit = 600
+        return cache
+    }()
 
     // MARK: - Loading
 
     @discardableResult
     func load(url: URL) -> Bool {
+        // Validate everything *before* touching any state, so a failed load of
+        // a second deck can't leave half-mutated state behind (wrong sourceURL
+        // would also mis-key the saved slide positions).
         guard let probe = PDFDocument(url: url), probe.pageCount > 0 else { return false }
         let split = PDFModel.isNotesLayout(probe)
+        guard let doc = PDFModel.croppedDocument(url: url, half: split ? .left : .full),
+              let first = doc.page(at: 0) else { return false }
+        let notes = split ? PDFModel.croppedDocument(url: url, half: .right) : nil
+
         if isLoaded { recordCurrentSession(); saveScratch() }   // finish the previous deck first
         sourceURL = url
-
-        slideDoc = PDFModel.croppedDocument(url: url, half: split ? .left : .full)
-        notesDoc = split ? PDFModel.croppedDocument(url: url, half: .right) : nil
-        guard let doc = slideDoc, let first = doc.page(at: 0) else { return false }
+        slideDoc = doc
+        notesDoc = notes
 
         let box = first.bounds(for: .cropBox)
         slideAspect = box.width / max(box.height, 1)
@@ -148,7 +170,7 @@ final class PresentationState: ObservableObject {
         }
         title = url.deletingPathExtension().lastPathComponent
         loadScratch()
-        thumbCache.removeAll()
+        thumbCache.removeAllObjects()
         strokes.removeAll()
         currentStroke = []
         laserPoint = nil
@@ -180,7 +202,7 @@ final class PresentationState: ObservableObject {
         textNotes = [:]
         pageCount = 0
         title = ""
-        thumbCache.removeAll()
+        thumbCache.removeAllObjects()
         strokes.removeAll()
         currentStroke = []
         laserPoint = nil
@@ -244,9 +266,11 @@ final class PresentationState: ObservableObject {
         if clamped != index {
             currentStroke = []
             laserPoint = nil
+            index = clamped
+            // Persist only on an actual change — not on every key repeat at
+            // the first/last slide.
+            if let url = sourceURL { SlidePositions.save(clamped, for: url) }
         }
-        index = clamped
-        if let url = sourceURL { SlidePositions.save(clamped, for: url) }
     }
 
     func resetTimer() {
@@ -479,13 +503,13 @@ final class PresentationState: ObservableObject {
     /// strip's thumbnails are zoomable while the overview uses its own size.
     func thumbnail(at i: Int, height: CGFloat = 110) -> NSImage? {
         guard let doc = slideDoc, i >= 0, i < doc.pageCount, let page = doc.page(at: i) else { return nil }
-        let key = "\(i)@\(Int(height))"
-        if let cached = thumbCache[key] { return cached }
+        let key = "\(i)@\(Int(height))" as NSString
+        if let cached = thumbCache.object(forKey: key) { return cached }
         let box = page.bounds(for: .cropBox)
         let aspect = box.width / max(box.height, 1)
         let size = NSSize(width: height * aspect, height: height)
         let image = page.thumbnail(of: size, for: .cropBox)
-        thumbCache[key] = image
+        thumbCache.setObject(image, forKey: key)
         return image
     }
 }

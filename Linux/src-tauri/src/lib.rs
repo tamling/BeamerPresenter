@@ -283,6 +283,12 @@ fn unescape(s: &str) -> String {
         .replace("&amp;", "&") // last, so &amp;lt; doesn't double-decode
 }
 
+/// Quits the app (used by the console's exit dialog).
+#[tauri::command]
+fn quit_app(app: tauri::AppHandle) {
+    app.exit(0);
+}
+
 // ---- Audience window control -----------------------------------------------
 
 use tauri::Manager;
@@ -385,7 +391,8 @@ pub fn run() {
             pptx_notes,
             show_audience,
             hide_audience,
-            toggle_audience_fullscreen
+            toggle_audience_fullscreen,
+            quit_app
         ])
         .run(tauri::generate_context!())
         .expect("error while running BeamerPresenter");

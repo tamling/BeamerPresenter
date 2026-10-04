@@ -99,6 +99,16 @@
     }
   }
 
+  // ---- Per-deck resume -----------------------------------------------------
+
+  const POS_KEY = "lastSlideByPath";
+  const loadPositions = () => JSON.parse(localStorage.getItem(POS_KEY) || "{}");
+  function savePosition(path, page) {
+    const map = loadPositions();
+    map[path] = page;
+    localStorage.setItem(POS_KEY, JSON.stringify(map));
+  }
+
   // ---- Opening decks -------------------------------------------------------
 
   function hud(title, detail = "", closable = false) {
@@ -142,7 +152,8 @@
       state.path = path;
       state.count = info.pageCount;
       state.split = info.split;
-      state.page = 0;
+      // Resume where this deck was left last time (first slide for new decks).
+      state.page = Math.min(Math.max(0, loadPositions()[path] || 0), info.pageCount - 1);
       state.blackout = false;
       // Plain single-screen PDFs pull \note{} text from the .tex next to them
       // — or PowerPoint speaker notes from a sibling .pptx (converted decks);
@@ -162,6 +173,7 @@
     el("home").classList.add("hidden");
     el("console").classList.add("active");
     buildOverview();
+    buildStrip();
     pushDeck();
     pushState();
     await invoke("show_audience");
@@ -176,12 +188,26 @@
     if (boardActive()) { state.boardIndex = null; setBoardVisible(false); }
     pushBoard();
     invoke("hide_audience");
+    el("strip").innerHTML = "";
     el("console").classList.remove("active");
     el("overview").classList.remove("active");
     el("home").classList.remove("hidden");
     renderRecents();
   }
-  el("close-btn").addEventListener("click", closeDeck);
+
+  // Leaving the presentation: back to the home screen, or quit entirely
+  // (mirrors the macOS exit dialog).
+  el("close-btn").addEventListener("click", () => {
+    if (state.path) el("exit-dialog").style.display = "flex";
+  });
+  el("exit-home").addEventListener("click", () => {
+    el("exit-dialog").style.display = "none";
+    closeDeck();
+  });
+  el("exit-quit").addEventListener("click", () => invoke("quit_app"));
+  el("exit-cancel").addEventListener("click", () => {
+    el("exit-dialog").style.display = "none";
+  });
 
   // ---- Console rendering ---------------------------------------------------
 
@@ -223,6 +249,7 @@
     live.textContent = state.blackout ? "BLACK" : "LIVE";
     live.classList.toggle("black", state.blackout);
     highlightOverview();
+    highlightStrip();
   }
 
   let resizeTimer = null;
@@ -371,12 +398,100 @@
   el("wb-delete").addEventListener("click", deleteBoard);
   el("wb-style").addEventListener("click", toggleBoardStyle);
 
+  // ---- Thumbnail strip (zoomable, mirrors the macOS strip) -----------------
+
+  let stripHeight = (() => {
+    const h = parseFloat(localStorage.getItem("stripHeight"));
+    return Number.isFinite(h) ? Math.min(Math.max(h, 50), 200) : 70;
+  })();
+  // Thumbnails render at 64px buckets and are *displayed* scaled to the live
+  // height, so dragging the zoom handle never re-renders per pixel.
+  const stripBucket = () => Math.max(64, Math.ceil(stripHeight / 64) * 64);
+  let renderedBucket = 0;
+  let stripRenderToken = 0;
+
+  function buildStrip() {
+    const strip = el("strip");
+    strip.innerHTML = "";
+    for (let i = 0; i < state.count; i++) {
+      const cell = document.createElement("div");
+      cell.className = "strip-cell";
+      const canvas = document.createElement("canvas");
+      const num = document.createElement("div");
+      num.className = "strip-num";
+      num.textContent = String(i + 1);
+      cell.append(canvas, num);
+      cell.addEventListener("click", () => goTo(i));
+      strip.appendChild(cell);
+    }
+    renderedBucket = 0;
+    renderStrip();
+  }
+
+  function applyStripScale() {
+    const h = stripHeight;
+    for (const cell of el("strip").children) {
+      const canvas = cell.querySelector("canvas");
+      canvas.style.height = `${h}px`;
+      canvas.style.width = `${h * Slides.slideAspect()}px`;
+    }
+  }
+
+  async function renderStrip() {
+    const bucket = stripBucket();
+    applyStripScale();
+    if (bucket === renderedBucket) return;
+    renderedBucket = bucket;
+    const token = ++stripRenderToken;
+    const cells = el("strip").children;
+    for (let i = 0; i < cells.length; i++) {
+      if (token !== stripRenderToken) return;   // superseded by a newer pass
+      const canvas = cells[i].querySelector("canvas");
+      await Slides.render(canvas, i, bucket * Slides.slideAspect(), bucket,
+        state.split ? "left" : "full");
+    }
+    applyStripScale();   // Slides.render set per-canvas sizes; rescale to live height
+  }
+
+  function highlightStrip() {
+    const cells = el("strip").children;
+    for (let i = 0; i < cells.length; i++) {
+      cells[i].classList.toggle("current", i === state.page);
+    }
+    cells[state.page]?.scrollIntoView({ inline: "center", block: "nearest", behavior: "smooth" });
+  }
+
+  // Drag the handle to zoom; re-render crisp at the new bucket on release.
+  (() => {
+    const handle = el("strip-handle");
+    let startY = null, startH = null;
+    handle.addEventListener("pointerdown", (e) => {
+      startY = e.clientY;
+      startH = stripHeight;
+      handle.setPointerCapture(e.pointerId);
+    });
+    handle.addEventListener("pointermove", (e) => {
+      if (startY === null) return;
+      stripHeight = Math.min(Math.max(startH + (startY - e.clientY), 50), 200);
+      applyStripScale();   // pure scaling while dragging — stays fluid
+    });
+    const done = () => {
+      if (startY === null) return;
+      startY = null;
+      localStorage.setItem("stripHeight", String(stripHeight));
+      renderStrip();       // crisp re-render at the final bucket
+    };
+    handle.addEventListener("pointerup", done);
+    handle.addEventListener("pointercancel", done);
+  })();
+
   // ---- Navigation ----------------------------------------------------------
 
   function goTo(page) {
     const p = Math.max(0, Math.min(state.count - 1, page));
     if (p === state.page) return;
     state.page = p;
+    if (state.path) savePosition(state.path, p);
     pushState();
     renderAll();
   }
@@ -539,6 +654,6 @@
       : "LibreOffice not found — needed to open .pptx";
   });
 
-  el("version").textContent = "BeamerPresenter 4.10 · Linux";
+  el("version").textContent = "BeamerPresenter 4.11 · Linux";
   renderRecents();
 })();
