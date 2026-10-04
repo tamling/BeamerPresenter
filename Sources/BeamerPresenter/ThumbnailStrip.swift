@@ -2,10 +2,13 @@ import SwiftUI
 
 /// Horizontal, clickable strip of slide thumbnails. The current slide is
 /// highlighted; clicking jumps to that slide. Auto-scrolls to keep the current
-/// slide visible.
+/// slide visible. The height follows the draggable handle above the strip
+/// (persisted), so the thumbnails can be zoomed.
 struct ThumbnailStrip: View {
     @EnvironmentObject var state: PresentationState
-    private let thumbHeight: CGFloat = 70
+    @AppStorage("thumbStripHeight") private var stripHeight: Double = 70
+
+    private var thumbHeight: CGFloat { CGFloat(stripHeight) }
 
     var body: some View {
         ScrollViewReader { proxy in

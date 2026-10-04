@@ -18,6 +18,7 @@ enum Favorites {
     @discardableResult
     static func add(_ url: URL) -> Bool {
         guard isDirectory(url) else { return false }
+        AccessBookmarks.remember(url)   // keep the folder grant across launches
         var paths = (UserDefaults.standard.stringArray(forKey: key) ?? [])
             .filter { $0 != url.path }
         paths.insert(url.path, at: 0)
@@ -63,10 +64,10 @@ enum AppInfo {
     static let name = "BeamerPresenter"
 
     static var version: String {
-        (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "4.7"
+        (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "4.8"
     }
 
-    /// e.g. "Version 4.7"
+    /// e.g. "Version 4.8"
     static var versionLine: String { "Version \(version)" }
 
     /// e.g. "Build 260621-1901175" — stamped at build time (see BuildInfo).
