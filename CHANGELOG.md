@@ -1,5 +1,14 @@
 # Changelog
 
+## v4.10 — 2026-10-04
+
+- **Fluid thumbnail zoom** (macOS): while dragging the strip handle the
+  thumbnails scale smoothly — PDF pages are re-rendered only at 64 pt size
+  buckets instead of on every drag pixel, which caused the stutter.
+- **Single click opens a slide** (macOS): thumbnail strip and overview grid
+  now jump on a single click by default; Settings ▸ Presenter console offers
+  a double-click mode instead.
+
 ## v4.9 — 2026-10-04
 
 - README refreshed to match the app: v4.1–v4.8 features documented (PowerPoint

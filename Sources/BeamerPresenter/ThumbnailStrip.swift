@@ -1,25 +1,31 @@
 import SwiftUI
 
 /// Horizontal, clickable strip of slide thumbnails. The current slide is
-/// highlighted; clicking jumps to that slide. Auto-scrolls to keep the current
-/// slide visible. The height follows the draggable handle above the strip
-/// (persisted), so the thumbnails can be zoomed.
+/// highlighted; clicking (single or double, per Settings) jumps to that slide.
+/// Auto-scrolls to keep the current slide visible. The height follows the
+/// draggable handle above the strip (persisted), so the thumbnails can be
+/// zoomed.
 struct ThumbnailStrip: View {
     @EnvironmentObject var state: PresentationState
     @AppStorage("thumbStripHeight") private var stripHeight: Double = 70
+    @AppStorage(Prefs.doubleClickSlides) private var doubleClick = false
 
     private var thumbHeight: CGFloat { CGFloat(stripHeight) }
+
+    /// Thumbnails are rendered at the next 64 pt bucket and *displayed* scaled
+    /// to the live height — so a zoom drag never re-renders PDF pages per
+    /// pixel (that made the drag visibly stutter) and stays fluid.
+    private var renderHeight: CGFloat { max(64, (thumbHeight / 64).rounded(.up) * 64) }
 
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     ForEach(0..<state.pageCount, id: \.self) { i in
-                        Button { state.go(to: i) } label: {
-                            thumb(i)
-                        }
-                        .buttonStyle(.plain)
-                        .id(i)
+                        thumb(i)
+                            .contentShape(Rectangle())
+                            .onTapGesture(count: doubleClick ? 2 : 1) { state.go(to: i) }
+                            .id(i)
                     }
                 }
                 .padding(.horizontal, 8)
@@ -39,7 +45,7 @@ struct ThumbnailStrip: View {
         let isCurrent = i == state.index
         VStack(spacing: 3) {
             Group {
-                if let image = state.thumbnail(at: i, height: thumbHeight) {
+                if let image = state.thumbnail(at: i, height: renderHeight) {
                     Image(nsImage: image).resizable().scaledToFit()
                 } else {
                     Theme.key
