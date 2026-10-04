@@ -165,7 +165,7 @@ struct StartView: View {
     }
 
     static var version: String {
-        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "4.11"
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "4.12"
     }
 }
 

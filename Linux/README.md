@@ -8,6 +8,8 @@ window** for the projector.
 Built with [Tauri 2](https://tauri.app) (Rust + WebKitGTK) and
 [pdf.js](https://mozilla.github.io/pdf.js/) (vendored, no network needed).
 
+![Presenter console](../docs/screenshots/console.png)
+
 ## Features (core console)
 
 - **Two windows** — presenter console + audience. With a second monitor the

@@ -1,5 +1,11 @@
 # Changelog
 
+## v4.12 — 2026-10-04
+
+- **Screenshots in the README** (`docs/screenshots/`): presenter console,
+  home screen, whiteboard, audience window and black-out — captured from the
+  Linux build (same Night Console design as macOS).
+
 ## v4.11 — 2026-10-04
 
 Peer-review fixes (macOS) and Linux feature parity.
