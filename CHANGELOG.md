@@ -1,5 +1,14 @@
 # Changelog
 
+## v4.13 — 2026-10-04
+
+- **Fix for the recurring folder-access prompts on macOS**: TCC remembers the
+  "Allow" per code signature, and unsigned/ad-hoc builds change identity on
+  every rebuild. `Tools/make-signing-cert.sh` creates a stable self-signed
+  identity once; `build-app.sh` now auto-detects it (or a real Developer
+  ID/Apple Development identity), always signs the bundle, and explains the
+  fix when only ad-hoc signing is available.
+
 ## v4.12 — 2026-10-04
 
 - **Screenshots in the README** (`docs/screenshots/`): presenter console,
