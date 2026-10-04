@@ -22,6 +22,23 @@ struct Stroke: Identifiable {
     var width: CGFloat   // fraction of slide width
 }
 
+/// Remembers the last viewed slide per presentation (keyed by file path), so
+/// reopening a deck resumes where you left off instead of starting over.
+enum SlidePositions {
+    private static let key = "lastSlideByPath"
+
+    static func save(_ index: Int, for url: URL) {
+        var map = UserDefaults.standard.dictionary(forKey: key) as? [String: Int] ?? [:]
+        map[url.path] = index
+        UserDefaults.standard.set(map, forKey: key)
+    }
+
+    static func restore(for url: URL, pageCount: Int) -> Int {
+        let map = UserDefaults.standard.dictionary(forKey: key) as? [String: Int] ?? [:]
+        return min(max(0, map[url.path] ?? 0), max(0, pageCount - 1))
+    }
+}
+
 /// Single source of truth shared by both windows. A keypress or click mutates
 /// state here and the presenter + audience views update in lockstep.
 final class PresentationState: ObservableObject {
@@ -102,7 +119,7 @@ final class PresentationState: ObservableObject {
     /// Call after the deck has been exported to a PDF: the edits are now saved.
     func markSaved() { hasUnsavedChanges = false }
 
-    private var thumbCache: [Int: NSImage] = [:]
+    private var thumbCache: [String: NSImage] = [:]
 
     // MARK: - Loading
 
@@ -140,7 +157,8 @@ final class PresentationState: ObservableObject {
         activeBoardIndex = nil
         selectedItemID = nil
         boardStroke = []
-        index = 0
+        // Resume where this deck was left last time (first slide for new decks).
+        index = SlidePositions.restore(for: url, pageCount: doc.pageCount)
         // Start blacked out unless the user turned it off in Settings.
         blackout = UserDefaults.standard.object(forKey: "startBlackedOut") as? Bool ?? true
         showOverview = false
@@ -228,6 +246,7 @@ final class PresentationState: ObservableObject {
             laserPoint = nil
         }
         index = clamped
+        if let url = sourceURL { SlidePositions.save(clamped, for: url) }
     }
 
     func resetTimer() {
@@ -456,15 +475,17 @@ final class PresentationState: ObservableObject {
     // MARK: - Thumbnails
 
     /// Lazily renders and caches a thumbnail of the slide half for the strip and
-    /// the overview grid.
+    /// the overview grid. The cache is keyed by page *and* height, since the
+    /// strip's thumbnails are zoomable while the overview uses its own size.
     func thumbnail(at i: Int, height: CGFloat = 110) -> NSImage? {
         guard let doc = slideDoc, i >= 0, i < doc.pageCount, let page = doc.page(at: i) else { return nil }
-        if let cached = thumbCache[i] { return cached }
+        let key = "\(i)@\(Int(height))"
+        if let cached = thumbCache[key] { return cached }
         let box = page.bounds(for: .cropBox)
         let aspect = box.width / max(box.height, 1)
         let size = NSSize(width: height * aspect, height: height)
         let image = page.thumbnail(of: size, for: .cropBox)
-        thumbCache[i] = image
+        thumbCache[key] = image
         return image
     }
 }

@@ -25,11 +25,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Night Console is a single fixed dark theme.
         NSApp.appearance = NSAppearance(named: .darkAqua)
+        // Re-establish file/folder access granted in earlier runs, so macOS
+        // doesn't ask again for folders the user already opened from.
+        AccessBookmarks.restoreAll()
         setupMenu()
         installKeyMonitor()
         NotificationCenter.default.addObserver(
             self, selector: #selector(screensChanged),
             name: NSApplication.didChangeScreenParametersNotification, object: nil)
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(closePresentation(_:)),
+            name: .exitPresentationRequested, object: nil)
         NotificationCenter.default.addObserver(
             self, selector: #selector(updateStatusItem),
             name: .statusItemPrefChanged, object: nil)
@@ -445,9 +451,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         Favorites.add(url)
     }
 
+    /// Leaving the presentation (the Exit key, Close Presentation, ⌘W): after
+    /// the usual save/discard check, offer going back to the home screen or
+    /// quitting the app entirely.
     @objc private func closePresentation(_ sender: Any?) {
         guard state.isLoaded else { return }
-        if confirmDiscardOrSave() { state.unload() }
+        guard confirmDiscardOrSave() else { return }
+
+        let alert = NSAlert()
+        alert.messageText = "Leave the presentation?"
+        alert.informativeText = "Go back to the home screen, or quit \(AppInfo.name) entirely."
+        alert.addButton(withTitle: "Home Screen")
+        alert.addButton(withTitle: "Quit \(AppInfo.name)")
+        alert.addButton(withTitle: "Cancel")
+        switch alert.runModal() {
+        case .alertFirstButtonReturn:
+            state.unload()
+        case .alertSecondButtonReturn:
+            state.unload()        // records the session; nothing left to re-ask on quit
+            NSApp.terminate(nil)
+        default:
+            break
+        }
     }
 
     /// If the open deck has unexported ink/whiteboards, ask whether to save them
@@ -733,6 +758,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             return
         }
         RecentFiles.add(url)
+        AccessBookmarks.remember(url)   // keep access to the file + its folder
         buildAudienceWindowIfNeeded()
         positionWindows()
         audienceWindow?.orderFront(nil)
@@ -1001,4 +1027,6 @@ extension Notification.Name {
     static let backgroundModePrefChanged = Notification.Name("backgroundModePrefChanged")
     /// Posted when the audience full-screen/windowed preference changes.
     static let audienceModeChanged = Notification.Name("audienceModeChanged")
+    /// Posted by the console's Exit key to run the leave-presentation flow.
+    static let exitPresentationRequested = Notification.Name("exitPresentationRequested")
 }

@@ -1,5 +1,21 @@
 # Changelog
 
+## v4.8 — 2026-10-04
+
+Quality-of-life fixes on macOS.
+
+- **Fewer folder-access prompts**: opened files and favourite folders are
+  remembered as bookmarks in a config folder
+  (`~/Library/Application Support/BeamerPresenter/`) and access is restored at
+  launch, so drag & drop or an app restart no longer re-asks for the same
+  folders.
+- **Resume per deck**: reopening a presentation continues on the slide you
+  left, instead of starting from the first one.
+- **Exit choice**: leaving a presentation (Exit key, Close Presentation, ⌘W)
+  now asks: back to the home screen, quit the app, or cancel.
+- **Zoomable slide strip**: the thumbnail strip at the bottom has a drag
+  handle — pull it up for larger, readable thumbnails (size persists).
+
 ## v4.7 — 2026-08-23
 
 - CI now publishes a GitHub **Release** (`v<version>`) with the built `.deb`
