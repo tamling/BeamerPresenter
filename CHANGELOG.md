@@ -1,5 +1,12 @@
 # Changelog
 
+## v4.9 — 2026-10-04
+
+- README refreshed to match the app: v4.1–v4.8 features documented (PowerPoint
+  speaker notes, audience-window behaviour, exit choice, resume, zoomable
+  thumbnail strip, remembered folder access, Linux `.deb` releases), stale
+  defaults corrected, project layout table extended.
+
 ## v4.8 — 2026-10-04
 
 Quality-of-life fixes on macOS.
