@@ -28,6 +28,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         // Re-establish file/folder access granted in earlier runs, so macOS
         // doesn't ask again for folders the user already opened from.
         AccessBookmarks.restoreAll()
+        SlidePositions.prune()   // drop resume entries for deleted files
         setupMenu()
         installKeyMonitor()
         NotificationCenter.default.addObserver(

@@ -25,6 +25,10 @@ Built with [Tauri 2](https://tauri.app) (Rust + WebKitGTK) and
 - **Whiteboard** (`W`) — free-form scratch boards, drawn in the console and
   mirrored live on the projector: four pen colours, undo/clear, multiple
   boards, dark (dot grid) or light (ink-on-white) style.
+- **Thumbnail strip** — zoomable (drag the handle above it), single click
+  jumps to a slide; the current one is highlighted and kept in view.
+- **Resume** — reopening a deck continues on the slide you left.
+- **Exit choice** — leaving a deck asks: home screen, quit, or cancel.
 - **Blackout** (`B`) — audience shows a quiet pulsing dot and the clock.
 - **Overview grid** (`G`), slide counter, wall clock, start/stop/reset timer.
 - Drop a PDF or `.tex` **anywhere** on the home screen to open it; recents list.

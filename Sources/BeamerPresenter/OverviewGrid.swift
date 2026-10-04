@@ -34,6 +34,12 @@ struct OverviewGrid: View {
                                 state.go(to: i)
                                 state.showOverview = false
                             }
+                            .accessibilityAddTraits(.isButton)
+                            .accessibilityLabel("Slide \(i + 1)")
+                            .accessibilityAction {
+                                state.go(to: i)
+                                state.showOverview = false
+                            }
                     }
                 }
                 .padding(20)

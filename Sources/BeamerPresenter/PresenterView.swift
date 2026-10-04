@@ -34,7 +34,7 @@ struct PresenterView: View {
     /// Height of the scratch-notes pane, in points.
     @AppStorage("presenterScratchHeight") private var scratchHeight: Double = 132
     /// Thumbnail height of the bottom slide strip, in points (draggable).
-    @AppStorage("thumbStripHeight") private var stripHeight: Double = 70
+    @AppStorage(Prefs.thumbStripHeight) private var stripHeight: Double = 70
 
     @State private var sidebarDragStart: Double?
     @State private var notesDragStart: Double?

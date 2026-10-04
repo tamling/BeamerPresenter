@@ -7,7 +7,7 @@ import SwiftUI
 /// zoomed.
 struct ThumbnailStrip: View {
     @EnvironmentObject var state: PresentationState
-    @AppStorage("thumbStripHeight") private var stripHeight: Double = 70
+    @AppStorage(Prefs.thumbStripHeight) private var stripHeight: Double = 70
     @AppStorage(Prefs.doubleClickSlides) private var doubleClick = false
 
     private var thumbHeight: CGFloat { CGFloat(stripHeight) }
@@ -25,12 +25,18 @@ struct ThumbnailStrip: View {
                         thumb(i)
                             .contentShape(Rectangle())
                             .onTapGesture(count: doubleClick ? 2 : 1) { state.go(to: i) }
+                            .accessibilityAddTraits(.isButton)
+                            .accessibilityLabel("Slide \(i + 1)")
+                            .accessibilityAction { state.go(to: i) }
                             .id(i)
                     }
                 }
                 .padding(.horizontal, 8)
                 .padding(.vertical, 6)
             }
+            // The initial index isn't a *change* (e.g. a resumed deck opens at
+            // its old slide), so scroll there once on appearance too.
+            .onAppear { proxy.scrollTo(state.index, anchor: .center) }
             .onChange(of: state.index) { newValue in
                 withAnimation { proxy.scrollTo(newValue, anchor: .center) }
             }

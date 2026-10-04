@@ -120,6 +120,9 @@ enum Prefs {
     /// Open a slide from the thumbnail strip / overview with a double click
     /// instead of a single click.
     static let doubleClickSlides = "doubleClickSlides"
+    /// Thumbnail height of the bottom slide strip (shared by the strip and the
+    /// drag handle in the presenter view).
+    static let thumbStripHeight = "thumbStripHeight"
 }
 
 /// Predefined "be right back" messages for the black screen.
