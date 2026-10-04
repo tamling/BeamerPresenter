@@ -4,6 +4,7 @@ import SwiftUI
 /// slide to jump to it and dismiss the overview.
 struct OverviewGrid: View {
     @EnvironmentObject var state: PresentationState
+    @AppStorage(Prefs.doubleClickSlides) private var doubleClick = false
     private let columns = [GridItem(.adaptive(minimum: 200), spacing: 16)]
 
     var body: some View {
@@ -27,13 +28,12 @@ struct OverviewGrid: View {
             ScrollView {
                 LazyVGrid(columns: columns, spacing: 18) {
                     ForEach(0..<state.pageCount, id: \.self) { i in
-                        Button {
-                            state.go(to: i)
-                            state.showOverview = false
-                        } label: {
-                            cell(i)
-                        }
-                        .buttonStyle(.plain)
+                        cell(i)
+                            .contentShape(Rectangle())
+                            .onTapGesture(count: doubleClick ? 2 : 1) {
+                                state.go(to: i)
+                                state.showOverview = false
+                            }
                     }
                 }
                 .padding(20)
