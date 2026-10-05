@@ -468,6 +468,7 @@
     handle.addEventListener("pointerdown", (e) => {
       startY = e.clientY;
       startH = stripHeight;
+      el("strip").classList.add("zooming");
       handle.setPointerCapture(e.pointerId);
     });
     handle.addEventListener("pointermove", (e) => {
@@ -478,6 +479,7 @@
     const done = () => {
       if (startY === null) return;
       startY = null;
+      el("strip").classList.remove("zooming");
       localStorage.setItem("stripHeight", String(stripHeight));
       renderStrip();       // crisp re-render at the final bucket
     };
@@ -654,6 +656,6 @@
       : "LibreOffice not found — needed to open .pptx";
   });
 
-  el("version").textContent = "BeamerPresenter 4.14 · Linux";
+  el("version").textContent = "BeamerPresenter 4.15 · Linux";
   renderRecents();
 })();

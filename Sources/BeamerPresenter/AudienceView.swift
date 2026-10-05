@@ -42,7 +42,6 @@ private struct BlackScreenView: View {
     @AppStorage("blackScreenImage") private var imagePath = ""
 
     @State private var now = Date()
-    @State private var dotOn = true
     private let tick = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     private var trimmed: String { message.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -64,12 +63,7 @@ private struct BlackScreenView: View {
 
                 VStack(spacing: s * 0.035) {
                     // Just the quiet pulsing dot — no label.
-                    Circle().fill(Theme.statusOk)
-                        .frame(width: max(7, s * 0.012), height: max(7, s * 0.012))
-                        .shadow(color: Theme.statusOk.opacity(0.7), radius: 4)
-                        .opacity(dotOn ? 1 : 0.2)
-                        .animation(.easeInOut(duration: 1.4).repeatForever(autoreverses: true), value: dotOn)
-                        .onAppear { dotOn.toggle() }
+                    PulsingDot(size: max(7, s * 0.012))
                     if hasMessage {
                         Text(trimmed)
                             .font(.display(s * 0.10))
@@ -90,5 +84,25 @@ private struct BlackScreenView: View {
     private var backgroundImage: NSImage? {
         guard !imagePath.isEmpty else { return nil }
         return NSImage(contentsOfFile: imagePath)
+    }
+}
+
+/// The blackout screen's breathing status dot. Driven by a `TimelineView`
+/// computing the opacity from the wall clock, so the pulse stays perfectly
+/// smooth no matter how often the surrounding view re-renders (the clock
+/// updating every second used to stutter the old `repeatForever` animation).
+struct PulsingDot: View {
+    var size: CGFloat
+    var period: Double = 2.8   // seconds for a full bright-dim-bright cycle
+
+    var body: some View {
+        TimelineView(.animation) { timeline in
+            let t = timeline.date.timeIntervalSinceReferenceDate
+            let phase = (sin(t * 2 * .pi / period) + 1) / 2
+            Circle().fill(Theme.statusOk)
+                .frame(width: size, height: size)
+                .shadow(color: Theme.statusOk.opacity(0.7), radius: 4)
+                .opacity(0.2 + 0.8 * phase)
+        }
     }
 }

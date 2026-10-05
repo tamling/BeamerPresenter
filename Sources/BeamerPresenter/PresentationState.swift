@@ -181,8 +181,11 @@ final class PresentationState: ObservableObject {
         boardStroke = []
         // Resume where this deck was left last time (first slide for new decks).
         index = SlidePositions.restore(for: url, pageCount: doc.pageCount)
-        // Start blacked out unless the user turned it off in Settings.
-        blackout = UserDefaults.standard.object(forKey: "startBlackedOut") as? Bool ?? true
+        // Start blacked out (per Settings) only when starting fresh — when the
+        // deck resumes mid-presentation, jump straight to the slide instead of
+        // the clock screen.
+        blackout = index == 0
+            && (UserDefaults.standard.object(forKey: "startBlackedOut") as? Bool ?? true)
         showOverview = false
         accumulated = 0
         timerRunning = true

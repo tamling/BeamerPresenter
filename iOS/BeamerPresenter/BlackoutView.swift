@@ -9,7 +9,6 @@ struct BlackoutView: View {
     @AppStorage("blackoutMessage") private var message = ""
     @AppStorage("blackoutShowClock") private var showClock = true
     @AppStorage("blackoutImagePath") private var imagePath = ""
-    @State private var dotOn = true
 
     var body: some View {
         GeometryReader { geo in
@@ -22,13 +21,16 @@ struct BlackoutView: View {
                     Color.black.opacity(0.45)
                 }
                 VStack(spacing: s * 0.035) {
-                    // Just the quiet pulsing dot — no label.
-                    Circle().fill(Theme.statusOk)
-                        .frame(width: max(7, s * 0.012), height: max(7, s * 0.012))
-                        .shadow(color: Theme.statusOk.opacity(0.7), radius: 4)
-                        .opacity(dotOn ? 1 : 0.2)
-                        .animation(.easeInOut(duration: 1.4).repeatForever(autoreverses: true), value: dotOn)
-                        .onAppear { dotOn.toggle() }
+                    // Just the quiet pulsing dot — no label. Time-driven so the
+                    // pulse stays smooth regardless of surrounding re-renders.
+                    TimelineView(.animation) { timeline in
+                        let t = timeline.date.timeIntervalSinceReferenceDate
+                        let phase = (sin(t * 2 * .pi / 2.8) + 1) / 2
+                        Circle().fill(Theme.statusOk)
+                            .frame(width: max(7, s * 0.012), height: max(7, s * 0.012))
+                            .shadow(color: Theme.statusOk.opacity(0.7), radius: 4)
+                            .opacity(0.2 + 0.8 * phase)
+                    }
                     if !message.isEmpty {
                         Text(message)
                             .font(.display(s * 0.10))
