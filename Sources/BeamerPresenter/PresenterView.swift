@@ -34,18 +34,14 @@ struct PresenterView: View {
     @AppStorage("presenterNotesFraction") private var notesFraction: Double = 0.5
     /// Height of the scratch-notes pane, in points.
     @AppStorage("presenterScratchHeight") private var scratchHeight: Double = 132
-    /// Thumbnail height of the bottom slide strip, in points (draggable).
-    @AppStorage(Prefs.thumbStripHeight) private var stripHeight: Double = 70
 
     @State private var sidebarDragStart: Double?
     @State private var notesDragStart: Double?
     @State private var scratchDragStart: Double?
-    @State private var stripDragStart: Double?
 
     private let sidebarRange = 260.0...820.0
     private let notesRange = 0.15...0.85
     private let scratchRange = 80.0...460.0
-    private let stripRange = 50.0...260.0
 
     var body: some View {
         ZStack {
@@ -75,16 +71,7 @@ struct PresenterView: View {
                 }
                 .frame(maxHeight: .infinity)
 
-                // Drag up/down to zoom the thumbnail strip (it sits below, so
-                // dragging up enlarges the thumbnails).
-                ResizeHandle(axis: .vertical) { translation in
-                    let start = stripDragStart ?? stripHeight
-                    stripDragStart = start
-                    stripHeight = (start - Double(translation)).clamped(to: stripRange)
-                } onEnded: {
-                    stripDragStart = nil
-                }
-
+                // The strip brings its own zoom handle along its top edge.
                 ThumbnailStrip()
             }
             .padding(8)

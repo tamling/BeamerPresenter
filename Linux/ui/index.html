@@ -147,6 +147,9 @@
     .strip-cell { flex: none; text-align: center; cursor: pointer; }
     .strip-cell canvas { display: block; border-radius: 5px;
                          outline: 1px solid var(--hairline-strong); }
+    /* While the zoom handle is being dragged, bitmaps only scale (slightly
+       blurred as a cue); the crisp re-render happens on release. */
+    #strip.zooming canvas { filter: blur(1.2px); }
     .strip-cell.current canvas { outline: 2.5px solid var(--accent);
                                  box-shadow: 0 0 8px rgba(199,242,78,.4); }
     .strip-num { font-family: var(--font-mono); font-size: 10px; padding-top: 3px;

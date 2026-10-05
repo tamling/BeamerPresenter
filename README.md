@@ -10,7 +10,7 @@ LaTeX install) or convert a PowerPoint `.pptx` (via LibreOffice) on the fly, and
 pull speaker notes straight from the `.tex` (`\note{…}`) or from the `.pptx`
 (PowerPoint speaker notes).
 
-**Version 4.14** — see `CHANGELOG.md`. Also available: an iPad version
+**Version 4.15** — see `CHANGELOG.md`. Also available: an iPad version
 (`iOS/`) and a **Linux port** of the core console (`Linux/`, Tauri 2 +
 WebKitGTK — see `Linux/README.md`; prebuilt `.deb` packages are attached to
 the GitHub Releases, rebuilt by CI on every push to `main`).

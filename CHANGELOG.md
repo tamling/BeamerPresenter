@@ -1,5 +1,18 @@
 # Changelog
 
+## v4.15 — 2026-10-05
+
+- **Smooth pulsing dot again**: the blackout screen's status dot is now driven
+  by a time-based `TimelineView` animation (macOS + iPadOS) — the old
+  `repeatForever` animation stuttered whenever the clock re-rendered the view.
+- **Natural thumbnail zoom**: while dragging the strip handle the bitmaps are
+  only scaled, with a slight blur as a cue; the crisp PDF re-render happens
+  once, on release (macOS; Linux already worked this way and gains the same
+  blur cue). The strip now owns its zoom handle.
+- **No clock screen on resume**: the "start blacked out" default now applies
+  only when a deck starts fresh — resuming mid-presentation jumps straight to
+  the slide.
+
 ## v4.14 — 2026-10-04
 
 - Build warnings fixed: `import Combine` added where `Timer.publish` is used
