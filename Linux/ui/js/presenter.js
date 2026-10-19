@@ -21,8 +21,15 @@
     boards: [],       // [{ strokes: [{color, width, points}] }]
     boardIndex: null, // active board while the whiteboard is up, else null
     boardLight: false,
-    penColor: Board.PENS[0].color
+    penColor: Board.PENS[0].color,
+    // Translated twin deck (e.g. the English version of Norwegian slides):
+    // shown in the console while showRef is on; the audience always gets
+    // the primary deck.
+    hasRef: false,
+    showRef: false
   };
+
+  const RefSlides = makeSlides();
 
   const el = (id) => document.getElementById(id);
 
@@ -168,6 +175,7 @@
     } catch (e) {
       return hud("Could not open PDF", String(e), true);
     }
+    await detectReferenceDeck(path);
     addRecent(path);
     el("deck-title").textContent = path.split("/").pop().replace(/\.pdf$/i, "");
     el("home").classList.add("hidden");
@@ -182,6 +190,10 @@
 
   function closeDeck() {
     Slides.close();
+    RefSlides.close();
+    state.hasRef = false;
+    state.showRef = false;
+    el("ref-btn").style.display = "none";
     state.path = null;
     state.blackout = false;
     state.boards = [];
@@ -213,17 +225,18 @@
 
   async function renderAll() {
     if (!state.path) return;
+    const deck = consoleDeck();
+    const deckHalf = deck.isSplit() ? "left" : "full";
     const pane = document.querySelector(".current-pane");
-    await Slides.render(el("current"), state.page,
-      pane.clientWidth - 36, pane.clientHeight - 36,
-      state.split ? "left" : "full");
+    await deck.render(el("current"), state.page,
+      pane.clientWidth - 36, pane.clientHeight - 36, deckHalf);
 
     const nextWrap = document.querySelector(".next-frame");
     const nw = nextWrap.clientWidth - 16;
     if (state.page + 1 < state.count) {
       el("next").style.visibility = "visible";
-      await Slides.render(el("next"), state.page + 1, nw, nw / Slides.slideAspect(),
-        state.split ? "left" : "full");
+      await deck.render(el("next"), state.page + 1, nw, nw / deck.slideAspect(),
+        deckHalf);
     } else {
       el("next").style.visibility = "hidden";
     }
@@ -397,6 +410,67 @@
   el("wb-new").addEventListener("click", newBoard);
   el("wb-delete").addEventListener("click", deleteBoard);
   el("wb-style").addEventListener("click", toggleBoardStyle);
+
+  // ---- Translated twin deck (reference) ------------------------------------
+
+  // talk-no.pdf <-> talk-en.pdf / talk_en.pdf / talk.en.pdf (and talk.pdf +
+  // talk-en.pdf). Only a sibling with the SAME page count counts, so the two
+  // decks stay in sync slide by slide. "en" is tried first.
+  const LANG_CODES = ["en", "de", "no", "nb", "nn", "da", "sv", "fi",
+                      "fr", "es", "it", "nl", "pl"];
+  const LANG_SEPS = ["-", "_", "."];
+
+  async function detectReferenceDeck(path) {
+    state.hasRef = false;
+    state.showRef = false;
+    RefSlides.close();
+    el("ref-btn").style.display = "none";
+
+    const dir = path.slice(0, path.lastIndexOf("/") + 1);
+    const stem = path.split("/").pop().replace(/\.pdf$/i, "");
+    let base = stem, own = null;
+    outer:
+    for (const sep of LANG_SEPS) {
+      for (const code of LANG_CODES) {
+        if (stem.toLowerCase().endsWith(sep + code)) {
+          base = stem.slice(0, stem.length - code.length - sep.length);
+          own = code;
+          break outer;
+        }
+      }
+    }
+    const ordered = ["en", ...LANG_CODES.filter((c) => c !== "en")]
+      .filter((c) => c !== own);
+    for (const code of ordered) {
+      for (const sep of LANG_SEPS) {
+        const candidate = `${dir}${base}${sep}${code}.pdf`;
+        if (candidate === path) continue;
+        if (!(await invoke("file_exists", { path: candidate }))) continue;
+        try {
+          const info = await RefSlides.open(candidate);
+          if (info.pageCount === state.count) {
+            state.hasRef = true;
+            state.showRef = true;   // that's why the twin exists — read it
+            el("ref-btn").style.display = "";
+            el("ref-btn").classList.add("on");
+            return;
+          }
+          RefSlides.close();
+        } catch (e) { /* unreadable candidate — keep looking */ }
+      }
+    }
+  }
+
+  function toggleReference() {
+    if (!state.hasRef) return;
+    state.showRef = !state.showRef;
+    el("ref-btn").classList.toggle("on", state.showRef);
+    renderAll();
+  }
+  el("ref-btn").addEventListener("click", toggleReference);
+
+  /// The deck the console panes render from (audience/strip stay primary).
+  const consoleDeck = () => (state.showRef && state.hasRef ? RefSlides : Slides);
 
   // ---- Thumbnail strip (zoomable, mirrors the macOS strip) -----------------
 
@@ -601,6 +675,7 @@
       case "Home": goTo(0); break;
       case "End": goTo(state.count - 1); break;
       case "b": case "B": toggleBlackout(); break;
+      case "e": case "E": toggleReference(); break;
       case "g": case "G": toggleOverview(); break;
       case "w": case "W": toggleBoard(); break;
       case "z": case "Z": undoStroke(); break;
@@ -656,6 +731,6 @@
       : "LibreOffice not found — needed to open .pptx";
   });
 
-  el("version").textContent = "BeamerPresenter 4.15 · Linux";
+  el("version").textContent = "BeamerPresenter 5.0 · Linux";
   renderRecents();
 })();

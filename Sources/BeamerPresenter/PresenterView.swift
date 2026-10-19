@@ -94,7 +94,8 @@ struct PresenterView: View {
             let nextH = avail - notesH
 
             VStack(spacing: 0) {
-                slidePane(title: "Next slide", index: state.index + 1, interactive: false)
+                slidePane(title: state.showReference ? "Next slide — translation" : "Next slide",
+                          index: state.index + 1, interactive: false)
                     .opacity(state.index + 1 < state.pageCount ? 1 : 0.25)
                     .frame(height: nextH)
 
@@ -186,11 +187,14 @@ struct PresenterView: View {
         }
     }
 
-    /// The large left pane: the current slide, or the whiteboard when active.
+    /// The large left pane: the current slide (primary or the translated twin
+    /// — the audience always sees the primary), or the whiteboard when active.
     private var currentPane: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text(state.isBoardActive ? "Whiteboard" : "Current slide").microLabel()
+                Text(state.isBoardActive ? "Whiteboard"
+                     : state.showReference ? "Current slide — translation (audience sees the original)"
+                     : "Current slide").microLabel()
                 Spacer()
                 LivePill()
             }
@@ -198,7 +202,7 @@ struct PresenterView: View {
                 if state.isBoardActive {
                     WhiteboardPane()
                 } else {
-                    SlideView(pageIndex: state.index, interactive: true)
+                    SlideView(pageIndex: state.index, interactive: true, preferReference: true)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -211,7 +215,7 @@ struct PresenterView: View {
     private func slidePane(title: String, index: Int, interactive: Bool) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title).microLabel()
-            SlideView(pageIndex: index, interactive: interactive)
+            SlideView(pageIndex: index, interactive: interactive, preferReference: true)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .padding(8)
                 .background(Theme.stage, in: RoundedRectangle(cornerRadius: 12))
@@ -392,6 +396,9 @@ private struct ControlBar: View {
             tool("Grid", "square.grid.2x2", active: state.showOverview) { state.showOverview.toggle() }
             tool("Black", state.blackout ? "eye.slash.fill" : "eye.slash", active: state.blackout) { state.blackout.toggle() }
             tool("Board", "square.and.pencil", active: state.isBoardActive) { state.toggleBoard() }
+            if state.hasReference {
+                tool("Transl", "globe", active: state.showReference) { state.toggleReference() }
+            }
 
             groupDivider
 

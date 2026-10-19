@@ -10,7 +10,7 @@ LaTeX install) or convert a PowerPoint `.pptx` (via LibreOffice) on the fly, and
 pull speaker notes straight from the `.tex` (`\note{…}`) or from the `.pptx`
 (PowerPoint speaker notes).
 
-**Version 4.15** — see `CHANGELOG.md`. Also available: an iPad version
+**Version 5.0** — see `CHANGELOG.md`. Also available: an iPad version
 (`iOS/`) and a **Linux port** of the core console (`Linux/`, Tauri 2 +
 WebKitGTK — see `Linux/README.md`; prebuilt `.deb` packages are attached to
 the GitHub Releases, rebuilt by CI on every push to `main`).
@@ -145,6 +145,17 @@ so overlays line up); otherwise each frame is treated as one page. A plain PDF
 with neither notes layout nor a `.tex` still presents fine — the notes pane just
 shows a hint instead.
 
+### Translated twin deck (e.g. Norwegian ↔ English)
+
+Presenting localized slides in a language you're less fluent in? Put the
+translated version next to the deck with a language suffix — `talk-no.pdf`
+beside `talk-en.pdf` (also `_en` / `.en`, or `talk.pdf` + `talk-en.pdf`).
+If the page counts match, the app picks the twin up automatically: the
+**audience sees the original**, while your **console shows the translation**
+(current + next slide). Toggle with `E`, the *Transl* key in the control bar,
+or *Presentation ▸ Show Translated Deck in Console*; a different twin can be
+picked via *Presentation ▸ Open Translated Deck…*.
+
 ### PowerPoint speaker notes
 
 A `.pptx` (or `.ppt`/`.odp`) is converted to a PDF via LibreOffice on open —
@@ -175,6 +186,7 @@ projector fill via *Presentation ▸ Audience Full Screen*).
 | Home / End | First / last slide |
 | `G` | Toggle the slide overview |
 | `B` | Black out the audience screen |
+| `E` | Show the translated twin deck in the console |
 | `W` | Toggle the whiteboard scratch slide |
 | `R` | Reset the elapsed timer |
 | `P` | Pen tool |

@@ -1,5 +1,20 @@
 # Changelog
 
+## v5.0 — 2026-10-19
+
+**Translated twin deck** (macOS + Linux): present localized slides while
+reading the translation.
+
+- A language-suffixed sibling with the same page count (`talk-no.pdf` ↔
+  `talk-en.pdf`, also `_en`/`.en`, or `talk.pdf` + `talk-en.pdf`) is detected
+  automatically on open; "en" is preferred.
+- The audience always sees the primary deck; the console's current + next
+  slide switch to the translation. Toggle with `E`, the Transl key in the
+  control bar, or the Presentation menu; a twin can also be picked manually
+  (macOS: Presentation ▸ Open Translated Deck…).
+- Ink, laser, notes, thumbnails and the overview keep working on the primary
+  deck as before.
+
 ## v4.15 — 2026-10-05
 
 - **Smooth pulsing dot again**: the blackout screen's status dot is now driven

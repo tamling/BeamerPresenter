@@ -56,6 +56,13 @@ final class PresentationState: ObservableObject {
     @Published private(set) var sourceURL: URL?          // the opened PDF on disk
     @Published private(set) var slideDoc: PDFDocument?   // left half (or full page)
     @Published private(set) var notesDoc: PDFDocument?   // right half, nil for plain PDFs
+
+    // Translated twin deck (e.g. the English version of Norwegian slides):
+    // shown in the *console* instead of the audience deck while enabled —
+    // the audience always sees the primary deck.
+    @Published private(set) var referenceDoc: PDFDocument?
+    @Published var showReference = false
+    var hasReference: Bool { referenceDoc != nil }
     @Published private(set) var textNotes: [Int: String] = [:]   // notes parsed from a sibling .tex
     @Published private(set) var pageCount: Int = 0
     @Published private(set) var isLoaded: Bool = false
@@ -181,6 +188,13 @@ final class PresentationState: ObservableObject {
         boardStroke = []
         // Resume where this deck was left last time (first slide for new decks).
         index = SlidePositions.restore(for: url, pageCount: doc.pageCount)
+        // A translated twin deck next to the file (talk-no.pdf ↔ talk-en.pdf)
+        // is picked up automatically; `E` toggles it in the console.
+        referenceDoc = nil
+        showReference = false
+        if let twin = ReferenceDeck.autoDetect(for: url, pageCount: doc.pageCount) {
+            loadReference(url: twin)
+        }
         // Start blacked out (per Settings) only when starting fresh — when the
         // deck resumes mid-presentation, jump straight to the slide instead of
         // the clock screen.
@@ -202,6 +216,8 @@ final class PresentationState: ObservableObject {
         sourceURL = nil
         slideDoc = nil
         notesDoc = nil
+        referenceDoc = nil
+        showReference = false
         textNotes = [:]
         pageCount = 0
         title = ""
@@ -221,6 +237,29 @@ final class PresentationState: ObservableObject {
         hasUnsavedChanges = false
         mentiActive = false
         mentiPresentURL = nil
+    }
+
+    // MARK: - Reference (translated twin) deck
+
+    /// Loads a translated twin deck shown in the console while `showReference`
+    /// is on. Split-notes twins contribute their slide half only.
+    @discardableResult
+    func loadReference(url: URL) -> Bool {
+        guard let probe = PDFDocument(url: url), probe.pageCount > 0 else { return false }
+        let split = PDFModel.isNotesLayout(probe)
+        referenceDoc = PDFModel.croppedDocument(url: url, half: split ? .left : .full)
+        showReference = referenceDoc != nil
+        return showReference
+    }
+
+    func clearReference() {
+        referenceDoc = nil
+        showReference = false
+    }
+
+    func toggleReference() {
+        guard hasReference else { return }
+        showReference.toggle()
     }
 
     // MARK: - Scratch notes & session stats

@@ -29,6 +29,9 @@ Built with [Tauri 2](https://tauri.app) (Rust + WebKitGTK) and
   boards, dark (dot grid) or light (ink-on-white) style.
 - **Thumbnail strip** — zoomable (drag the handle above it), single click
   jumps to a slide; the current one is highlighted and kept in view.
+- **Translated twin deck** — `talk-no.pdf` next to `talk-en.pdf` (same page
+  count) is detected automatically: the audience sees the original, the
+  console shows the translation; `E` toggles.
 - **Resume** — reopening a deck continues on the slide you left.
 - **Exit choice** — leaving a deck asks: home screen, quit, or cancel.
 - **Blackout** (`B`) — audience shows a quiet pulsing dot and the clock.
@@ -38,7 +41,7 @@ Built with [Tauri 2](https://tauri.app) (Rust + WebKitGTK) and
 ### Keys
 
 `←`/`→`/`Space` slides · `Home`/`End` first/last · `B` blackout · `G` overview ·
-`W` whiteboard · `Z` undo stroke · `C` clear board ·
+`E` translation · `W` whiteboard · `Z` undo stroke · `C` clear board ·
 `F` audience full screen · `T` timer start/stop · `R` timer reset
 
 ## Building

@@ -8,11 +8,21 @@ struct SlideView: View {
     @EnvironmentObject var state: PresentationState
     let pageIndex: Int
     let interactive: Bool
+    /// Console panes pass true: while `showReference` is on they render the
+    /// translated twin deck. The audience view keeps the default (false) and
+    /// always shows the primary deck.
+    var preferReference: Bool = false
+
+    private var document: PDFDocument? {
+        preferReference && state.showReference
+            ? (state.referenceDoc ?? state.slideDoc)
+            : state.slideDoc
+    }
 
     var body: some View {
         ZStack {
             Color.black
-            PDFPageView(document: state.slideDoc, pageIndex: pageIndex)
+            PDFPageView(document: document, pageIndex: pageIndex)
             AnnotationLayer(pageIndex: pageIndex, interactive: interactive)
         }
         .aspectRatio(state.slideAspect, contentMode: .fit)
