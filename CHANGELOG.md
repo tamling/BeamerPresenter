@@ -1,5 +1,11 @@
 # Changelog
 
+## v5.2 — 2026-10-19
+
+- Fix the macOS build of v5.0/v5.1: `SlideView.swift` references
+  `PDFDocument` since the twin-deck feature but was missing
+  `import PDFKit`.
+
 ## v5.1 — 2026-10-19
 
 - **Screenshots refreshed** to show the translated twin deck in action: the

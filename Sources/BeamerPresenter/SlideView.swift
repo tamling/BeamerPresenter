@@ -1,4 +1,5 @@
 import SwiftUI
+import PDFKit
 
 /// A slide rendered at its true aspect ratio with the annotation layer on top.
 /// Because the PDF and the ink share one aspect-fit frame, unit-coordinate
