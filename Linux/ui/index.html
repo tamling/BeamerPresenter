@@ -92,6 +92,8 @@
             color: var(--accent); }
     .live.black { background: rgba(255,255,255,.06); color: var(--text-muted); }
     .bar button { padding: 5px 10px; font-size: 12px; }
+    .bar button.on { background: var(--accent-dim); border-color: var(--accent);
+                     color: var(--accent); }
 
     .deck { flex: 1; display: flex; min-height: 0; background: var(--stage); }
     .current-pane { flex: 1; display: flex; align-items: center; justify-content: center;
@@ -228,6 +230,8 @@
       <button id="timer-btn" title="Start / stop the elapsed timer (T)">Start</button>
       <button id="timer-reset" title="Reset the timer (R)">Reset</button>
       <span class="live" id="live">LIVE</span>
+      <button id="ref-btn" style="display:none"
+              title="Show the translated twin deck in the console (E) — the audience keeps the original">Transl</button>
       <button id="board-btn" title="Toggle the whiteboard (W)">Board</button>
       <button id="close-btn" title="Back to the home screen">Close</button>
     </div>
@@ -269,6 +273,7 @@
     <div id="strip"></div>
     <div class="hints">
       <span><b>←→</b> slides</span><span><b>B</b> black</span><span><b>G</b> overview</span>
+      <span><b>E</b> translation</span>
       <span><b>W</b> whiteboard</span><span><b>Z</b> undo</span>
       <span><b>F</b> audience fullscreen</span><span><b>T</b> timer</span>
       <span><b>Home/End</b> first/last</span>

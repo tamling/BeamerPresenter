@@ -1,13 +1,16 @@
 // Shared slide rendering for the presenter and audience windows.
 //
-// Wraps pdf.js: loads the deck via Tauri's asset protocol, detects the Beamer
+// Wraps pdf.js: loads a deck via Tauri's asset protocol, detects the Beamer
 // `show notes on second screen=right` double-width layout (aspect > 2.4, like
 // PDFModel.swift), and renders a page — or one half of it — into a canvas
 // sized to fit its container.
+//
+// `makeSlides()` builds an independent instance; `Slides` is the primary deck
+// and the presenter keeps a second instance for the translated twin deck.
 
 "use strict";
 
-const Slides = (() => {
+function makeSlides() {
   let pdf = null;        // pdf.js document
   let split = false;     // double-width notes layout?
   let aspect = 16 / 9;   // aspect of the slide half (for layout)
@@ -58,4 +61,6 @@ const Slides = (() => {
   }
 
   return { open, close, pageCount, isSplit, slideAspect, render };
-})();
+}
+
+const Slides = makeSlides();

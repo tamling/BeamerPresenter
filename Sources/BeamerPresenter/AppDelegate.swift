@@ -270,6 +270,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         presoMenu.addItem(.separator())
         add(to: presoMenu, "Toggle Overview", #selector(toggleOverview(_:)), "1")
         add(to: presoMenu, "Black Out Audience", #selector(toggleBlackout(_:)), "b")
+        add(to: presoMenu, "Show Translated Deck in Console", #selector(toggleReference(_:)), "e")
+        add(to: presoMenu, "Open Translated Deck…", #selector(openReferenceDeck(_:)))
         audienceFSItem = add(to: presoMenu, "Audience Full Screen", #selector(toggleAudienceFullscreen(_:)))
         updateAudienceMenuTitle()
 
@@ -367,6 +369,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             return state.isLoaded
         case #selector(toggleBlackout(_:)):
             item.state = state.blackout ? .on : .off
+            return state.isLoaded
+        case #selector(toggleReference(_:)):
+            item.state = state.showReference ? .on : .off
+            return state.isLoaded && state.hasReference
+        case #selector(openReferenceDeck(_:)):
             return state.isLoaded
         case #selector(toggleWhiteboard(_:)):
             item.state = state.isBoardActive ? .on : .off
@@ -565,6 +572,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     @objc private func lastSlide(_ sender: Any?)      { state.goToLast() }
     @objc private func toggleOverview(_ sender: Any?) { state.showOverview.toggle() }
     @objc private func toggleBlackout(_ sender: Any?) { state.blackout.toggle() }
+    @objc private func toggleReference(_ sender: Any?) { state.toggleReference() }
+
+    /// Lets the user pick the translated twin deck manually (when the
+    /// language-suffix auto-detection didn't find one).
+    @objc private func openReferenceDeck(_ sender: Any?) {
+        guard state.isLoaded else { return }
+        let panel = NSOpenPanel()
+        panel.message = "Choose the translated version of this deck (shown in the console; the audience keeps the original)."
+        panel.allowedContentTypes = [.pdf]
+        panel.allowsMultipleSelection = false
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        if state.loadReference(url: url) {
+            AccessBookmarks.remember(url)
+        } else {
+            let alert = NSAlert()
+            alert.messageText = "Could not open the translated deck"
+            alert.informativeText = url.lastPathComponent
+            alert.runModal()
+        }
+    }
     @objc private func resetTimer(_ sender: Any?)     { state.resetTimer() }
     @objc private func toggleTimer(_ sender: Any?)    { state.toggleTimer() }
 
@@ -1003,6 +1030,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         case 119:          state.goToLast()          // end
         case 5:            state.showOverview.toggle()   // G
         case 11:           state.blackout.toggle()       // B
+        case 14:           state.toggleReference()       // E — translated deck in console
         case 15:           state.resetTimer()            // R
         case 13:           state.toggleBoard()           // W
         case 35:           state.toggleTool(.pen)        // P
