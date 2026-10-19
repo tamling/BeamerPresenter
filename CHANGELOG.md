@@ -1,5 +1,12 @@
 # Changelog
 
+## v5.1 — 2026-10-19
+
+- **Screenshots refreshed** to show the translated twin deck in action: the
+  console screenshot now presents the Norwegian sample deck with its English
+  twin in the current/next panes (captured from a real headless run of the
+  Linux UI, which also exercises the twin-deck detection end to end).
+
 ## v5.0 — 2026-10-19
 
 **Translated twin deck** (macOS + Linux): present localized slides while

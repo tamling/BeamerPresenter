@@ -10,7 +10,7 @@ LaTeX install) or convert a PowerPoint `.pptx` (via LibreOffice) on the fly, and
 pull speaker notes straight from the `.tex` (`\note{…}`) or from the `.pptx`
 (PowerPoint speaker notes).
 
-**Version 5.0** — see `CHANGELOG.md`. Also available: an iPad version
+**Version 5.1** — see `CHANGELOG.md`. Also available: an iPad version
 (`iOS/`) and a **Linux port** of the core console (`Linux/`, Tauri 2 +
 WebKitGTK — see `Linux/README.md`; prebuilt `.deb` packages are attached to
 the GitHub Releases, rebuilt by CI on every push to `main`).
@@ -20,8 +20,10 @@ the GitHub Releases, rebuilt by CI on every push to `main`).
 *(Captured from the Linux build — the macOS app shares the same Night
 Console design.)*
 
-The presenter console: current + next slide, speaker notes from the `.tex`,
-clock/timer, and the zoomable thumbnail strip:
+The presenter console with the **translated twin deck** active: the audience
+(and the thumbnail strip) shows the Norwegian deck, while the current + next
+slide display its English twin — plus speaker notes from the `.tex`,
+clock/timer, and the zoomable strip:
 
 ![Presenter console](docs/screenshots/console.png)
 
