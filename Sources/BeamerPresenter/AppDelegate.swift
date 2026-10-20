@@ -21,6 +21,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     private var fullScreenExitObserver: NSObjectProtocol?
     private var keyMonitor: Any?
     private var cancellables = Set<AnyCancellable>()
+    /// Files handed over by Finder/Dock before the UI exists (macOS can call
+    /// `application(_:open:)` ahead of `applicationDidFinishLaunching`).
+    private var pendingOpenURLs: [URL] = []
+    private var finishedLaunching = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Night Console is a single fixed dark theme.
@@ -74,6 +78,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         applyBackgroundMode()
         showSplash()
         NSApp.activate(ignoringOtherApps: true)
+        finishedLaunching = true
+        // A file dropped on the Dock icon (or opened via Finder) at launch.
+        if let url = pendingOpenURLs.first {
+            pendingOpenURLs.removeAll()
+            openDropped(url)
+        }
+    }
+
+    /// Finder "Open With" / a file dropped on the Dock icon. The document
+    /// types are declared in Info.plist; without this handler macOS showed
+    /// "cannot open files in the 'PDF Presentation' format".
+    func application(_ application: NSApplication, open urls: [URL]) {
+        guard let url = urls.first else { return }
+        if finishedLaunching {
+            openDropped(url)
+        } else {
+            pendingOpenURLs.append(url)
+        }
+    }
+
+    /// A file or folder arriving from outside (Dock, Finder, or a drag onto
+    /// the window): folders become favourites, presentations open.
+    func openDropped(_ url: URL) {
+        var isDir: ObjCBool = false
+        FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir)
+        if isDir.boolValue {
+            Favorites.add(url)
+        } else {
+            load(url: url)
+        }
     }
 
     // MARK: - Menu bar status item
@@ -850,7 +884,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             backing: .buffered, defer: false)
         presenter.title = "BeamerPresenter"
         presenter.isReleasedWhenClosed = false   // we hold a strong ref; avoid an ARC over-release crash
-        presenter.contentView = NSHostingView(rootView: root)
+        // The AppKit drop catcher wraps the SwiftUI content so files can be
+        // dropped anywhere on the window (SwiftUI's own drop zone still
+        // highlights; this catches everything that would fall through).
+        let dropCatcher = FileDropView { [weak self] url in self?.openDropped(url) }
+        dropCatcher.host(NSHostingView(rootView: root))
+        presenter.contentView = dropCatcher
         presenter.contentMinSize = NSSize(width: 560, height: 380)   // allow shrinking
         // A normal, resizable window whose green button enters real macOS
         // full screen (not just zoom/maximise).
