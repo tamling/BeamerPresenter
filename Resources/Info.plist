@@ -13,9 +13,9 @@
     <key>CFBundleIconFile</key>
     <string>BeamerPresenter</string>
     <key>CFBundleVersion</key>
-    <string>25</string>
+    <string>26</string>
     <key>CFBundleShortVersionString</key>
-    <string>5.2</string>
+    <string>5.3</string>
     <key>NSHumanReadableCopyright</key>
     <string>© 2026</string>
     <key>ATSApplicationFontsPath</key>
@@ -50,6 +50,18 @@
             <key>LSItemContentTypes</key>
             <array>
                 <string>org.tug.tex</string>
+            </array>
+        </dict>
+        <dict>
+            <key>CFBundleTypeName</key>
+            <string>PowerPoint Presentation</string>
+            <key>CFBundleTypeRole</key>
+            <string>Viewer</string>
+            <key>LSItemContentTypes</key>
+            <array>
+                <string>org.openxmlformats.presentationml.presentation</string>
+                <string>com.microsoft.powerpoint.ppt</string>
+                <string>org.oasis-open.opendocument.presentation</string>
             </array>
         </dict>
     </array>

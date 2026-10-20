@@ -1,5 +1,19 @@
 # Changelog
 
+## v5.3 — 2026-10-20
+
+macOS file-opening fixes.
+
+- **Dock & Finder opening works**: dropping a PDF on the Dock icon (or
+  "Open With" in Finder) no longer errors — the missing
+  `application(_:open:)` handler is implemented, with buffering for files
+  handed over before launch finishes. PowerPoint/ODP document types are now
+  declared too.
+- **Drop truly anywhere**: an AppKit-level drop catcher wraps the presenter
+  window, so files land no matter where on the window they're dropped (even
+  over buttons and lists — and now also while a presentation is open, with
+  the usual save check).
+
 ## v5.2 — 2026-10-19
 
 - Fix the macOS build of v5.0/v5.1: `SlideView.swift` references
