@@ -14,7 +14,8 @@
     thumbnails, and the current slide is scaled live to its shrinking pane
     (also while resizing the window) and re-rendered crisp on release.
 - **Home screen** (macOS): the logo tile above the app name is gone — the
-  name leads the sidebar now.
+  name leads the sidebar now — and the LaTeX / LibreOffice status moved from
+  the sidebar into the bottom bar, between the stats and the version.
 
 ## v6.0 — 2026-10-21
 

@@ -72,8 +72,6 @@ struct WelcomeView: View {
             .buttonStyle(PrimaryButtonStyle())
             .keyboardShortcut("o", modifiers: .command)
 
-            systemStatus
-
             // The drop zone lives here (not in the library column), so long
             // favourites/recents lists never push it out of the window.
             dropZone
@@ -96,9 +94,9 @@ struct WelcomeView: View {
         }
     }
 
-    /// Green/yellow startup status of optional dependencies.
+    /// Green/yellow startup status of optional dependencies (in the bottom bar).
     private var systemStatus: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 5) {
             statusRow(ok: latexEngine != nil,
                       okText: "LaTeX ready — \(latexEngine ?? "")",
                       missingText: "LaTeX not found — install MacTeX to compile .tex")
@@ -115,7 +113,7 @@ struct WelcomeView: View {
             Circle().fill(ok ? Theme.statusOk : Theme.statusWarn).frame(width: 9, height: 9)
                 .shadow(color: (ok ? Theme.statusOk : Theme.statusWarn).opacity(0.6), radius: 4)
             Text(ok ? okText : missingText)
-            Spacer()
+                .lineLimit(1).truncationMode(.tail)
         }
     }
 
@@ -283,7 +281,12 @@ struct WelcomeView: View {
             statTile("stopwatch", Stats.format(Stats.averageSeconds), "Avg. session")
             statTile("clock", Stats.format(Stats.totalSeconds), "Total time")
 
-            Spacer()
+            Spacer(minLength: 16)
+
+            systemStatus
+                .layoutPriority(-1)   // truncates first when the window is narrow
+
+            Spacer(minLength: 16)
 
             VStack(alignment: .trailing, spacing: 3) {
                 Text("\(AppInfo.name) \(AppInfo.version)")
