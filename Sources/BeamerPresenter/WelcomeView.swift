@@ -56,11 +56,6 @@ struct WelcomeView: View {
     private var sidebarBranding: some View {
         VStack(alignment: .leading, spacing: 22) {
             VStack(alignment: .leading, spacing: 10) {
-                BrandMark()
-                    .padding(15)
-                    .frame(width: 64, height: 64)
-                    .background(Theme.key, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 16).stroke(Theme.hairline, lineWidth: 1))
                 Text(AppInfo.name).font(.display(30)).tracking(-0.3)
                     .foregroundStyle(Theme.textPrimary)
                 Text("Present · Annotate · Two screens")

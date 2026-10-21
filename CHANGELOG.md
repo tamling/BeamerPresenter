@@ -13,6 +13,8 @@
   - Linux: at most one update per frame, one CSS variable drives all
     thumbnails, and the current slide is scaled live to its shrinking pane
     (also while resizing the window) and re-rendered crisp on release.
+- **Home screen** (macOS): the logo tile above the app name is gone — the
+  name leads the sidebar now.
 
 ## v6.0 — 2026-10-21
 
