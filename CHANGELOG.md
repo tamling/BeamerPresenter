@@ -1,5 +1,11 @@
 # Changelog
 
+## v5.5 — 2026-10-21
+
+- **No scroll bar on the home screen** (macOS): instead of scrolling, the
+  right column shows at most 3 favourite folders and 3 recent files (with a
+  "+ N more" hint), so everything always fits the window.
+
 ## v5.4 — 2026-10-21
 
 - **New, modern app icon** (macOS + Linux, one shared renderer): a dark
