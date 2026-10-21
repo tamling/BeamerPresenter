@@ -79,7 +79,11 @@ struct WelcomeView: View {
 
             systemStatus
 
-            Spacer(minLength: 0)
+            // The drop zone lives here (not in the library column), so long
+            // favourites/recents lists never push it out of the window.
+            dropZone
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .frame(minHeight: 120)
 
             VStack(alignment: .leading, spacing: 8) {
                 Rectangle().fill(Theme.hairline).frame(height: 1)
@@ -120,42 +124,42 @@ struct WelcomeView: View {
         }
     }
 
-    // MARK: - Right (library: favourites, recents, drop zone)
+    // MARK: - Right (library: favourites + recents, scrollable)
 
     private var library: some View {
-        VStack(alignment: .leading, spacing: 26) {
-            VStack(alignment: .leading, spacing: 12) {
-                sectionHeader("Favorite Folders") {
-                    smallKeyButton("plus") { addFavoriteFolder() }
-                        .help("Add a folder of presentations")
-                }
-                if favorites.isEmpty {
-                    dashedBox("No favourite folders yet — drop a folder here to pin it.")
-                } else {
-                    VStack(spacing: 8) { ForEach(favorites, id: \.self) { favoriteCard($0) } }
-                }
-            }
-
-            VStack(alignment: .leading, spacing: 12) {
-                sectionHeader("Recent") {
-                    if !recents.isEmpty {
-                        Button("Clear") { RecentFiles.clear(); recents = [] }
-                            .buttonStyle(.plain)
-                            .font(.ui(13, "Medium")).foregroundStyle(Theme.accent)
+        ScrollView(.vertical, showsIndicators: true) {
+            VStack(alignment: .leading, spacing: 26) {
+                VStack(alignment: .leading, spacing: 12) {
+                    sectionHeader("Favorite Folders") {
+                        smallKeyButton("plus") { addFavoriteFolder() }
+                            .help("Add a folder of presentations")
+                    }
+                    if favorites.isEmpty {
+                        dashedBox("No favourite folders yet — drop a folder here to pin it.")
+                    } else {
+                        VStack(spacing: 8) { ForEach(favorites, id: \.self) { favoriteCard($0) } }
                     }
                 }
-                if recents.isEmpty {
-                    dashedBox("No recent presentations yet.")
-                } else {
-                    VStack(spacing: 8) {
-                        ForEach(Array(recents.prefix(5)), id: \.self) { recentCard($0) }
+
+                VStack(alignment: .leading, spacing: 12) {
+                    sectionHeader("Recent") {
+                        if !recents.isEmpty {
+                            Button("Clear") { RecentFiles.clear(); recents = [] }
+                                .buttonStyle(.plain)
+                                .font(.ui(13, "Medium")).foregroundStyle(Theme.accent)
+                        }
+                    }
+                    if recents.isEmpty {
+                        dashedBox("No recent presentations yet.")
+                    } else {
+                        VStack(spacing: 8) {
+                            ForEach(Array(recents.prefix(5)), id: \.self) { recentCard($0) }
+                        }
                     }
                 }
             }
-
-            dropZone.frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(28)
         }
-        .padding(28)
         .background(Theme.base)
     }
 
@@ -287,26 +291,29 @@ struct WelcomeView: View {
         }
     }
 
+    /// Compact drop target for the sidebar (drops land anywhere on the
+    /// window; this is the visual anchor).
     private var dropZone: some View {
         ZStack {
             DotGrid().opacity(0.6)
-            VStack(spacing: 14) {
+            VStack(spacing: 10) {
                 ZStack {
                     Circle().strokeBorder(Theme.accent.opacity(dropTargeted ? 1 : 0.7), lineWidth: 1.5)
-                        .frame(width: 56, height: 56)
+                        .frame(width: 44, height: 44)
                         .shadow(color: Theme.accent.opacity(dropTargeted ? 0.6 : 0.25), radius: 10)
-                    Image(systemName: "arrow.down").font(.system(size: 19, weight: .semibold))
+                    Image(systemName: "arrow.down").font(.system(size: 16, weight: .semibold))
                         .foregroundStyle(Theme.accent)
                 }
-                Text("Drop a PDF, .tex or .pptx to open")
-                    .font(.display(18)).foregroundStyle(Theme.textPrimary)
+                Text("Drop a PDF, .tex or .pptx")
+                    .font(.display(15)).foregroundStyle(Theme.textPrimary)
                     .multilineTextAlignment(.center)
-                Text("…or drop a folder to add it to favourites")
-                    .font(.ui(13)).foregroundStyle(Theme.textFaint)
+                Text("anywhere in this window — a folder becomes a favourite")
+                    .font(.ui(12)).foregroundStyle(Theme.textFaint)
                     .multilineTextAlignment(.center)
             }
+            .padding(12)
         }
-        .frame(maxWidth: .infinity, minHeight: 240)
+        .frame(maxWidth: .infinity, minHeight: 120)
         .background(dropTargeted ? Theme.accentDim : Color.clear)
         .clipShape(RoundedRectangle(cornerRadius: 14))
         .overlay(RoundedRectangle(cornerRadius: 14)

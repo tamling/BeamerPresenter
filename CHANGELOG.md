@@ -1,5 +1,15 @@
 # Changelog
 
+## v5.4 — 2026-10-21
+
+- **New, modern app icon** (macOS + Linux, one shared renderer): a dark
+  squircle with a glowing lime-gradient play mark over a progress bar with a
+  lit playhead — "presenting, live".
+- **Home screen layout fixed** (macOS): with many favourites/recents the
+  right column overflowed and cut everything off. The drop zone now sits in
+  the left column between the Open button and the tip (drops still land
+  anywhere on the window), and favourites + recents scroll.
+
 ## v5.3 — 2026-10-20
 
 macOS file-opening fixes.
