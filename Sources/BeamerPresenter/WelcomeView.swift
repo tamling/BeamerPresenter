@@ -124,53 +124,66 @@ struct WelcomeView: View {
         }
     }
 
-    // MARK: - Right (library: favourites + recents, capped — no scrolling)
+    // MARK: - Right (library: favourites + recents, fits the window height)
 
-    /// How many favourites/recents the home screen shows. Capped so the
-    /// column always fits without a scroll bar.
-    private let libraryCap = 3
-
+    /// Shows as many favourites/recents as the column height allows — no
+    /// scroll bar: resize the window and more entries appear.
     private var library: some View {
-        VStack(alignment: .leading, spacing: 26) {
-            VStack(alignment: .leading, spacing: 12) {
-                sectionHeader("Favorite Folders") {
-                    smallKeyButton("plus") { addFavoriteFolder() }
-                        .help("Add a folder of presentations")
-                }
-                if favorites.isEmpty {
-                    dashedBox("No favourite folders yet — drop a folder here to pin it.")
-                } else {
-                    VStack(spacing: 8) {
-                        ForEach(Array(favorites.prefix(libraryCap)), id: \.self) { favoriteCard($0) }
+        GeometryReader { geo in
+            let caps = libraryCaps(for: geo.size.height)
+            VStack(alignment: .leading, spacing: 26) {
+                VStack(alignment: .leading, spacing: 12) {
+                    sectionHeader("Favorite Folders") {
+                        smallKeyButton("plus") { addFavoriteFolder() }
+                            .help("Add a folder of presentations")
                     }
-                    if favorites.count > libraryCap {
-                        Text("+ \(favorites.count - libraryCap) more — remove one to see them")
-                            .font(.ui(12)).foregroundStyle(Theme.textFaint)
+                    if favorites.isEmpty {
+                        dashedBox("No favourite folders yet — drop a folder here to pin it.")
+                    } else {
+                        VStack(spacing: 8) {
+                            ForEach(Array(favorites.prefix(caps.favorites)), id: \.self) { favoriteCard($0) }
+                        }
+                        if favorites.count > caps.favorites {
+                            Text("+ \(favorites.count - caps.favorites) more — enlarge the window to see them")
+                                .font(.ui(12)).foregroundStyle(Theme.textFaint)
+                        }
                     }
                 }
-            }
 
-            VStack(alignment: .leading, spacing: 12) {
-                sectionHeader("Recent") {
-                    if !recents.isEmpty {
-                        Button("Clear") { RecentFiles.clear(); recents = [] }
-                            .buttonStyle(.plain)
-                            .font(.ui(13, "Medium")).foregroundStyle(Theme.accent)
+                VStack(alignment: .leading, spacing: 12) {
+                    sectionHeader("Recent") {
+                        if !recents.isEmpty {
+                            Button("Clear") { RecentFiles.clear(); recents = [] }
+                                .buttonStyle(.plain)
+                                .font(.ui(13, "Medium")).foregroundStyle(Theme.accent)
+                        }
+                    }
+                    if recents.isEmpty {
+                        dashedBox("No recent presentations yet.")
+                    } else {
+                        VStack(spacing: 8) {
+                            ForEach(Array(recents.prefix(caps.recents)), id: \.self) { recentCard($0) }
+                        }
                     }
                 }
-                if recents.isEmpty {
-                    dashedBox("No recent presentations yet.")
-                } else {
-                    VStack(spacing: 8) {
-                        ForEach(Array(recents.prefix(libraryCap)), id: \.self) { recentCard($0) }
-                    }
-                }
-            }
 
-            Spacer(minLength: 0)
+                Spacer(minLength: 0)
+            }
+            .padding(28)
         }
-        .padding(28)
         .background(Theme.base)
+    }
+
+    /// Splits the rows that fit into the column between the two sections:
+    /// half each, with unused slots handed to the fuller section.
+    private func libraryCaps(for height: CGFloat) -> (favorites: Int, recents: Int) {
+        let rowHeight: CGFloat = 80     // card (~72 pt) + 8 pt spacing
+        let overhead: CGFloat = 170     // padding, headers, section gap, hint line
+        let rows = max(2, Int((height - overhead) / rowHeight))
+        var fav = min(favorites.count, max(1, rows / 2))
+        let rec = min(recents.count, rows - fav)
+        fav = min(favorites.count, rows - rec)   // hand back unused recent slots
+        return (fav, rec)
     }
 
     private func sectionHeader<T: View>(_ title: String, @ViewBuilder trailing: () -> T) -> some View {

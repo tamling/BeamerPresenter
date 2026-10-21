@@ -1,5 +1,12 @@
 # Changelog
 
+## v5.6 — 2026-10-21
+
+- **Dynamic home-screen lists** (macOS): favourites and recents show as many
+  entries as the window height allows (split between the two sections, spare
+  slots handed to the fuller one) — no scroll bar; enlarging the window
+  reveals more.
+
 ## v5.5 — 2026-10-21
 
 - **No scroll bar on the home screen** (macOS): instead of scrolling, the
