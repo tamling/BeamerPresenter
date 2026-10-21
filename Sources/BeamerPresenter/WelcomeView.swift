@@ -164,11 +164,73 @@ struct WelcomeView: View {
                     }
                 }
 
+                // With an empty list there's room to spare: fill it with the
+                // console's keyboard shortcuts (handy before a first talk).
+                if showsShortcuts {
+                    shortcutsCard
+                }
+
                 Spacer(minLength: 0)
             }
             .padding(28)
         }
         .background(Theme.base)
+    }
+
+    private var showsShortcuts: Bool { favorites.isEmpty || recents.isEmpty }
+
+    /// The presenter-console keys (see `AppDelegate.handleKey`).
+    private static let shortcuts: [(keys: [String], action: String)] = [
+        (["←", "→"], "Previous / next slide"),
+        (["Space"], "Next slide"),
+        (["Home", "End"], "First / last slide"),
+        (["G"], "Slide overview"),
+        (["B"], "Black audience screen"),
+        (["W"], "Whiteboard"),
+        (["P"], "Pen"),
+        (["L"], "Laser pointer"),
+        (["Z"], "Undo stroke"),
+        (["C"], "Clear strokes"),
+        (["R"], "Reset timer"),
+        (["E"], "Translated deck in console"),
+        (["Esc"], "Close tool, board or overview"),
+        (["⌘", "O"], "Open a presentation"),
+    ]
+
+    private var shortcutsCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Keyboard shortcuts").microLabel()
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 24, alignment: .leading),
+                                GridItem(.flexible(), spacing: 24, alignment: .leading)],
+                      alignment: .leading, spacing: 10) {
+                ForEach(Self.shortcuts, id: \.action) { item in
+                    HStack(spacing: 10) {
+                        HStack(spacing: 4) {
+                            ForEach(item.keys, id: \.self) { keyCap($0) }
+                        }
+                        .frame(minWidth: 86, alignment: .leading)
+                        Text(item.action)
+                            .font(.ui(13)).foregroundStyle(Theme.textSecondary)
+                            .lineLimit(1).truncationMode(.tail)
+                    }
+                }
+            }
+        }
+        .padding(18)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .nightCard()
+    }
+
+    private func keyCap(_ label: String) -> some View {
+        Text(label)
+            .font(.mono(11, bold: true)).foregroundStyle(Theme.textPrimary)
+            .padding(.horizontal, 7).frame(minWidth: 26, minHeight: 24)
+            .background(Theme.key, in: RoundedRectangle(cornerRadius: 6))
+            .overlay(RoundedRectangle(cornerRadius: 6).stroke(Theme.hairlineStrong, lineWidth: 1))
+            .overlay(alignment: .bottom) {   // a hint of key depth
+                RoundedRectangle(cornerRadius: 6).fill(Theme.hairlineStrong)
+                    .frame(height: 2).padding(.horizontal, 2)
+            }
     }
 
     /// Splits the rows that fit into the column between the two sections
@@ -177,7 +239,9 @@ struct WelcomeView: View {
     private func libraryLayout(for height: CGFloat)
         -> (favorites: Int, recents: Int, rowHeight: CGFloat) {
         let baseRow: CGFloat = 80       // card (~72 pt) + 8 pt spacing
-        let overhead: CGFloat = 170     // padding, headers, section gap, hint line
+        // padding, headers, section gap, hint line — plus the shortcuts card
+        // (~7 rows + title) while it's shown.
+        let overhead: CGFloat = 170 + (showsShortcuts ? 320 : 0)
         let rows = max(2, Int((height - overhead) / baseRow))
         var fav = min(favorites.count, max(1, rows / 2))
         let rec = min(recents.count, rows - fav)

@@ -16,6 +16,8 @@
 - **Home screen** (macOS): the logo tile above the app name is gone — the
   name leads the sidebar now — and the LaTeX / LibreOffice status moved from
   the sidebar into the bottom bar, between the stats and the version.
+  While favourites or recents are still empty, the free space shows a
+  keyboard-shortcuts card for the presenter console.
 
 ## v6.0 — 2026-10-21
 
