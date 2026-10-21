@@ -5,46 +5,53 @@ import SwiftUI
 /// Settings) jumps to that slide. Auto-scrolls to keep the current slide
 /// visible.
 ///
-/// Zooming is designed to feel fluid: while the handle is being dragged the
-/// existing bitmaps are only *scaled* (with a slight blur as a visual cue) —
-/// no PDF rendering happens mid-drag. The crisp re-render at the final size
-/// runs once, when the drag ends.
+/// Zooming is designed to feel as fluid as resizing a window: while the handle
+/// is dragged the height lives in view state only (persisted once, on release),
+/// the existing bitmaps are just *scaled* — no PDF rendering, no blur, no
+/// implicit animation per frame — and only the visible thumbnails are laid out.
+/// The crisp re-render at the final size runs once, when the drag ends.
 struct ThumbnailStrip: View {
     @EnvironmentObject var state: PresentationState
     @AppStorage(Prefs.thumbStripHeight) private var stripHeight: Double = 70
     @AppStorage(Prefs.doubleClickSlides) private var doubleClick = false
 
     @State private var dragStartHeight: Double?
+    @State private var liveHeight: Double?            // the height mid-drag (not yet persisted)
     @State private var frozenRenderHeight: CGFloat?   // bitmaps stay at this size mid-drag
 
     private let heightRange = 50.0...260.0
-    private var thumbHeight: CGFloat { CGFloat(stripHeight) }
+    private var thumbHeight: CGFloat { CGFloat(liveHeight ?? stripHeight) }
 
     /// Rendering happens at 64 pt buckets; display scales to the live height.
     private var bucket: CGFloat { max(64, (thumbHeight / 64).rounded(.up) * 64) }
     private var renderHeight: CGFloat { frozenRenderHeight ?? bucket }
-    private var isZooming: Bool { frozenRenderHeight != nil }
 
     var body: some View {
         VStack(spacing: 0) {
             // Drag up/down to zoom the thumbnails (the strip sits below, so
             // dragging up enlarges them).
             ResizeHandle(axis: .vertical) { translation in
-                if dragStartHeight == nil {
-                    dragStartHeight = stripHeight
-                    frozenRenderHeight = bucket   // freeze the bitmaps for the drag
+                var t = Transaction()
+                t.disablesAnimations = true
+                withTransaction(t) {
+                    if dragStartHeight == nil {
+                        dragStartHeight = stripHeight
+                        frozenRenderHeight = bucket   // freeze the bitmaps for the drag
+                    }
+                    let start = dragStartHeight ?? stripHeight
+                    liveHeight = min(max(start - Double(translation),
+                                         heightRange.lowerBound), heightRange.upperBound)
                 }
-                let start = dragStartHeight ?? stripHeight
-                stripHeight = min(max(start - Double(translation),
-                                      heightRange.lowerBound), heightRange.upperBound)
             } onEnded: {
+                if let liveHeight { stripHeight = liveHeight }   // persist once
+                liveHeight = nil
                 dragStartHeight = nil
                 frozenRenderHeight = nil          // one crisp re-render at the final size
             }
 
             ScrollViewReader { proxy in
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
+                    LazyHStack(spacing: 8) {
                         ForEach(0..<state.pageCount, id: \.self) { i in
                             thumb(i)
                                 .contentShape(Rectangle())
@@ -83,7 +90,6 @@ struct ThumbnailStrip: View {
                 }
             }
             .frame(height: thumbHeight)
-            .blur(radius: isZooming ? 1.2 : 0)   // soft cue while scaling mid-drag
             .clipShape(RoundedRectangle(cornerRadius: 6))
             .overlay(
                 RoundedRectangle(cornerRadius: 6)
