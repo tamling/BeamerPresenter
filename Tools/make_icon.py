@@ -81,14 +81,55 @@ def lerp(a, b, t):
 
 # ---------------------------------------------------------------- the icon
 
-# Night Console palette: near-black tile + glowing lime bar chart.
-BG_TOP = (32, 36, 44)
-BG_BOT = (9, 10, 13)
-LIME   = (198, 240, 74)
+# Night Console palette: near-black squircle, a lime-gradient play mark with a
+# soft glow, and a progress bar with a glowing dot — "presenting, live".
+BG_TOP   = (36, 40, 52)
+BG_BOT   = (8, 9, 12)
+LIME_TOP = (214, 248, 110)
+LIME_BOT = (158, 212, 44)
+LIME     = (198, 240, 74)
+DOT      = (236, 255, 170)
+TRACK    = (52, 58, 68)
 
 GLOW_PASSES = 16
-GLOW_MAX = 0.060
+GLOW_MAX = 0.055
 GLOW_ALPHA = 0.05
+
+
+def seg_dist(px, py, ax, ay, bx, by):
+    vx, vy = bx - ax, by - ay
+    wx, wy = px - ax, py - ay
+    t = max(0.0, min(1.0, (wx * vx + wy * vy) / (vx * vx + vy * vy)))
+    return math.hypot(wx - t * vx, wy - t * vy)
+
+
+def tri_dist(px, py, a, b, c):
+    """Signed distance to the triangle a-b-c; negative = inside."""
+    d = min(seg_dist(px, py, *a, *b), seg_dist(px, py, *b, *c),
+            seg_dist(px, py, *c, *a))
+    s1 = (b[0] - a[0]) * (py - a[1]) - (b[1] - a[1]) * (px - a[0])
+    s2 = (c[0] - b[0]) * (py - b[1]) - (c[1] - b[1]) * (px - b[0])
+    s3 = (a[0] - c[0]) * (py - c[1]) - (a[1] - c[1]) * (px - c[0])
+    inside = (s1 >= 0 and s2 >= 0 and s3 >= 0) or (s1 <= 0 and s2 <= 0 and s3 <= 0)
+    return -d if inside else d
+
+
+def fill_tri(buf, S, a, b, c, round_r, color=None, alpha=1.0, grad=None):
+    """Fills the triangle expanded by `round_r` (which rounds its corners)."""
+    x0 = max(0, int(min(a[0], b[0], c[0]) - round_r - 1))
+    x1 = min(S, int(max(a[0], b[0], c[0]) + round_r + 2))
+    y0 = max(0, int(min(a[1], b[1], c[1]) - round_r - 1))
+    y1 = min(S, int(max(a[1], b[1], c[1]) + round_r + 2))
+    top, height = y0, max(1, y1 - y0)
+    for y in range(y0, y1):
+        col = grad((y + 0.5 - top) / height) if grad else color
+        cr, cg, cb = col
+        row = y * S
+        for x in range(x0, x1):
+            d = tri_dist(x + 0.5, y + 0.5, a, b, c) - round_r
+            cov = min(max(0.5 - d, 0.0), 1.0)
+            if cov > 0:
+                blend(buf, (row + x) * 4, cr, cg, cb, cov * alpha)
 
 
 def glow_rr(buf, S, cx, cy, w, h, r, color):
@@ -116,32 +157,31 @@ def render(S):
         hi = max(0.0, 1 - t * 2.4) * 0.10
         return tuple(min(255, c + (255 - c) * hi) for c in base)
 
-    def bg_at(y):                           # background colour at absolute y
-        return bg_grad((y - m) / (S - 2 * m))
-
-    def hole(cx, cy, w, h, r):              # carve a background-matching cut-out
-        top = cy - h / 2
-        fill_rr(buf, S, S, cx, cy, w, h, r, grad=lambda tt: bg_at(top + tt * h))
-
     # Background squircle (full-bleed with a hair of margin).
     fill_rr(buf, S, S, S / 2, S / 2, S - 2 * m, S - 2 * m, S * 0.2237, grad=bg_grad)
 
-    # "Two screens": a presenter screen (lime frame, behind, upper-right) and a
-    # clean audience screen (solid lime, front, lower-left) overlapping it.
-    bw, bh = S * 0.405, S * 0.300           # back screen
-    bcx, bcy = S * 0.590, S * 0.405
-    glow_rr(buf, S, bcx, bcy, bw, bh, S * 0.052, LIME)
-    hole(bcx, bcy, bw - S * 0.066, bh - S * 0.066, S * 0.030)
+    # Play mark: lime gradient, rounded corners, soft glow. Shifted a touch
+    # right so the triangle's visual weight sits centered.
+    tw, th = S * 0.34, S * 0.40
+    tx, ty = S * 0.515, S * 0.455
+    r = S * 0.050
+    a = (tx - tw * 0.48, ty - th / 2)
+    b = (tx - tw * 0.48, ty + th / 2)
+    c = (tx + tw * 0.62, ty)
+    for k in range(GLOW_PASSES, 0, -1):
+        grow = S * GLOW_MAX * (k / GLOW_PASSES)
+        fill_tri(buf, S, a, b, c, r + grow, color=LIME, alpha=GLOW_ALPHA)
+    fill_tri(buf, S, a, b, c, r,
+             grad=lambda t: lerp(LIME_TOP, LIME_BOT, t))
 
-    fw, fh = S * 0.430, S * 0.320           # front screen
-    fcx, fcy = S * 0.430, S * 0.585
-    # Punch a dark gap around the front screen so it reads as sitting in front.
-    hole(fcx, fcy, fw + S * 0.044, fh + S * 0.044, S * 0.080)
-    glow_rr(buf, S, fcx, fcy, fw, fh, S * 0.058, LIME)
-
-    # A small dark cursor dot on the front screen (a nod to the laser pointer).
-    fill_circle(buf, S, S, fcx + fw * 0.20, fcy + fh * 0.16, S * 0.030,
-                bg_at(fcy + fh * 0.16))
+    # Progress bar beneath: dark track, lime fill, glowing playhead dot.
+    bw, bh = S * 0.50, S * 0.038
+    bcx, bcy = S * 0.50, S * 0.760
+    fill_rr(buf, S, S, bcx, bcy, bw, bh, bh / 2, color=TRACK)
+    frac = 0.64
+    fw = bw * frac
+    glow_rr(buf, S, bcx - bw / 2 + fw / 2, bcy, fw, bh, bh / 2, LIME)
+    glow_circle(buf, S, bcx - bw / 2 + fw, bcy, S * 0.030, DOT)
 
     return buf
 
