@@ -25,8 +25,8 @@ struct BeamerPresenterApp: App {
                 .environmentObject(model)
                 .environmentObject(external)
                 .environmentObject(presenterLink)
-                .preferredColorScheme(.dark)
-                .tint(Theme.accent)
+                .tint(Theme.accentInk)
+                .themed()
                 .statusBarHidden(model.document != nil)
                 .task { external.start(model: model) }
         }

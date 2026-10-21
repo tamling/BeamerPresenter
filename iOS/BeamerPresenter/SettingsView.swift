@@ -26,6 +26,10 @@ struct SettingsView: View {
     @AppStorage("blackoutMessage") private var blackoutMessage = ""
     @AppStorage("blackoutShowClock") private var blackoutShowClock = true
     @AppStorage("blackoutImagePath") private var blackoutImagePath = ""
+    @AppStorage(Prefs.appearance) private var appearance = Appearance.night.rawValue
+    /// The theme picked here; applied when Settings closes (switching rebuilds
+    /// the whole UI, which would otherwise dismiss this sheet mid-choice).
+    @State private var pendingAppearance: String?
 
     @State private var importingImage = false
 
@@ -34,6 +38,21 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section {
+                    Picker("Theme", selection: Binding(
+                        get: { pendingAppearance ?? appearance },
+                        set: { pendingAppearance = $0 })) {
+                        ForEach(Appearance.allCases, id: \.rawValue) { a in
+                            Text(a.title).tag(a.rawValue)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                } header: {
+                    Text("Appearance")
+                } footer: {
+                    Text("Paper is a light console for bright rooms; it applies when you close Settings. The projector and the slides are unchanged.")
+                }
+
                 Section("Pen") {
                     Toggle("Apple Pencil only (palm rejection)", isOn: $pencilOnly)
                     Picker("Default colour", selection: $penColorName) {
@@ -91,6 +110,9 @@ struct SettingsView: View {
                           allowedContentTypes: [.image]) { result in
                 if case .success(let url) = result { importImage(url) }
             }
+        }
+        .onDisappear {
+            if let picked = pendingAppearance, picked != appearance { appearance = picked }
         }
     }
 
