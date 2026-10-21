@@ -1,5 +1,11 @@
 # Changelog
 
+## v5.7 — 2026-10-21
+
+- **Home-screen cards scale with the window** (macOS): when fewer
+  favourites/recents exist than would fit, the cards grow (up to 118 pt per
+  row) so large windows no longer leave dead space below the lists.
+
 ## v5.6 — 2026-10-21
 
 - **Dynamic home-screen lists** (macOS): favourites and recents show as many

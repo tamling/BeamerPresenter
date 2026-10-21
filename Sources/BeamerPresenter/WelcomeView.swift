@@ -130,7 +130,7 @@ struct WelcomeView: View {
     /// scroll bar: resize the window and more entries appear.
     private var library: some View {
         GeometryReader { geo in
-            let caps = libraryCaps(for: geo.size.height)
+            let layout = libraryLayout(for: geo.size.height)
             VStack(alignment: .leading, spacing: 26) {
                 VStack(alignment: .leading, spacing: 12) {
                     sectionHeader("Favorite Folders") {
@@ -141,10 +141,12 @@ struct WelcomeView: View {
                         dashedBox("No favourite folders yet — drop a folder here to pin it.")
                     } else {
                         VStack(spacing: 8) {
-                            ForEach(Array(favorites.prefix(caps.favorites)), id: \.self) { favoriteCard($0) }
+                            ForEach(Array(favorites.prefix(layout.favorites)), id: \.self) {
+                                favoriteCard($0, height: layout.rowHeight)
+                            }
                         }
-                        if favorites.count > caps.favorites {
-                            Text("+ \(favorites.count - caps.favorites) more — enlarge the window to see them")
+                        if favorites.count > layout.favorites {
+                            Text("+ \(favorites.count - layout.favorites) more — enlarge the window to see them")
                                 .font(.ui(12)).foregroundStyle(Theme.textFaint)
                         }
                     }
@@ -162,7 +164,9 @@ struct WelcomeView: View {
                         dashedBox("No recent presentations yet.")
                     } else {
                         VStack(spacing: 8) {
-                            ForEach(Array(recents.prefix(caps.recents)), id: \.self) { recentCard($0) }
+                            ForEach(Array(recents.prefix(layout.recents)), id: \.self) {
+                                recentCard($0, height: layout.rowHeight)
+                            }
                         }
                     }
                 }
@@ -174,16 +178,20 @@ struct WelcomeView: View {
         .background(Theme.base)
     }
 
-    /// Splits the rows that fit into the column between the two sections:
-    /// half each, with unused slots handed to the fuller section.
-    private func libraryCaps(for height: CGFloat) -> (favorites: Int, recents: Int) {
-        let rowHeight: CGFloat = 80     // card (~72 pt) + 8 pt spacing
+    /// Splits the rows that fit into the column between the two sections
+    /// (half each, unused slots handed to the fuller one) — and when fewer
+    /// entries exist than would fit, the cards grow to fill the free space.
+    private func libraryLayout(for height: CGFloat)
+        -> (favorites: Int, recents: Int, rowHeight: CGFloat) {
+        let baseRow: CGFloat = 80       // card (~72 pt) + 8 pt spacing
         let overhead: CGFloat = 170     // padding, headers, section gap, hint line
-        let rows = max(2, Int((height - overhead) / rowHeight))
+        let rows = max(2, Int((height - overhead) / baseRow))
         var fav = min(favorites.count, max(1, rows / 2))
         let rec = min(recents.count, rows - fav)
         fav = min(favorites.count, rows - rec)   // hand back unused recent slots
-        return (fav, rec)
+        let shown = max(1, fav + rec)
+        let row = min(118, max(72, (height - overhead) / CGFloat(shown) - 8))
+        return (fav, rec, row)
     }
 
     private func sectionHeader<T: View>(_ title: String, @ViewBuilder trailing: () -> T) -> some View {
@@ -220,7 +228,7 @@ struct WelcomeView: View {
             .overlay(RoundedRectangle(cornerRadius: 9).stroke(Theme.hairline, lineWidth: 1))
     }
 
-    private func recentCard(_ url: URL) -> some View {
+    private func recentCard(_ url: URL, height: CGFloat) -> some View {
         Button { onOpenURL(url) } label: {
             HStack(spacing: 13) {
                 tile { Text(url.pathExtension.uppercased().isEmpty ? "PDF" : url.pathExtension.uppercased())
@@ -236,14 +244,16 @@ struct WelcomeView: View {
                 Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(Theme.textFaint)
             }
-            .padding(14).nightCard().contentShape(Rectangle())
+            .padding(.horizontal, 14)
+            .frame(height: height)      // grows with the window, filling the column
+            .nightCard().contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }
 
     /// A favourite folder (left-aligned). Click it to browse and open the files
     /// inside (navigating sub-folders); the minus removes the favourite.
-    private func favoriteCard(_ folder: URL) -> some View {
+    private func favoriteCard(_ folder: URL, height: CGFloat) -> some View {
         HStack(spacing: 13) {
             Button { browseTarget = BrowseTarget(url: folder) } label: {
                 HStack(spacing: 13) {
@@ -265,7 +275,9 @@ struct WelcomeView: View {
                 .buttonStyle(.plain).foregroundStyle(Theme.textFaint)
                 .help("Remove from favorites")
         }
-        .padding(14).nightCard()
+        .padding(.horizontal, 14)
+        .frame(height: height)          // grows with the window, filling the column
+        .nightCard()
     }
 
     // MARK: - Bottom dashboard
