@@ -1,5 +1,19 @@
 # Changelog
 
+## v6.1 — 2026-10-21
+
+- **Thumbnail-strip zoom as smooth as a window resize** (macOS + Linux):
+  - the drag handles now track the pointer in window coordinates — the
+    handle moves with the pane it resizes, so the old local measurement fed
+    back on itself and made the drag stutter (all console dividers, iOS too);
+  - mid-drag the strip height lives in view state and is saved once on
+    release (no preference write per pixel), with no implicit animation and
+    no blur filter on every thumbnail; only visible thumbnails are laid out;
+  - the slide views no longer force a re-scale pass on every update (macOS);
+  - Linux: at most one update per frame, one CSS variable drives all
+    thumbnails, and the current slide is scaled live to its shrinking pane
+    (also while resizing the window) and re-rendered crisp on release.
+
 ## v6.0 — 2026-10-21
 
 - **Paper — a light appearance** (macOS, iOS, Linux): Settings → Appearance

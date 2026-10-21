@@ -344,7 +344,9 @@ struct ResizeHandle: View {
             }
         }
         .gesture(
-            DragGesture(minimumDistance: 1)
+            // Global coordinates: the handle moves with the pane it resizes, so
+            // a local translation would feed back on itself and jitter.
+            DragGesture(minimumDistance: 1, coordinateSpace: .global)
                 .onChanged { onChanged(isHorizontal ? $0.translation.width : $0.translation.height) }
                 .onEnded { _ in onEnded() }
         )

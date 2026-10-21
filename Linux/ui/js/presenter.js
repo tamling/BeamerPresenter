@@ -223,6 +223,17 @@
 
   // ---- Console rendering ---------------------------------------------------
 
+  /// Scales the rendered current slide to its pane without re-rendering — used
+  /// while a resize is in progress; `renderAll` re-renders crisp afterwards.
+  function fitCurrentToPane() {
+    const canvas = el("current");
+    const pane = document.querySelector(".current-pane");
+    const cw = parseFloat(canvas.style.width), ch = parseFloat(canvas.style.height);
+    if (!cw || !ch) return;
+    const scale = Math.min((pane.clientWidth - 36) / cw, (pane.clientHeight - 36) / ch);
+    canvas.style.transform = scale > 0 ? `scale(${scale})` : "";
+  }
+
   async function renderAll() {
     if (!state.path) return;
     const deck = consoleDeck();
@@ -230,6 +241,7 @@
     const pane = document.querySelector(".current-pane");
     await deck.render(el("current"), state.page,
       pane.clientWidth - 36, pane.clientHeight - 36, deckHalf);
+    el("current").style.transform = "";
 
     const nextWrap = document.querySelector(".next-frame");
     const nw = nextWrap.clientWidth - 16;
@@ -268,6 +280,7 @@
 
   let resizeTimer = null;
   window.addEventListener("resize", () => {
+    fitCurrentToPane();   // follow the window live; crisp re-render once it settles
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(() => { renderAll(); renderBoard(); }, 120);
   });
@@ -488,6 +501,7 @@
   function buildStrip() {
     const strip = el("strip");
     strip.innerHTML = "";
+    strip.style.setProperty("--thumb-aspect", String(Slides.slideAspect()));
     for (let i = 0; i < state.count; i++) {
       const cell = document.createElement("div");
       cell.className = "strip-cell";
@@ -504,12 +518,7 @@
   }
 
   function applyStripScale() {
-    const h = stripHeight;
-    for (const cell of el("strip").children) {
-      const canvas = cell.querySelector("canvas");
-      canvas.style.height = `${h}px`;
-      canvas.style.width = `${h * Slides.slideAspect()}px`;
-    }
+    el("strip").style.setProperty("--thumb-h", `${stripHeight}px`);
   }
 
   async function renderStrip() {
@@ -537,26 +546,38 @@
   }
 
   // Drag the handle to zoom; re-render crisp at the new bucket on release.
+  // Mid-drag, at most one update per frame: the strip height is one CSS
+  // variable and the current slide is scaled (not re-rendered) to its shrinking
+  // pane — the same pure-scaling path a window resize takes.
   (() => {
     const handle = el("strip-handle");
-    let startY = null, startH = null;
+    let startY = null, startH = null, lastY = null, frame = 0;
+    const step = () => {
+      frame = 0;
+      if (startY === null) return;
+      stripHeight = Math.min(Math.max(startH + (startY - lastY), 50), 200);
+      applyStripScale();
+      fitCurrentToPane();
+    };
     handle.addEventListener("pointerdown", (e) => {
-      startY = e.clientY;
+      startY = lastY = e.clientY;
       startH = stripHeight;
       el("strip").classList.add("zooming");
       handle.setPointerCapture(e.pointerId);
     });
     handle.addEventListener("pointermove", (e) => {
       if (startY === null) return;
-      stripHeight = Math.min(Math.max(startH + (startY - e.clientY), 50), 200);
-      applyStripScale();   // pure scaling while dragging — stays fluid
+      lastY = e.clientY;
+      if (!frame) frame = requestAnimationFrame(step);
     });
     const done = () => {
       if (startY === null) return;
+      if (frame) { cancelAnimationFrame(frame); step(); }
       startY = null;
       el("strip").classList.remove("zooming");
       localStorage.setItem("stripHeight", String(stripHeight));
       renderStrip();       // crisp re-render at the final bucket
+      renderAll();         // and the current slide at its final pane size
     };
     handle.addEventListener("pointerup", done);
     handle.addEventListener("pointercancel", done);
@@ -749,6 +770,6 @@
   el("theme-btn").addEventListener("click", toggleTheme);
   el("theme-btn-console").addEventListener("click", toggleTheme);
 
-  el("version").textContent = "BeamerPresenter 6.0 · Linux";
+  el("version").textContent = "BeamerPresenter 6.1 · Linux";
   renderRecents();
 })();

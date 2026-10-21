@@ -28,6 +28,8 @@ struct PDFPageView: NSViewRepresentable {
         if view.currentPage != page {
             view.go(to: page)
         }
-        view.autoScales = true
+        // Re-setting this on every update forces a re-scale pass even when
+        // nothing changed (e.g. on every frame of a pane resize).
+        if !view.autoScales { view.autoScales = true }
     }
 }
