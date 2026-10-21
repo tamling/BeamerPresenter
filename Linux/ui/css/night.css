@@ -1,6 +1,7 @@
 /* Night Console design tokens — mirrors Sources/BeamerPresenter/Theme.swift.
-   A single fixed dark theme: near-black surface ladder, cool text ladder,
-   hairlines, and one electric-lime signal colour. */
+   Two appearances share the tokens: Night (dark, default) and Paper (light,
+   `<html data-theme="paper">`): surface ladder, text ladder, hairlines and one
+   electric-lime signal colour. The audience window always stays Night. */
 
 :root {
   --base:       #15171C;   /* window bg, primary surface */
@@ -23,10 +24,51 @@
   --on-accent:  #15171C;
   --status-ok:  #5BD08A;
   --status-warn:#E0B341;
+  --accent-ink:  #C7F24E;   /* lime as text / glyph */
+  --accent-ring: #C7F24E;   /* lime as outline */
+  --accent-glow: rgba(199, 242, 78, 0.4);
+  --scrim:       rgba(12, 13, 16, 0.96);
+  --scrim-soft:  rgba(12, 13, 16, 0.7);
+
+  /* Speaker-notes markup (Markdown-style highlighting) */
+  --note-markup:  #EE7A52;
+  --note-link:    #74B1DE;
+  --note-code:    #E9C46A;
+  --note-code-bg: rgba(255, 255, 255, 0.06);
 
   --font-display: "Space Grotesk", "Inter", system-ui, sans-serif;
   --font-ui:      "IBM Plex Sans", "Inter", system-ui, sans-serif;
   --font-mono:    "JetBrains Mono", "Fira Mono", monospace;
+}
+
+:root[data-theme="paper"] {
+  --base:       #DEDEDE;
+  --raised:     #EFEFEF;
+  --surface:    #F4F4F4;
+  --key:        #F7F7F7;
+  --inset:      #E6E6E6;
+  --stage:      #CFCFCF;
+
+  --text-primary:   #2A2A2A;
+  --text-secondary: #4A4A4A;
+  --text-muted:     #626262;
+  --text-faint:     #8A8A8A;
+  --hairline:        rgba(0, 0, 0, 0.12);
+  --hairline-strong: rgba(0, 0, 0, 0.18);
+
+  --accent-dim:  rgba(199, 242, 78, 0.35);
+  --accent-ink:  #4E6A0C;   /* lime text is unreadable on silver */
+  --accent-ring: #7FA51A;
+  --accent-glow: rgba(127, 165, 26, 0.3);
+  --status-ok:   #2F9E5B;
+  --status-warn: #C98A12;
+  --scrim:       rgba(222, 222, 222, 0.96);
+  --scrim-soft:  rgba(60, 60, 60, 0.35);
+
+  --note-markup:  #B8452A;
+  --note-link:    #2F6A9E;
+  --note-code:    #8E3420;
+  --note-code-bg: #EADBD5;
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -61,6 +103,7 @@ button {
   font-size: 13px;
 }
 button:hover { border-color: var(--hairline-strong); filter: brightness(1.15); }
+:root[data-theme="paper"] button:hover { filter: brightness(0.96); }
 button.primary {
   background: var(--accent);
   color: var(--on-accent);
@@ -80,3 +123,13 @@ button.primary:hover { filter: brightness(1.06); }
 
 .hairline-h { height: 1px; background: var(--hairline); }
 .hairline-v { width: 1px; background: var(--hairline); }
+
+/* Speaker-notes highlighting (see js/notesmarkup.js) */
+.md-mark    { color: var(--note-markup); }
+.md-heading { color: var(--note-markup); font-weight: 700; }
+.md-bold    { font-weight: 700; }
+.md-italic  { font-style: italic; }
+.md-quote   { color: var(--text-secondary); font-style: italic; }
+.md-code    { color: var(--note-code); background: var(--note-code-bg); border-radius: 3px; }
+.md-link    { color: var(--note-link); }
+.md-url     { color: var(--note-link); text-decoration: underline; }

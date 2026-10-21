@@ -20,10 +20,10 @@ struct KeyButton<Glyph: View>: View {
                     .frame(width: width, height: height)
                     .background(Theme.key, in: RoundedRectangle(cornerRadius: 9))
                     .overlay(RoundedRectangle(cornerRadius: 9)
-                        .stroke(active ? Theme.accent : Theme.hairline, lineWidth: 1))
+                        .stroke(active ? Theme.accentRing : Theme.hairline, lineWidth: 1))
                     .shadow(color: active ? Theme.accent.opacity(0.5) : .clear, radius: 6)
                 Text(caption).font(.mono(9)).textCase(.uppercase).tracking(0.6)
-                    .foregroundStyle(active ? Theme.accent : Theme.textMuted)
+                    .foregroundStyle(active ? Theme.accentInk : Theme.textMuted)
             }
             .contentShape(Rectangle())
         }
@@ -77,15 +77,15 @@ struct LivePill: View {
     @State private var on = true
     var body: some View {
         HStack(spacing: 6) {
-            Circle().fill(Theme.accent).frame(width: 7, height: 7)
+            Circle().fill(Theme.accentInk).frame(width: 7, height: 7)
                 .opacity(on ? 1 : 0.25)
                 .animation(.easeInOut(duration: 1.4).repeatForever(autoreverses: true), value: on)
             Text("LIVE").font(.mono(10, bold: true)).tracking(1.2)
-                .foregroundStyle(Theme.accent)
+                .foregroundStyle(Theme.accentInk)
         }
         .padding(.horizontal, 9).padding(.vertical, 4)
         .background(Theme.accentDim, in: Capsule())
-        .overlay(Capsule().stroke(Theme.accent.opacity(0.6), lineWidth: 1))
+        .overlay(Capsule().stroke(Theme.accentRing.opacity(0.8), lineWidth: 1))
         .onAppear { on.toggle() }
     }
 }

@@ -91,7 +91,7 @@ struct StartView: View {
                         .foregroundStyle(Theme.textPrimary)
                     Text("Present · Annotate · Two screens")
                         .font(.mono(10)).textCase(.uppercase).tracking(1.6)
-                        .foregroundStyle(Theme.accent)
+                        .foregroundStyle(Theme.accentInk)
                     Text("Your console on the iPad, clean slides on the projector.")
                         .font(.ui(15)).foregroundStyle(Theme.textSecondary)
                         .multilineTextAlignment(.center)
@@ -129,7 +129,7 @@ struct StartView: View {
                                 if i > 0 { Divider().overlay(Theme.hairline) }
                                 Button { model.open(url: url) } label: {
                                     HStack(spacing: 11) {
-                                        Text("PDF").font(.mono(9, bold: true)).foregroundStyle(Theme.accent)
+                                        Text("PDF").font(.mono(9, bold: true)).foregroundStyle(Theme.accentInk)
                                             .padding(.horizontal, 7).padding(.vertical, 5)
                                             .background(Theme.accentDim, in: RoundedRectangle(cornerRadius: 6))
                                         Text(url.deletingPathExtension().lastPathComponent)
@@ -165,7 +165,7 @@ struct StartView: View {
     }
 
     static var version: String {
-        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "5.7"
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "6.0"
     }
 }
 
@@ -490,11 +490,11 @@ struct PresenterView: View {
     private func keyGlyph(_ icon: String, active: Bool = false) -> some View {
         Image(systemName: icon)
             .font(.system(size: 16, weight: .medium))
-            .foregroundStyle(active ? Theme.accent : Theme.textPrimary)
+            .foregroundStyle(active ? Theme.accentInk : Theme.textPrimary)
             .frame(width: 46, height: 36)
             .background(Theme.key, in: RoundedRectangle(cornerRadius: 9))
             .overlay(RoundedRectangle(cornerRadius: 9)
-                .stroke(active ? Theme.accent : Theme.hairline, lineWidth: 1))
+                .stroke(active ? Theme.accentRing : Theme.hairline, lineWidth: 1))
             .shadow(color: active ? Theme.accent.opacity(0.5) : .clear, radius: 6)
     }
 
@@ -619,7 +619,7 @@ struct PresenterView: View {
                     } label: {
                         Circle().fill(color).frame(width: 26, height: 26)
                             .overlay(Circle().strokeBorder(
-                                model.penColor == color ? Theme.accent : Theme.hairlineStrong,
+                                model.penColor == color ? Theme.accentRing : Theme.hairlineStrong,
                                 lineWidth: model.penColor == color ? 3 : 1))
                             .shadow(color: model.penColor == color ? Theme.accent.opacity(0.4) : .clear, radius: 4)
                     }

@@ -55,12 +55,12 @@ struct OverviewGrid: View {
             .background(Theme.key)
             .clipShape(RoundedRectangle(cornerRadius: 7))
             .overlay(RoundedRectangle(cornerRadius: 7)
-                .strokeBorder(isCurrent ? Theme.accent : Theme.hairlineStrong,
+                .strokeBorder(isCurrent ? Theme.accentRing : Theme.hairlineStrong,
                               lineWidth: isCurrent ? 2.5 : 1))
             .shadow(color: isCurrent ? Theme.accent.opacity(0.4) : .clear, radius: 8)
             Text("\(i + 1)")
                 .font(.mono(11))
-                .foregroundStyle(isCurrent ? Theme.accent : Theme.textMuted)
+                .foregroundStyle(isCurrent ? Theme.accentInk : Theme.textMuted)
         }
     }
 }

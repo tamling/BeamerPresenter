@@ -23,15 +23,16 @@ struct BoardStyle {
         return r.isMultiple(of: 2) ? tableSurface : tableStripe
     }
 
-    /// Night look — presenter + audience.
+    /// Night look — presenter + audience. Fixed Night values (not the live
+    /// tokens) so the board stays dark under the Paper appearance too.
     static let dark = BoardStyle(
-        background: Theme.stage,
+        background: Color(hex: 0x0C0D10),
         showGrid: true,
-        gridDot: Theme.textFaint.opacity(0.4),
-        text: Theme.textPrimary,
-        tableBorder: Theme.hairlineStrong,
-        tableHeader: Theme.key,
-        tableSurface: Theme.surface,
+        gridDot: Color(hex: 0x5B636E).opacity(0.4),
+        text: Color(hex: 0xE9ECF0),
+        tableBorder: Color.white.opacity(0.08),
+        tableHeader: Color(hex: 0x23272E),
+        tableSurface: Color(hex: 0x1E2228),
         tableStripe: Color(hex: 0x21252C)
     )
 

@@ -12,6 +12,7 @@ struct SettingsView: View {
     @AppStorage(Prefs.backgroundMode) private var backgroundMode = false
     @AppStorage(Prefs.audienceFullscreen) private var audienceFullscreen = false
     @AppStorage(Prefs.doubleClickSlides) private var doubleClickSlides = false
+    @AppStorage(Prefs.appearance) private var appearance = Appearance.night.rawValue
 
     var body: some View {
         Form {
@@ -26,6 +27,20 @@ struct SettingsView: View {
                         NotificationCenter.default.post(name: .backgroundModePrefChanged, object: nil)
                     }
                 Text("Background mode keeps only the menu bar icon; the macOS menu bar is unavailable then.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+
+            Section("Appearance") {
+                Picker("Theme", selection: $appearance) {
+                    ForEach(Appearance.allCases, id: \.rawValue) { a in
+                        Text(a.title).tag(a.rawValue)
+                    }
+                }
+                .pickerStyle(.radioGroup)
+                .onChange(of: appearance) { _ in
+                    NotificationCenter.default.post(name: .appearancePrefChanged, object: nil)
+                }
+                Text("Paper is a light console for bright rooms. The audience screen and the slides are unchanged; the Dock icon follows the theme.")
                     .font(.caption).foregroundStyle(.secondary)
             }
 
@@ -123,6 +138,8 @@ enum Prefs {
     /// Thumbnail height of the bottom slide strip (shared by the strip and the
     /// drag handle in the presenter view).
     static let thumbStripHeight = "thumbStripHeight"
+    /// Console appearance: "night" (dark, default) or "paper" (light).
+    static let appearance = "appearance"
 }
 
 /// Predefined "be right back" messages for the black screen.

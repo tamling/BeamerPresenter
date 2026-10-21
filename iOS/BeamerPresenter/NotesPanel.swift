@@ -15,7 +15,7 @@ struct NotesPanel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
-            Divider().overlay(Color.white.opacity(0.15))
+            Divider().overlay(Theme.hairlineStrong)
             content
         }
         .background(Theme.surface)
@@ -44,8 +44,8 @@ struct NotesPanel: View {
                 .padding(8)
         } else if let note = model.note(for: model.index), !note.isEmpty {
             ScrollView {
-                Text(note)
-                    .font(.title3)
+                Text(NotesMarkup.attributed(note, size: 17))
+                    .lineSpacing(5)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .textSelection(.enabled)
                     .padding(14)

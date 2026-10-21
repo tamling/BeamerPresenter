@@ -91,6 +91,17 @@ LIME     = (198, 240, 74)
 DOT      = (236, 255, 170)
 TRACK    = (52, 58, 68)
 
+# Paper (light) variant: a silver squircle; the lime is deepened so the mark
+# keeps its contrast on the light ground. Shown in the Dock while the app runs
+# with Settings → Appearance → Paper.
+PAPER = dict(
+    BG_TOP=(246, 246, 246), BG_BOT=(196, 198, 202),
+    LIME_TOP=(190, 236, 70), LIME_BOT=(112, 156, 22),
+    LIME=(150, 200, 40), DOT=(96, 140, 14), TRACK=(176, 178, 184),
+)
+NIGHT = dict(BG_TOP=BG_TOP, BG_BOT=BG_BOT, LIME_TOP=LIME_TOP, LIME_BOT=LIME_BOT,
+             LIME=LIME, DOT=DOT, TRACK=TRACK)
+
 GLOW_PASSES = 16
 GLOW_MAX = 0.055
 GLOW_ALPHA = 0.05
@@ -147,7 +158,10 @@ def glow_circle(buf, S, cx, cy, rad, color):
     fill_circle(buf, S, S, cx, cy, rad, color)
 
 
-def render(S):
+def render(S, pal=NIGHT):
+    BG_TOP, BG_BOT = pal["BG_TOP"], pal["BG_BOT"]
+    LIME_TOP, LIME_BOT, LIME = pal["LIME_TOP"], pal["LIME_BOT"], pal["LIME"]
+    DOT, TRACK = pal["DOT"], pal["TRACK"]
     buf = bytearray(S * S * 4)               # transparent RGBA
 
     m = S * 0.035                            # squircle margin
@@ -213,6 +227,10 @@ def main():
             write_png(os.path.join(res, "AppIcon.png"), size, size, buf)
 
     print(f"✓ wrote {iconset} and Resources/AppIcon.png")
+
+    print("  rendering 512px (Paper)")
+    write_png(os.path.join(res, "AppIconLight.png"), 512, 512, render(512, PAPER))
+    print("✓ wrote Resources/AppIconLight.png")
 
 
 if __name__ == "__main__":

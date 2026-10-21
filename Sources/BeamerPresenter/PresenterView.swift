@@ -276,8 +276,8 @@ struct PresenterView: View {
             PDFPageView(document: state.notesDoc, pageIndex: state.index)
         } else if let text = state.textNotes[state.index], !text.isEmpty {
             ScrollView {
-                Text(text)
-                    .font(.body)
+                Text(NotesMarkup.attributed(text, size: 14))
+                    .lineSpacing(4)
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(10)
@@ -416,7 +416,7 @@ private struct ControlBar: View {
                         Circle().fill(color)
                             .frame(width: 22, height: 22)
                             .overlay(Circle().strokeBorder(
-                                state.penColor == color ? Theme.accent : Theme.hairlineStrong,
+                                state.penColor == color ? Theme.accentRing : Theme.hairlineStrong,
                                 lineWidth: state.penColor == color ? 2.5 : 1))
                             .shadow(color: state.penColor == color ? Theme.accent.opacity(0.4) : .clear, radius: 4)
                             .frame(height: 34)
@@ -577,14 +577,14 @@ private struct ControlBar: View {
         Button(action: action) {
             VStack(spacing: 6) {
                 Image(systemName: systemImage).font(.system(size: 15, weight: .medium))
-                    .foregroundStyle(active ? Theme.accent : Theme.textPrimary)
+                    .foregroundStyle(active ? Theme.accentInk : Theme.textPrimary)
                     .frame(width: 40, height: 34)
                     .background(Theme.key, in: RoundedRectangle(cornerRadius: 9))
                     .overlay(RoundedRectangle(cornerRadius: 9)
-                        .stroke(active ? Theme.accent : Theme.hairline, lineWidth: 1))
+                        .stroke(active ? Theme.accentRing : Theme.hairline, lineWidth: 1))
                     .shadow(color: active ? Theme.accent.opacity(0.5) : .clear, radius: 6)
                 Text(caption).font(.mono(9)).textCase(.uppercase).tracking(0.6)
-                    .foregroundStyle(active ? Theme.accent : Theme.textMuted)
+                    .foregroundStyle(active ? Theme.accentInk : Theme.textMuted)
             }
             .opacity(disabled ? 0.4 : 1)
             .contentShape(Rectangle())

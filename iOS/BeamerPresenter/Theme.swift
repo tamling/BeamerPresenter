@@ -1,9 +1,10 @@
 import SwiftUI
 
 // MARK: - Night Console design tokens
-// Drop-in from the "Night Console" spec (v1, 2026). A single fixed dark theme:
-// one near-black surface ladder, a cool text ladder, hairlines, and one electric
-// lime signal. Use these tokens directly rather than semantic system colours.
+// From the "Night Console" spec (v1, 2026): one surface ladder, a text ladder,
+// hairlines, and one electric lime signal. Two appearances share the tokens —
+// Night (dark, default) and Paper (light). Use these tokens directly rather than
+// semantic system colours.
 
 extension Color {
     init(hex: UInt) {
@@ -14,30 +15,80 @@ extension Color {
     }
 }
 
+/// UserDefaults keys shared with `@AppStorage`.
+enum Prefs {
+    /// Console appearance: "night" (dark, default) or "paper" (light).
+    static let appearance = "appearance"
+}
+
+/// The two console looks: the original dark "Night Console" and the light
+/// "Paper" (silver-grey surfaces, same lime signal, red-orange note markup).
+enum Appearance: String, CaseIterable {
+    case night, paper
+
+    var title: String { self == .night ? "Night (dark)" : "Paper (light)" }
+
+    /// The user's choice (Settings → Appearance); Night by default.
+    static var current: Appearance {
+        Appearance(rawValue: UserDefaults.standard.string(forKey: Prefs.appearance) ?? "") ?? .night
+    }
+}
+
 enum Theme {
+    private static var paper: Bool { Appearance.current == .paper }
+    private static func pick(_ night: Color, _ paper: Color) -> Color { self.paper ? paper : night }
+
     // Surfaces (base → inset ladder)
-    static let base      = Color(hex: 0x15171C)   // window bg, primary surface
-    static let raised    = Color(hex: 0x1B1E24)   // title bar, toolbar
-    static let surface   = Color(hex: 0x1E2228)   // cards, list rows
-    static let key       = Color(hex: 0x23272E)   // tactile keys, thumbnails
-    static let inset     = Color(hex: 0x0F1115)   // wells: counter, scratch field
-    static let stage     = Color(hex: 0x0C0D10)   // slide mat behind the deck
-    static let blackout  = Color(hex: 0x08090B)   // audience black-out
+    static var base: Color     { pick(Color(hex: 0x15171C), Color(hex: 0xDEDEDE)) }   // window bg, primary surface
+    static var raised: Color   { pick(Color(hex: 0x1B1E24), Color(hex: 0xEFEFEF)) }   // title bar, toolbar
+    static var surface: Color  { pick(Color(hex: 0x1E2228), Color(hex: 0xF4F4F4)) }   // cards, list rows
+    static var key: Color      { pick(Color(hex: 0x23272E), Color(hex: 0xF7F7F7)) }   // tactile keys, thumbnails
+    static var inset: Color    { pick(Color(hex: 0x0F1115), Color(hex: 0xE6E6E6)) }   // wells: counter, scratch field
+    static var stage: Color    { pick(Color(hex: 0x0C0D10), Color(hex: 0xCFCFCF)) }   // slide mat behind the deck
+    static let blackout        = Color(hex: 0x08090B)                                 // audience black-out (always black)
 
     // Text & lines
-    static let textPrimary   = Color(hex: 0xE9ECF0)
-    static let textSecondary = Color(hex: 0x8B939E)
-    static let textMuted     = Color(hex: 0x6F7682)
-    static let textFaint     = Color(hex: 0x5B636E)
-    static let hairline      = Color.white.opacity(0.06)   // 0.08 = strong
-    static let hairlineStrong = Color.white.opacity(0.08)
+    static var textPrimary: Color   { pick(Color(hex: 0xE9ECF0), Color(hex: 0x2A2A2A)) }
+    static var textSecondary: Color { pick(Color(hex: 0x8B939E), Color(hex: 0x4A4A4A)) }
+    static var textMuted: Color     { pick(Color(hex: 0x6F7682), Color(hex: 0x626262)) }
+    static var textFaint: Color     { pick(Color(hex: 0x5B636E), Color(hex: 0x8A8A8A)) }
+    static var hairline: Color       { pick(Color.white.opacity(0.06), Color.black.opacity(0.12)) }
+    static var hairlineStrong: Color { pick(Color.white.opacity(0.08), Color.black.opacity(0.18)) }
 
     // Accent + status
-    static let accent     = Color(hex: 0xC7F24E)   // LIVE, active tool, primary btn, timer
-    static let accentDim  = Color(hex: 0xC7F24E).opacity(0.14)
+    /// Lime fill: LIVE, active tool, primary button, timer.
+    static let accent     = Color(hex: 0xC7F24E)
+    static var accentDim: Color { accent.opacity(paper ? 0.35 : 0.14) }
     static let onAccent   = Color(hex: 0x15171C)
-    static let statusOk   = Color(hex: 0x5BD08A)   // LaTeX ready
-    static let statusWarn = Color(hex: 0xE0B341)   // dependency missing
+    /// Lime used as text, glyph or thin line. On Paper, lime text is unreadable,
+    /// so it turns a dark olive; rings get a mid lime.
+    static var accentInk: Color  { pick(accent, Color(hex: 0x4E6A0C)) }
+    static var accentRing: Color { pick(accent, Color(hex: 0x7FA51A)) }
+    static var statusOk: Color   { pick(Color(hex: 0x5BD08A), Color(hex: 0x2F9E5B)) }   // LaTeX ready
+    static var statusWarn: Color { pick(Color(hex: 0xE0B341), Color(hex: 0xC98A12)) }   // dependency missing
+
+    // Speaker-notes markup (Markdown-style highlighting)
+    static var noteMarkup: Color { pick(Color(hex: 0xEE7A52), Color(hex: 0xB8452A)) }   // # ** * - > and headings
+    static var noteLink: Color   { pick(Color(hex: 0x74B1DE), Color(hex: 0x2F6A9E)) }
+    static var noteCode: Color   { pick(Color(hex: 0xE9C46A), Color(hex: 0x8E3420)) }
+    static var noteCodeBg: Color { pick(Color.white.opacity(0.06), Color(hex: 0xEADBD5)) }
+}
+
+/// Rebuilds a window's SwiftUI tree when the appearance changes (the tokens
+/// above are read at render time) and matches system controls to it.
+struct Themed<Content: View>: View {
+    @AppStorage(Prefs.appearance) private var appearance = Appearance.night.rawValue
+    let content: Content
+
+    var body: some View {
+        content
+            .id(appearance)
+            .preferredColorScheme(appearance == Appearance.paper.rawValue ? .light : .dark)
+    }
+}
+
+extension View {
+    func themed() -> some View { Themed(content: self) }
 }
 
 /// Annotation pen colours (the only other saturated hues in the app).
