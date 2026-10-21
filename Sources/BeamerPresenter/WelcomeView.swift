@@ -124,42 +124,52 @@ struct WelcomeView: View {
         }
     }
 
-    // MARK: - Right (library: favourites + recents, scrollable)
+    // MARK: - Right (library: favourites + recents, capped — no scrolling)
+
+    /// How many favourites/recents the home screen shows. Capped so the
+    /// column always fits without a scroll bar.
+    private let libraryCap = 3
 
     private var library: some View {
-        ScrollView(.vertical, showsIndicators: true) {
-            VStack(alignment: .leading, spacing: 26) {
-                VStack(alignment: .leading, spacing: 12) {
-                    sectionHeader("Favorite Folders") {
-                        smallKeyButton("plus") { addFavoriteFolder() }
-                            .help("Add a folder of presentations")
-                    }
-                    if favorites.isEmpty {
-                        dashedBox("No favourite folders yet — drop a folder here to pin it.")
-                    } else {
-                        VStack(spacing: 8) { ForEach(favorites, id: \.self) { favoriteCard($0) } }
-                    }
+        VStack(alignment: .leading, spacing: 26) {
+            VStack(alignment: .leading, spacing: 12) {
+                sectionHeader("Favorite Folders") {
+                    smallKeyButton("plus") { addFavoriteFolder() }
+                        .help("Add a folder of presentations")
                 }
-
-                VStack(alignment: .leading, spacing: 12) {
-                    sectionHeader("Recent") {
-                        if !recents.isEmpty {
-                            Button("Clear") { RecentFiles.clear(); recents = [] }
-                                .buttonStyle(.plain)
-                                .font(.ui(13, "Medium")).foregroundStyle(Theme.accent)
-                        }
+                if favorites.isEmpty {
+                    dashedBox("No favourite folders yet — drop a folder here to pin it.")
+                } else {
+                    VStack(spacing: 8) {
+                        ForEach(Array(favorites.prefix(libraryCap)), id: \.self) { favoriteCard($0) }
                     }
-                    if recents.isEmpty {
-                        dashedBox("No recent presentations yet.")
-                    } else {
-                        VStack(spacing: 8) {
-                            ForEach(Array(recents.prefix(5)), id: \.self) { recentCard($0) }
-                        }
+                    if favorites.count > libraryCap {
+                        Text("+ \(favorites.count - libraryCap) more — remove one to see them")
+                            .font(.ui(12)).foregroundStyle(Theme.textFaint)
                     }
                 }
             }
-            .padding(28)
+
+            VStack(alignment: .leading, spacing: 12) {
+                sectionHeader("Recent") {
+                    if !recents.isEmpty {
+                        Button("Clear") { RecentFiles.clear(); recents = [] }
+                            .buttonStyle(.plain)
+                            .font(.ui(13, "Medium")).foregroundStyle(Theme.accent)
+                    }
+                }
+                if recents.isEmpty {
+                    dashedBox("No recent presentations yet.")
+                } else {
+                    VStack(spacing: 8) {
+                        ForEach(Array(recents.prefix(libraryCap)), id: \.self) { recentCard($0) }
+                    }
+                }
+            }
+
+            Spacer(minLength: 0)
         }
+        .padding(28)
         .background(Theme.base)
     }
 
