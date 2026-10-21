@@ -33,7 +33,7 @@ struct WelcomeView: View {
         }
         .frame(minWidth: 680, minHeight: 460)
         .background(Theme.base)
-        .tint(Theme.accent)
+        .tint(Theme.accentInk)
         // Accept drops anywhere on the home screen — the drop zone below is
         // just the visual anchor (it still lights up while dragging).
         .onDrop(of: [UTType.fileURL], isTargeted: $dropTargeted) { handleDrop($0) }
@@ -65,7 +65,7 @@ struct WelcomeView: View {
                     .foregroundStyle(Theme.textPrimary)
                 Text("Present · Annotate · Two screens")
                     .font(.mono(10)).textCase(.uppercase).tracking(1.6)
-                    .foregroundStyle(Theme.accent)
+                    .foregroundStyle(Theme.accentInk)
                 Text("Present LaTeX Beamer PDFs with speaker notes — your console on one screen, clean slides on the other.")
                     .font(.ui(15)).foregroundStyle(Theme.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -157,7 +157,7 @@ struct WelcomeView: View {
                         if !recents.isEmpty {
                             Button("Clear") { RecentFiles.clear(); recents = [] }
                                 .buttonStyle(.plain)
-                                .font(.ui(13, "Medium")).foregroundStyle(Theme.accent)
+                                .font(.ui(13, "Medium")).foregroundStyle(Theme.accentInk)
                         }
                     }
                     if recents.isEmpty {
@@ -232,7 +232,7 @@ struct WelcomeView: View {
         Button { onOpenURL(url) } label: {
             HStack(spacing: 13) {
                 tile { Text(url.pathExtension.uppercased().isEmpty ? "PDF" : url.pathExtension.uppercased())
-                        .font(.mono(10, bold: true)).foregroundStyle(Theme.accent) }
+                        .font(.mono(10, bold: true)).foregroundStyle(Theme.accentInk) }
                 VStack(alignment: .leading, spacing: 2) {
                     Text(url.deletingPathExtension().lastPathComponent)
                         .font(.ui(16, "SemiBold")).foregroundStyle(Theme.textPrimary)
@@ -257,7 +257,7 @@ struct WelcomeView: View {
         HStack(spacing: 13) {
             Button { browseTarget = BrowseTarget(url: folder) } label: {
                 HStack(spacing: 13) {
-                    tile { Image(systemName: "folder.fill").foregroundStyle(Theme.accent) }
+                    tile { Image(systemName: "folder.fill").foregroundStyle(Theme.accentInk) }
                     VStack(alignment: .leading, spacing: 2) {
                         Text(folder.lastPathComponent)
                             .font(.ui(16, "SemiBold")).foregroundStyle(Theme.textPrimary).lineLimit(1)
@@ -304,7 +304,7 @@ struct WelcomeView: View {
 
     private func statTile(_ icon: String, _ value: String, _ title: String) -> some View {
         HStack(spacing: 10) {
-            Image(systemName: icon).font(.title3).foregroundStyle(Theme.accent)
+            Image(systemName: icon).font(.title3).foregroundStyle(Theme.accentInk)
             VStack(alignment: .leading, spacing: 1) {
                 Text(value).font(.display(19)).foregroundStyle(Theme.textPrimary)
                 Text(title).microLabel()
@@ -333,11 +333,11 @@ struct WelcomeView: View {
             DotGrid().opacity(0.6)
             VStack(spacing: 10) {
                 ZStack {
-                    Circle().strokeBorder(Theme.accent.opacity(dropTargeted ? 1 : 0.7), lineWidth: 1.5)
+                    Circle().strokeBorder(Theme.accentRing.opacity(dropTargeted ? 1 : 0.7), lineWidth: 1.5)
                         .frame(width: 44, height: 44)
                         .shadow(color: Theme.accent.opacity(dropTargeted ? 0.6 : 0.25), radius: 10)
                     Image(systemName: "arrow.down").font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(Theme.accent)
+                        .foregroundStyle(Theme.accentInk)
                 }
                 Text("Drop a PDF, .tex or .pptx")
                     .font(.display(15)).foregroundStyle(Theme.textPrimary)
@@ -352,7 +352,7 @@ struct WelcomeView: View {
         .background(dropTargeted ? Theme.accentDim : Color.clear)
         .clipShape(RoundedRectangle(cornerRadius: 14))
         .overlay(RoundedRectangle(cornerRadius: 14)
-            .strokeBorder(dropTargeted ? Theme.accent : Theme.hairlineStrong,
+            .strokeBorder(dropTargeted ? Theme.accentRing : Theme.hairlineStrong,
                           style: StrokeStyle(lineWidth: 1.5, dash: [5])))
     }
 
@@ -443,11 +443,11 @@ struct FolderBrowser: View {
                 .disabled(stack.count <= 1)
                 .foregroundStyle(stack.count > 1 ? Theme.textPrimary : Theme.textFaint)
 
-                Image(systemName: "folder.fill").foregroundStyle(Theme.accent)
+                Image(systemName: "folder.fill").foregroundStyle(Theme.accentInk)
                 Text(current.lastPathComponent)
                     .font(.ui(15, "SemiBold")).foregroundStyle(Theme.textPrimary).lineLimit(1)
                 Spacer()
-                Button("Done") { dismiss() }.buttonStyle(.plain).foregroundStyle(Theme.accent)
+                Button("Done") { dismiss() }.buttonStyle(.plain).foregroundStyle(Theme.accentInk)
             }
             .padding(14)
 
@@ -502,7 +502,7 @@ struct FolderBrowser: View {
     private func folderRow(_ url: URL) -> some View {
         Button { stack.append(url); query = "" } label: {
             HStack(spacing: 11) {
-                Image(systemName: "folder.fill").foregroundStyle(Theme.accent).frame(width: 22)
+                Image(systemName: "folder.fill").foregroundStyle(Theme.accentInk).frame(width: 22)
                 Text(url.lastPathComponent).font(.ui(14)).foregroundStyle(Theme.textPrimary).lineLimit(1)
                 Spacer()
                 Image(systemName: "chevron.right").font(.caption).foregroundStyle(Theme.textFaint)
@@ -517,7 +517,7 @@ struct FolderBrowser: View {
         Button { onOpen(url) } label: {
             HStack(spacing: 11) {
                 Text(url.pathExtension.uppercased())
-                    .font(.mono(9, bold: true)).foregroundStyle(Theme.accent)
+                    .font(.mono(9, bold: true)).foregroundStyle(Theme.accentInk)
                     .frame(width: 30)
                     .padding(.vertical, 4)
                     .background(Theme.accentDim, in: RoundedRectangle(cornerRadius: 5))

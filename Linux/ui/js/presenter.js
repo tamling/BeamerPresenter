@@ -253,7 +253,8 @@
       const notes = el("notes");
       notes.style.display = "block";
       const text = state.notes.get(state.page) || "";
-      notes.textContent = text || "No notes for this slide.";
+      if (text) notes.innerHTML = NotesMarkup.html(text);
+      else notes.textContent = "No notes for this slide.";
       notes.classList.toggle("empty", !text);
     }
 
@@ -731,6 +732,23 @@
       : "LibreOffice not found — needed to open .pptx";
   });
 
-  el("version").textContent = "BeamerPresenter 5.7 · Linux";
+  // Appearance: Night (dark, default) or Paper (light). Only this console
+  // window follows it — the audience window stays Night.
+  const applyTheme = (theme) => {
+    if (theme === "paper") document.documentElement.dataset.theme = "paper";
+    else delete document.documentElement.dataset.theme;
+    const label = theme === "paper" ? "Night" : "Paper";
+    for (const id of ["theme-btn", "theme-btn-console"]) el(id).textContent = label;
+  };
+  const toggleTheme = () => {
+    const next = document.documentElement.dataset.theme === "paper" ? "night" : "paper";
+    try { localStorage.setItem("appearance", next); } catch (e) {}
+    applyTheme(next);
+  };
+  applyTheme(document.documentElement.dataset.theme === "paper" ? "paper" : "night");
+  el("theme-btn").addEventListener("click", toggleTheme);
+  el("theme-btn-console").addEventListener("click", toggleTheme);
+
+  el("version").textContent = "BeamerPresenter 6.0 · Linux";
   renderRecents();
 })();

@@ -1,5 +1,23 @@
 # Changelog
 
+## v6.0 — 2026-10-21
+
+- **Paper — a light appearance** (macOS + Linux): Settings → Appearance on
+  macOS, the Paper/Night button on the Linux home screen and console bar.
+  Silver-grey surfaces, the same lime signal (as fills; lime text becomes a
+  dark olive so it stays readable), and darker status colours. Night stays
+  the default. The audience screen, the slides and the Night whiteboard are
+  unchanged.
+- **Dock icon follows the appearance** (macOS): with Paper the running app
+  shows a silver icon (`Resources/AppIconLight.png`, rendered by
+  `Tools/make_icon.py`). Finder keeps the bundled Night icon.
+- **Markdown-style speaker notes** (macOS + Linux): `# heading`, `- item`,
+  `**bold**`, `*italic*`, `` `code` ``, `> question` and `[text](url)` in
+  `\note{…}` are highlighted like a code editor does: the markup characters
+  stay visible in red-orange, the content gets its weight. Notes use
+  JetBrains Mono.
+- iOS: version bump only (no Paper appearance yet).
+
 ## v5.7 — 2026-10-21
 
 - **Home-screen cards scale with the window** (macOS): when fewer

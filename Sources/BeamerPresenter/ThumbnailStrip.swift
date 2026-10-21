@@ -87,13 +87,13 @@ struct ThumbnailStrip: View {
             .clipShape(RoundedRectangle(cornerRadius: 6))
             .overlay(
                 RoundedRectangle(cornerRadius: 6)
-                    .strokeBorder(isCurrent ? Theme.accent : Theme.hairlineStrong,
+                    .strokeBorder(isCurrent ? Theme.accentRing : Theme.hairlineStrong,
                                   lineWidth: isCurrent ? 2.5 : 1)
             )
             .shadow(color: isCurrent ? Theme.accent.opacity(0.4) : .clear, radius: 6)
             Text("\(i + 1)")
                 .font(.mono(10)).tracking(0.5)
-                .foregroundStyle(isCurrent ? Theme.accent : Theme.textMuted)
+                .foregroundStyle(isCurrent ? Theme.accentInk : Theme.textMuted)
         }
     }
 }

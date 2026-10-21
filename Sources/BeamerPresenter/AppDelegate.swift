@@ -25,10 +25,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     /// `application(_:open:)` ahead of `applicationDidFinishLaunching`).
     private var pendingOpenURLs: [URL] = []
     private var finishedLaunching = false
+    /// The bundle's (Night) icon, kept so the Dock can switch back from Paper.
+    private var bundleIcon: NSImage?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // Night Console is a single fixed dark theme.
-        NSApp.appearance = NSAppearance(named: .darkAqua)
+        // Night (dark) or Paper (light), per Settings → Appearance.
+        applyAppearance()
         // Re-establish file/folder access granted in earlier runs, so macOS
         // doesn't ask again for folders the user already opened from.
         AccessBookmarks.restoreAll()
@@ -47,6 +49,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         NotificationCenter.default.addObserver(
             self, selector: #selector(applyBackgroundMode),
             name: .backgroundModePrefChanged, object: nil)
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(applyAppearance),
+            name: .appearancePrefChanged, object: nil)
         NotificationCenter.default.addObserver(
             self, selector: #selector(rebuildAudienceWindow),
             name: .audienceModeChanged, object: nil)
@@ -178,6 +183,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
 
     // MARK: - Launch splash
 
+    /// Applies Settings → Appearance: AppKit chrome (title bars, menus, sheets)
+    /// and the Dock icon follow Night/Paper; SwiftUI content re-renders itself
+    /// via `.themed()`.
+    @objc private func applyAppearance() {
+        let paper = Appearance.current == .paper
+        NSApp.appearance = NSAppearance(named: paper ? .aqua : .darkAqua)
+        if bundleIcon == nil { bundleIcon = NSApp.applicationIconImage }
+        let light = paper
+            ? Bundle.main.url(forResource: "AppIconLight", withExtension: "png")
+                .flatMap(NSImage.init(contentsOf:))
+            : nil
+        NSApp.applicationIconImage = light ?? bundleIcon
+    }
+
     /// Shows a brief launch splash with the icon and version, then fades it out
     /// and brings the presenter window forward.
     private func showSplash() {
@@ -189,7 +208,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         window.hasShadow = true
         window.level = .floating
         window.isMovableByWindowBackground = true
-        window.contentView = NSHostingView(rootView: splash)
+        window.contentView = NSHostingView(rootView: splash.themed())
         window.center()
         window.orderFrontRegardless()
         splashWindow = window
@@ -458,7 +477,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 480, height: 340),
                                   styleMask: [.titled, .closable], backing: .buffered, defer: false)
             window.title = "Settings"
-            window.contentView = NSHostingView(rootView: SettingsView())
+            window.contentView = NSHostingView(rootView: SettingsView().themed())
             window.isReleasedWhenClosed = false
             window.center()
             settingsWindow = window
@@ -473,7 +492,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
                                   styleMask: [.titled, .closable, .resizable, .miniaturizable],
                                   backing: .buffered, defer: false)
             window.title = "Mentimeter"
-            window.contentView = NSHostingView(rootView: MentimeterView().environmentObject(state))
+            window.contentView = NSHostingView(rootView: MentimeterView().environmentObject(state).themed())
             window.isReleasedWhenClosed = false
             window.center()
             mentimeterWindow = window
@@ -836,7 +855,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         window.backgroundColor = .clear
         window.level = .floating
         window.hasShadow = true
-        window.contentView = NSHostingView(rootView: CompileHUD(title: title, detail: detail))
+        window.contentView = NSHostingView(rootView: CompileHUD(title: title, detail: detail).themed())
         window.center()
         window.orderFrontRegardless()
         compileHUD = window
@@ -876,7 +895,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         let root = RootPresenterView(
             onOpen: { [weak self] in self?.openDocument(nil) },
             onOpenURL: { [weak self] url in self?.load(url: url) }
-        ).environmentObject(state)
+        ).environmentObject(state).themed()
 
         let presenter = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 1280, height: 820),
@@ -1091,6 +1110,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
 extension Notification.Name {
     /// Posted by Settings when the "show menu bar icon" preference changes.
     static let statusItemPrefChanged = Notification.Name("statusItemPrefChanged")
+    /// Settings → Appearance switched between Night and Paper.
+    static let appearancePrefChanged = Notification.Name("appearancePrefChanged")
     /// Posted by Settings when the "run in background" preference changes.
     static let backgroundModePrefChanged = Notification.Name("backgroundModePrefChanged")
     /// Posted when the audience full-screen/windowed preference changes.
