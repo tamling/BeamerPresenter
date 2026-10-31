@@ -4,7 +4,7 @@ weights the app's `Font` helper references, writing them into both the iOS and
 macOS font folders. Run once (needs network + fonttools):
 
     pip install fonttools brotli
-    python3 tools/make_fonts.py
+    python3 Tools/make_fonts.py
 
 Typefaces (SIL OFL): Space Grotesk, IBM Plex Sans, JetBrains Mono.
 """

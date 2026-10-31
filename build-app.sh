@@ -20,6 +20,18 @@ CONFIG="release"
 ARCHS="${ARCHS:-arm64}"               # space-separated; add x86_64 for Intel
 SIGN_IDENTITY="${1:-}"
 
+# An incomplete download (a ZIP that failed to expand, or the wrong folder)
+# otherwise fails deep inside SwiftPM with a confusing manifest error.
+for required in Package.swift Sources/BeamerPresenter Resources/Info.plist; do
+    [ -e "$required" ] && continue
+    echo "✗ $required is missing from $(pwd)" >&2
+    echo >&2
+    echo "  This copy of the sources is incomplete. Get a clean one with:" >&2
+    echo "      git clone https://github.com/tamling/BeamerPresenter.git" >&2
+    echo "  (or re-download the ZIP and expand it into an empty folder)." >&2
+    exit 1
+done
+
 # A universal (multi-arch) build uses Xcode's build system (xcbuild), which is
 # only in the full Xcode — not the standalone Command Line Tools. If xcode-select
 # points at the CLT, fall back to the host's native arch with a clear hint.

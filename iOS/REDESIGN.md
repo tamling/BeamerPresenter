@@ -42,7 +42,7 @@ tactile keys, mono labels, a single electric-lime signal. Reference mock:
   SIL OFL) are bundled in `iOS/BeamerPresenter/Fonts/` and `Resources/Fonts/`,
   registered via `UIAppFonts` (iOS) and `ATSApplicationFontsPath = Fonts`
   (macOS, copied by `build-app.sh`). Regenerate the exact static weights with
-  `python3 tools/make_fonts.py`. (`swift run` dev builds without the .app bundle
+  `python3 Tools/make_fonts.py`. (`swift run` dev builds without the .app bundle
   fall back to system fonts.)
 - The chrome never recolours slide content — the deck stays as authored. The
   whiteboard is dark while presenting (presenter + audience) but exports light
