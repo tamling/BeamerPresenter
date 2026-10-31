@@ -5,6 +5,7 @@ import SwiftUI
 struct OverviewGrid: View {
     @EnvironmentObject var state: PresentationState
     @AppStorage(Prefs.doubleClickSlides) private var doubleClick = false
+    @ObservedObject private var chrome = WindowChrome.shared
     private let columns = [GridItem(.adaptive(minimum: 200), spacing: 16)]
 
     var body: some View {
@@ -24,6 +25,8 @@ struct OverviewGrid: View {
                 .keyboardShortcut(.cancelAction)
             }
             .padding(20)
+            // Clear the traffic lights floating over this full-window overlay.
+            .padding(.top, chrome.titlebarHeight)
 
             ScrollView {
                 LazyVGrid(columns: columns, spacing: 18) {
