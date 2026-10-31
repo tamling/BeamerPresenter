@@ -3,3 +3,5 @@ build/
 # Generated from Resources/AppIcon.iconset by make-icon.sh / build-app.sh
 Resources/BeamerPresenter.icns
 .DS_Store
+__pycache__/
+*.pyc

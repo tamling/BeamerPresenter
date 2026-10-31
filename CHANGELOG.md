@@ -1,5 +1,16 @@
 # Changelog
 
+## v6.3 — 2026-10-31
+
+- **Fixed a macOS-hostile case collision**: the repo carried both `Tools/` and
+  `tools/`, which merge into one folder on case-insensitive filesystems (the
+  default on macOS) and can break checkouts and ZIP extraction.
+  `make_fonts.py` moved into `Tools/`; a stale `__pycache__` is gone and
+  Python caches are now ignored.
+- `build-app.sh` checks that `Package.swift`, `Sources/` and `Info.plist` are
+  present and explains how to get a clean copy, instead of failing with
+  SwiftPM's "package manifest cannot be accessed".
+
 ## v6.2 — 2026-10-31
 
 - **Unified window look** (macOS): the grey system title bar is gone — the
