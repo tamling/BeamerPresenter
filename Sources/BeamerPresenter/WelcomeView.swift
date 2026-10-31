@@ -17,12 +17,16 @@ struct WelcomeView: View {
     @State private var latexEngine: String?
     @State private var hasLibreOffice = false
     @State private var checkedDeps = false
+    @ObservedObject private var chrome = WindowChrome.shared
 
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 0) {
                 sidebarBranding
                     .padding(30)
+                    // Clear the traffic lights floating over the top-left
+                    // corner (no system title bar any more).
+                    .padding(.top, chrome.titlebarHeight)
                     .frame(width: 404)
                 Rectangle().fill(Theme.hairline).frame(width: 1)
                 library
@@ -123,7 +127,7 @@ struct WelcomeView: View {
     /// scroll bar: resize the window and more entries appear.
     private var library: some View {
         GeometryReader { geo in
-            let layout = libraryLayout(for: geo.size.height)
+            let layout = libraryLayout(for: geo.size.height - chrome.titlebarHeight)
             VStack(alignment: .leading, spacing: 26) {
                 VStack(alignment: .leading, spacing: 12) {
                     sectionHeader("Favorite Folders") {
@@ -173,6 +177,9 @@ struct WelcomeView: View {
                 Spacer(minLength: 0)
             }
             .padding(28)
+            // Line the section headers up with the sidebar, which sits below
+            // the traffic lights.
+            .padding(.top, chrome.titlebarHeight)
         }
         .background(Theme.base)
     }

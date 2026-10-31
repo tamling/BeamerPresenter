@@ -240,6 +240,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         state.saveScratch()
     }
 
+    // In full screen macOS hides the traffic lights, so the views stop
+    // reserving room for them.
+    func windowDidEnterFullScreen(_ notification: Notification) {
+        guard (notification.object as? NSWindow) === presenterWindow else { return }
+        WindowChrome.shared.setFullScreen(true)
+    }
+
+    func windowDidExitFullScreen(_ notification: Notification) {
+        guard (notification.object as? NSWindow) === presenterWindow else { return }
+        WindowChrome.shared.setFullScreen(false)
+    }
+
     /// The red button confirms, optionally saves, and hides to the menu bar
     /// instead of closing — the app keeps running there.
     func windowShouldClose(_ sender: NSWindow) -> Bool {
@@ -903,6 +915,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             backing: .buffered, defer: false)
         presenter.title = "BeamerPresenter"
         presenter.isReleasedWhenClosed = false   // we hold a strong ref; avoid an ARC over-release crash
+        // Unified look: no grey title bar strip — the console runs to the
+        // window's top edge and the traffic lights float over it. The matching
+        // background keeps resizes from flashing the system grey.
+        WindowChrome.unify(presenter)
+        presenter.backgroundColor = NSColor(red: 0x15 / 255.0, green: 0x17 / 255.0,
+                                            blue: 0x1C / 255.0, alpha: 1)   // Theme.base
         // The AppKit drop catcher wraps the SwiftUI content so files can be
         // dropped anywhere on the window (SwiftUI's own drop zone still
         // highlights; this catches everything that would fall through).
@@ -948,7 +966,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             audience.collectionBehavior = [.fullScreenAuxiliary, .canJoinAllSpaces]
         } else {
             // A normal, resizable window whose green button enters real macOS
-            // full screen (not just zoom/maximise).
+            // full screen (not just zoom/maximise). No title bar strip, so the
+            // slide reaches the window's top edge on the projector too.
+            WindowChrome.unify(audience)
+            audience.backgroundColor = .black
             audience.collectionBehavior = [.fullScreenPrimary]
             audience.center()   // sensible spot on a single screen (positionWindows handles two)
         }

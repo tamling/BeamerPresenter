@@ -365,6 +365,7 @@ private extension Double {
 /// also live in the macOS menu bar (and on the keyboard).
 private struct ControlBar: View {
     @EnvironmentObject var state: PresentationState
+    @ObservedObject private var chrome = WindowChrome.shared
 
     @State private var now = Date()
     @State private var showCustomTarget = false
@@ -450,6 +451,9 @@ private struct ControlBar: View {
             }
         }
         .padding(.horizontal, 16)
+        // Start right of the traffic lights, which float over the bar now
+        // that the window has no separate title bar (0 in full screen).
+        .padding(.leading, chrome.trafficLightInset)
         .frame(height: 66)
         .background(Theme.raised)
         .overlay(alignment: .bottom) { Rectangle().fill(Theme.hairline).frame(height: 1) }

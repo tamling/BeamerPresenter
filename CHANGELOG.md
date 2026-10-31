@@ -1,5 +1,14 @@
 # Changelog
 
+## v6.2 — 2026-10-31
+
+- **Unified window look** (macOS): the grey system title bar is gone — the
+  console, home screen and audience window run all the way to the window's
+  top edge, with the traffic lights floating over the content the way Safari,
+  Vivaldi and the Claude app do. Views keep that corner clear (and reclaim
+  the room in full screen, where macOS hides the lights); the window
+  background matches the Night Console base so resizing never flashes grey.
+
 ## v6.1 — 2026-10-21
 
 - **Thumbnail-strip zoom as smooth as a window resize** (macOS + Linux):
