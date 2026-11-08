@@ -66,8 +66,12 @@ final class RemoteLink: NSObject, ObservableObject {
 
     // Remote side: the presenter we invited, and a counter so a stale timeout
     // task cannot flag a later attempt as failed.
-    private var invitedPeer: MCPeerID?
+    // Published so the view can disable "Connect" while an invitation is pending.
+    @Published private var invitedPeer: MCPeerID?
     private var inviteGeneration = 0
+
+    /// Remote side: an invitation is in flight — don't send another one.
+    var isInviting: Bool { invitedPeer != nil }
 
     init(role: Role) { self.role = role; super.init() }
 
@@ -146,6 +150,7 @@ final class RemoteLink: NSObject, ObservableObject {
             guard let self, !Task.isCancelled, self.isStarted else { return }
             self.lockedOut = false
             self.lockoutTask = nil
+            self.rotateCode()   // fresh code once the lockout ends
             self.startAdvertising()
         }
         return false
@@ -157,7 +162,9 @@ final class RemoteLink: NSObject, ObservableObject {
     /// The code is sent to that one peer only — never broadcast to every advertiser.
     func connect(to presenter: FoundPresenter, code: String) {
         let trimmed = code.trimmingCharacters(in: .whitespaces)
-        guard role == .remote, PairingCode.isWellFormed(trimmed),
+        // One invitation at a time: a duplicate would reach the presenter after it
+        // already rotated the code and count as a wrong attempt toward the lockout.
+        guard role == .remote, invitedPeer == nil, !connected, PairingCode.isWellFormed(trimmed),
               presenters.contains(where: { $0.peerID == presenter.peerID }) else { return }
         pairingFailed = false
         inviteGeneration &+= 1
@@ -174,6 +181,15 @@ final class RemoteLink: NSObject, ObservableObject {
         }
     }
 
+    /// Remote side: abandon a pending invitation (the user went back to the list).
+    func cancelPairing() {
+        guard role == .remote, let invited = invitedPeer else { return }
+        invitedPeer = nil
+        inviteGeneration &+= 1      // the pending timeout task must not flag a failure
+        pairingFailed = false
+        if !connected { session.cancelConnectPeer(invited) }
+    }
+
     // MARK: Sending
 
     func send(command: RemoteCommand) { send(.command(command)) }
@@ -182,10 +198,9 @@ final class RemoteLink: NSObject, ObservableObject {
         let s = state.sanitized()
         // If the note still does not fit (heavy JSON escaping), send the state
         // without it rather than leaving the remote on a stale slide and timer.
-        guard let data = RemotePacket.state(s).encoded() ?? {
-            var bare = s; bare.note = ""
-            return RemotePacket.state(bare).encoded()
-        }() else { return }
+        var bare = s
+        bare.note = ""
+        guard let data = RemotePacket.state(s).encoded() ?? RemotePacket.state(bare).encoded() else { return }
         send(data: data)
     }
 
@@ -242,8 +257,14 @@ extension RemoteLink: MCSessionDelegate {
         }
     }
 
-    nonisolated func session(_ s: MCSession, didReceive stream: InputStream, withName: String, fromPeer: MCPeerID) {}
-    nonisolated func session(_ s: MCSession, didStartReceivingResourceWithName: String, fromPeer: MCPeerID, with: Progress) {}
+    // The protocol uses data packets only. Refuse streams and resources, which
+    // would otherwise bypass the packet size cap (resources are spooled to disk).
+    nonisolated func session(_ s: MCSession, didReceive stream: InputStream, withName: String, fromPeer: MCPeerID) {
+        stream.close()
+    }
+    nonisolated func session(_ s: MCSession, didStartReceivingResourceWithName: String, fromPeer: MCPeerID, with progress: Progress) {
+        progress.cancel()
+    }
     nonisolated func session(_ s: MCSession, didFinishReceivingResourceWithName: String, fromPeer: MCPeerID, at: URL?, withError: Error?) {}
 }
 
@@ -265,12 +286,14 @@ extension RemoteLink: MCNearbyServiceBrowserDelegate {
                              withDiscoveryInfo info: [String: String]?) {
         Task { @MainActor in
             // List it for the user to pick — no automatic invitation.
-            let entry = FoundPresenter(peerID: peerID, name: peerID.displayName,
-                                       title: info?["title"].map { String($0.prefix(60)) })
+            let title = info?["title"].map { String($0.prefix(60)) }
             if let i = self.presenters.firstIndex(where: { $0.peerID == peerID }) {
-                self.presenters[i] = entry
+                // Re-discovery (Wi-Fi + Bluetooth) hands us an equal but distinct
+                // MCPeerID; keep the original so the entry's id stays stable.
+                let known = self.presenters[i].peerID
+                self.presenters[i] = FoundPresenter(peerID: known, name: known.displayName, title: title)
             } else {
-                self.presenters.append(entry)
+                self.presenters.append(FoundPresenter(peerID: peerID, name: peerID.displayName, title: title))
             }
         }
     }

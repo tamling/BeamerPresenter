@@ -102,9 +102,10 @@ fi
 
 if [ -n "$SIGN_IDENTITY" ]; then
     echo "▶︎ Codesigning with: $SIGN_IDENTITY"
-    # Self-signed identities can't get an Apple timestamp — fall back quietly.
+    # Self-signed identities can't get an Apple timestamp (and it needs the
+    # network) — fall back quietly without it, but keep the hardened runtime.
     codesign --force --options runtime --timestamp --sign "$SIGN_IDENTITY" "$APP" 2>/dev/null \
-        || codesign --force --sign "$SIGN_IDENTITY" "$APP"
+        || codesign --force --options runtime --sign "$SIGN_IDENTITY" "$APP"
     codesign --verify --verbose "$APP"
 else
     echo "▶︎ Codesigning ad-hoc (no identity found)."

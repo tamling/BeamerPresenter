@@ -18,6 +18,13 @@ targets:
     platform: iOS
     sources:
       - BeamerPresenter
+      # Foundation-only code shared with the macOS app (SwiftPM target
+      # BeamerCore); compiled straight into this app module, so no import.
+      - path: ../Sources/BeamerCore
+        group: BeamerCore
+        # Subprocess launcher (Foundation.Process) — unavailable on iOS.
+        excludes:
+          - SafeProcess.swift
     preBuildScripts:
       - name: Stamp build ID
         basedOnDependencyAnalysis: false

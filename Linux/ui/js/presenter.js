@@ -56,10 +56,26 @@
   const RECENTS_KEY = "recents";
   const RECENTS_MAX = 10;
   const CARDS_MAX = 3;   // up to here: rich cards; more: a compact list
-  const loadRecents = () => JSON.parse(localStorage.getItem(RECENTS_KEY) || "[]");
+  /// A JSON value from localStorage, or `fallback` if it's missing, corrupt or
+  /// of the wrong shape (a broken entry must not break the home screen).
+  function loadJSON(key, fallback, isValid) {
+    try {
+      const value = JSON.parse(localStorage.getItem(key));
+      return isValid(value) ? value : fallback;
+    } catch (e) {
+      return fallback;
+    }
+  }
+  function saveJSON(key, value) {
+    try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) {}
+  }
+
+  const loadRecents = () => loadJSON(RECENTS_KEY, [],
+    (v) => Array.isArray(v) && v.every((p) => typeof p === "string"));
   function addRecent(path) {
     const list = [path, ...loadRecents().filter((p) => p !== path)].slice(0, RECENTS_MAX);
-    localStorage.setItem(RECENTS_KEY, JSON.stringify(list));
+    saveJSON(RECENTS_KEY, list);
+    prunePositions(list);
   }
 
   function splitName(path) {
@@ -109,11 +125,82 @@
   // ---- Per-deck resume -----------------------------------------------------
 
   const POS_KEY = "lastSlideByPath";
-  const loadPositions = () => JSON.parse(localStorage.getItem(POS_KEY) || "{}");
+  const loadPositions = () => loadJSON(POS_KEY, {},
+    (v) => v !== null && typeof v === "object" && !Array.isArray(v));
   function savePosition(path, page) {
     const map = loadPositions();
     map[path] = page;
-    localStorage.setItem(POS_KEY, JSON.stringify(map));
+    saveJSON(POS_KEY, map);
+  }
+  // Only decks still in the recents list keep a resume position — the map
+  // would otherwise grow with every deck ever opened.
+  function prunePositions(recents) {
+    const map = loadPositions();
+    const kept = Object.fromEntries(
+      Object.entries(map).filter(([path]) => recents.includes(path)));
+    if (Object.keys(kept).length !== Object.keys(map).length) saveJSON(POS_KEY, kept);
+  }
+
+  // ---- Trust prompt (compiling runs the project's own build) ---------------
+
+  const TRUST_KEY = "trustedFolders";
+  const loadTrusted = () => loadJSON(TRUST_KEY, [],
+    (v) => Array.isArray(v) && v.every((p) => typeof p === "string"));
+  const folderOf = (path) => path.slice(0, path.lastIndexOf("/")) || "/";
+
+  const TRUST_TEXT = {
+    tex: {
+      title: "Compile this LaTeX project?",
+      detail: "LaTeX projects can contain build scripts — only compile projects you trust.",
+      confirm: "Compile"
+    },
+    office: {
+      title: "Convert this presentation with LibreOffice?",
+      detail: "Office files can contain macros and links to other files — only convert files you trust.",
+      confirm: "Convert"
+    }
+  };
+
+  let trustPending = false;   // a trust dialog is open
+
+  /// Asks before running LaTeX / LibreOffice on `path` (skipped for folders
+  /// the user chose to always trust). Resolves to true to go ahead. While a
+  /// dialog is open, further requests are declined — one answer must never
+  /// approve a file the user did not see.
+  function confirmTrust(kind, path) {
+    const folder = folderOf(path);
+    if (loadTrusted().includes(folder)) return Promise.resolve(true);
+    if (trustPending) return Promise.resolve(false);
+    trustPending = true;
+    const text = TRUST_TEXT[kind];
+    el("trust-title").textContent = text.title;
+    el("trust-detail").textContent = text.detail;
+    el("trust-file").textContent = path;
+    el("trust-ok").textContent = text.confirm;
+    el("trust-always").checked = false;
+    el("trust-dialog").style.display = "flex";
+    el("trust-cancel").focus();   // the safe choice is the default
+    return new Promise((resolve) => {
+      const finish = (ok) => {
+        trustPending = false;
+        el("trust-dialog").style.display = "none";
+        el("trust-ok").removeEventListener("click", onOk);
+        el("trust-cancel").removeEventListener("click", onCancel);
+        document.removeEventListener("keydown", onKey, true);
+        if (ok && el("trust-always").checked) {
+          saveJSON(TRUST_KEY, [...loadTrusted().filter((f) => f !== folder), folder]);
+        }
+        resolve(ok);
+      };
+      const onOk = () => finish(true);
+      const onCancel = () => finish(false);
+      const onKey = (e) => {
+        if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); finish(false); }
+      };
+      el("trust-ok").addEventListener("click", onOk);
+      el("trust-cancel").addEventListener("click", onCancel);
+      document.addEventListener("keydown", onKey, true);
+    });
   }
 
   // ---- Opening decks -------------------------------------------------------
@@ -132,9 +219,10 @@
   // conversion (mirrors the macOS open flow).
   async function openAny(path) {
     const lower = path.toLowerCase();
-    const viaSiblingOr = async (extRe, title, detail, command, arg) => {
+    const viaSiblingOr = async (extRe, kind, title, detail, command, arg) => {
       const sibling = path.replace(extRe, ".pdf");
       if (await invoke("file_exists", { path: sibling })) return openPDF(sibling);
+      if (!(await confirmTrust(kind, path))) return;
       hud(title, detail);
       const result = await invoke(command, arg);
       hideHud();
@@ -142,11 +230,11 @@
       hud(`Could not open ${path.split("/").pop()}`, result.log, true);
     };
     if (lower.endsWith(".tex")) {
-      return viaSiblingOr(/\.tex$/i, `Compiling ${path.split("/").pop()}…`,
+      return viaSiblingOr(/\.tex$/i, "tex", `Compiling ${path.split("/").pop()}…`,
         "Running LaTeX…", "compile_tex", { texPath: path });
     }
     if (/\.(pptx|ppt|odp)$/.test(lower)) {
-      return viaSiblingOr(/\.(pptx|ppt|odp)$/i, `Converting ${path.split("/").pop()}…`,
+      return viaSiblingOr(/\.(pptx|ppt|odp)$/i, "office", `Converting ${path.split("/").pop()}…`,
         "Using LibreOffice…", "convert_office", { path });
     }
     if (lower.endsWith(".pdf")) return openPDF(path);
@@ -155,6 +243,10 @@
 
   async function openPDF(path) {
     try {
+      // The asset protocol only serves folders granted here — the deck's own
+      // (which also holds any twin deck). Granted before the audience hears
+      // of the deck, since it loads through the same app-wide scope.
+      await invoke("grant_deck", { path });
       const info = await Slides.open(path);
       state.path = path;
       state.count = info.pageCount;
@@ -461,6 +553,7 @@
         if (candidate === path) continue;
         if (!(await invoke("file_exists", { path: candidate }))) continue;
         try {
+          await invoke("grant_deck", { path: candidate });   // same folder; cheap
           const info = await RefSlides.open(candidate);
           if (info.pageCount === state.count) {
             state.hasRef = true;
@@ -722,7 +815,7 @@
   listen("tauri://drag-drop", (event) => {
     el("dropzone").classList.remove("targeted");
     const paths = event.payload.paths || [];
-    if (paths.length > 0 && !state.path) openAny(paths[0]);
+    if (paths.length > 0 && !state.path && !trustPending) openAny(paths[0]);
   });
 
   // ---- Audience handshake --------------------------------------------------

@@ -2,11 +2,14 @@ import SwiftUI
 
 /// Turns this device (e.g. an iPhone) into a remote for a presenting iPad on the
 /// same Wi-Fi: big previous/next, the current slide number and speaker note, and
-/// black-out / timer controls — discovered and connected automatically.
+/// black-out / timer controls. Nearby iPads are listed; pick one, then enter
+/// the code it shows — the code only ever goes to the iPad you picked.
 struct RemoteView: View {
     @StateObject private var link = RemoteLink(role: .remote)
     @Environment(\.dismiss) private var dismiss
     @State private var code = ""
+    /// The presenter the user picked from the list; nil shows the list.
+    @State private var selected: RemoteLink.FoundPresenter?
 
     var body: some View {
         NavigationStack {
@@ -17,8 +20,10 @@ struct RemoteView: View {
                     } else {
                         waiting("Connecting…")
                     }
-                } else if link.foundPresenter {
-                    pairing
+                } else if let presenter = selected {
+                    pairing(presenter)
+                } else if !link.presenters.isEmpty {
+                    picker
                 } else {
                     searching
                 }
@@ -34,6 +39,17 @@ struct RemoteView: View {
         .preferredColorScheme(.dark)
         .onAppear { link.start() }
         .onDisappear { link.stop() }
+        // The picked iPad went away: back to the list.
+        .onChange(of: link.presenters.map(\.id)) { ids in
+            if let s = selected, !ids.contains(s.id) { link.cancelPairing(); selected = nil; code = "" }
+        }
+        .onChange(of: link.pairingFailed) { failed in
+            if failed { code = "" }
+        }
+        // The code is single-use on the iPad; never leave a spent one in the field.
+        .onChange(of: link.connected) { isConnected in
+            if isConnected { code = "" }
+        }
     }
 
     private var searching: some View {
@@ -59,18 +75,41 @@ struct RemoteView: View {
         .padding(40)
     }
 
-    /// Presenter found: ask for the 4-digit code shown on the iPad before connecting.
-    private var pairing: some View {
+    /// Presenters found: let the user pick which iPad to pair with.
+    private var picker: some View {
+        List(link.presenters) { p in
+            Button {
+                code = ""
+                selected = p
+            } label: {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(p.name).font(.headline)
+                    if let title = p.title, !title.isEmpty {
+                        Text(title).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
+                    }
+                }
+            }
+        }
+    }
+
+    /// Presenter picked: ask for the 6-digit code shown on that iPad before connecting.
+    private func pairing(_ presenter: RemoteLink.FoundPresenter) -> some View {
         VStack(spacing: 18) {
+            HStack {
+                Button { link.cancelPairing(); selected = nil; code = "" } label: {
+                    Label("Back", systemImage: "chevron.left")
+                }
+                Spacer()
+            }
             Spacer()
             Image(systemName: "lock.shield").font(.system(size: 40, weight: .semibold))
                 .foregroundStyle(Color.brand)
             Text("Enter pairing code").font(.headline)
-            Text("Type the 4-digit code shown on the iPad.")
+            Text("Type the 6-digit code shown on \(presenter.name).")
                 .font(.subheadline).foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
 
-            TextField("0000", text: $code)
+            TextField("000000", text: $code)
                 .keyboardType(.numberPad)
                 .textContentType(.oneTimeCode)
                 .multilineTextAlignment(.center)
@@ -79,28 +118,32 @@ struct RemoteView: View {
                 .padding(.vertical, 10)
                 .background(Color(white: 0.14), in: RoundedRectangle(cornerRadius: 12))
                 .onChange(of: code) { newValue in
-                    code = String(newValue.filter(\.isNumber).prefix(4))
-                    if code.count == 4 { link.connect(code: code) }
+                    let digits = String(newValue.filter { $0.isASCII && $0.isNumber }.prefix(PairingCode.length))
+                    // Rewriting the field re-runs onChange; connect only on the clean pass.
+                    guard digits == newValue else { code = digits; return }
+                    if digits.count == PairingCode.length { link.connect(to: presenter, code: digits) }
                 }
 
             if link.pairingFailed {
                 Text("Wrong code — try again.").font(.subheadline).foregroundStyle(.red)
             }
 
-            Button("Connect") { link.connect(code: code) }
+            Button("Connect") { link.connect(to: presenter, code: code) }
                 .buttonStyle(.borderedProminent)
-                .disabled(code.count != 4)
+                .disabled(code.count != PairingCode.length || link.isInviting)
             Spacer()
         }
         .padding(40)
     }
 
-    private func connected(_ s: PresenterState) -> some View {
-        VStack(spacing: 18) {
+    private func connected(_ state: PresenterState) -> some View {
+        // Clamp again here so the label math can never overflow or go out of range.
+        let s = state.sanitized()
+        return VStack(spacing: 18) {
             VStack(spacing: 4) {
                 Text(s.title.isEmpty ? "Presentation" : s.title)
                     .font(.headline).lineLimit(1)
-                Text("\(s.index + 1) / \(s.pageCount)")
+                Text(s.pageCount == 0 ? "– / –" : "\(s.index + 1) / \(s.pageCount)")
                     .font(.system(.largeTitle, design: .rounded).weight(.semibold).monospacedDigit())
             }
 

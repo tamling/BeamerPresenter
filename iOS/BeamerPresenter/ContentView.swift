@@ -347,6 +347,10 @@ struct PresenterView: View {
             }
             if presenterLink.connected {
                 Image(systemName: "iphone").foregroundStyle(Theme.statusOk)
+            } else if presenterLink.lockedOut {
+                // Too many wrong codes: pairing paused, a fresh code follows.
+                Label("Locked", systemImage: "lock.fill")
+                    .font(.subheadline).foregroundStyle(.secondary)
             } else if !presenterLink.pairingCode.isEmpty {
                 Label(presenterLink.pairingCode, systemImage: "lock")
                     .font(.subheadline.monospacedDigit()).foregroundStyle(.secondary)
@@ -547,7 +551,8 @@ struct PresenterView: View {
             .background(Theme.inset, in: RoundedRectangle(cornerRadius: 9))
             .overlay(RoundedRectangle(cornerRadius: 9).stroke(Theme.statusOk.opacity(0.5), lineWidth: 1))
         } else {
-            Text(presenterLink.pairingCode.isEmpty ? "––––" : presenterLink.pairingCode)
+            Text(presenterLink.lockedOut ? "Locked"
+                 : presenterLink.pairingCode.isEmpty ? "––––––" : presenterLink.pairingCode)
                 .font(.mono(15, bold: true)).foregroundStyle(Theme.textPrimary)
                 .lineLimit(1).fixedSize()
                 .padding(.horizontal, 11).frame(height: 36)

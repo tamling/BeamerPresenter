@@ -8,7 +8,7 @@ struct MentimeterView: View {
     @EnvironmentObject var state: PresentationState
     @StateObject private var browser = MentiBrowser()
     @State private var results = MentiResults.load()
-    @State private var recents = MentiLinks.load()
+    @State private var recents = MentimeterView.loadRecents()
 
     var body: some View {
         VStack(spacing: 0) {
@@ -46,8 +46,13 @@ struct MentimeterView: View {
             results = MentiResults.load()
         }
         .onReceive(NotificationCenter.default.publisher(for: MentiLinks.didChange)) { _ in
-            recents = MentiLinks.load()
+            recents = Self.loadRecents()
         }
+    }
+
+    /// Recent mentis, limited to Mentimeter's own hosts (older entries may not be).
+    private static func loadRecents() -> [MentiLink] {
+        MentiLinks.load().filter { MentiBrowser.isMentimeterURL($0.url) }
     }
 
     /// One-click relaunch of a recently presented menti.
@@ -64,7 +69,7 @@ struct MentimeterView: View {
                 }
                 Divider()
                 Button("Clear recents", role: .destructive) {
-                    recents.forEach { MentiLinks.remove($0.url) }
+                    MentiLinks.load().forEach { MentiLinks.remove($0.url) }   // hidden ones too
                 }
             }
         } label: {
@@ -114,7 +119,10 @@ struct MentimeterView: View {
                 Spacer()
                 Button {
                     if let url = browser.currentURL {
-                        MentiLinks.add(title: browser.pageTitle, url: url)
+                        // Only Mentimeter pages are remembered as recents.
+                        if MentiBrowser.isMentimeterURL(url) {
+                            MentiLinks.add(title: browser.pageTitle, url: url)
+                        }
                         state.startMenti(url)
                     }
                 } label: {

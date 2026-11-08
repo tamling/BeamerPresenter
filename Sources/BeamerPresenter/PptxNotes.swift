@@ -1,4 +1,5 @@
 import Foundation
+import BeamerCore
 
 /// Reads PowerPoint speaker notes straight from the `.pptx` next to a
 /// presentation (the file a converted PDF came from), so they show in the
@@ -40,25 +41,55 @@ enum PptxNotes {
 
     // MARK: - Unzip
 
-    /// Extracts the `ppt/` tree to a fresh temp folder using the system unzip.
+    private static let unzipTool = URL(fileURLWithPath: "/usr/bin/unzip")
+    /// Archives that would unpack to more than this are refused (zip bombs).
+    private static let maxUnpackedBytes: Int64 = 100 * 1024 * 1024
+    /// Extracted parts larger than this are not read.
+    private static let maxPartBytes = 5 * 1024 * 1024
+
+    /// Extracts the `ppt/` tree to a fresh temp folder using the system unzip,
+    /// after checking the archive's listed total size.
     private static func unzip(_ url: URL) -> URL? {
+        let listing = SafeProcess.run(executable: unzipTool, arguments: ["-l", url.path],
+                                      environment: nil, currentDirectory: nil, timeout: 30)
+        guard listing.launchError == nil, !listing.timedOut, listing.status == 0,
+              let total = totalUncompressedSize(listing: listing.output),
+              total <= maxUnpackedBytes else { return nil }
+
         let dir = FileManager.default.temporaryDirectory
             .appendingPathComponent("pptx-notes-\(UUID().uuidString)")
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/unzip")
-        process.arguments = ["-qq", "-o", url.path, "ppt/*", "-d", dir.path]
-        process.standardOutput = Pipe()
-        process.standardError = Pipe()
-        do {
-            try process.run()
-            process.waitUntilExit()
-        } catch { return nil }
+        let result = SafeProcess.run(executable: unzipTool,
+                                     arguments: ["-qq", "-o", url.path, "ppt/*", "-d", dir.path],
+                                     environment: nil, currentDirectory: nil, timeout: 30)
         // unzip exits 11 when no entry matched; anything but 0 means no notes.
-        return process.terminationStatus == 0 ? dir : nil
+        guard result.launchError == nil, !result.timedOut, result.status == 0 else {
+            try? FileManager.default.removeItem(at: dir)
+            return nil
+        }
+        return dir
     }
 
+    /// The total uncompressed size from `unzip -l` output: its last line reads
+    /// "<bytes>   <count> file(s)". `nil` when no such line is found.
+    static func totalUncompressedSize(listing: String) -> Int64? {
+        for line in listing.split(whereSeparator: \.isNewline).reversed() {
+            let fields = line.split(whereSeparator: { $0 == " " || $0 == "\t" })
+            guard fields.count >= 3, fields.last == "files" || fields.last == "file" else { continue }
+            return Int64(fields[0])
+        }
+        return nil
+    }
+
+    /// Reads an extracted part — skipping symlinks (a crafted archive could point
+    /// them anywhere), anything resolving outside `dir`, and oversized files.
     private static func read(_ dir: URL, _ relative: String) -> String? {
-        try? String(contentsOf: dir.appendingPathComponent(relative), encoding: .utf8)
+        let url = dir.appendingPathComponent(relative)
+        guard let values = try? url.resourceValues(forKeys: [.isSymbolicLinkKey, .fileSizeKey]),
+              values.isSymbolicLink != true,
+              (values.fileSize ?? 0) <= maxPartBytes else { return nil }
+        let root = dir.resolvingSymlinksInPath().path + "/"
+        guard url.resolvingSymlinksInPath().path.hasPrefix(root) else { return nil }
+        return try? String(contentsOf: url, encoding: .utf8)
     }
 
     // MARK: - OOXML parsing (regex-based, like the TexNotes reader)

@@ -74,6 +74,14 @@ final class MentiBrowser: NSObject, ObservableObject {
 
     /// The page currently shown — captured when presenting on the audience screen.
     var currentURL: URL? { webView.url }
+
+    /// `true` for https pages on mentimeter.com / menti.com (or a subdomain) —
+    /// only those are worth remembering as recent mentis. Navigation itself stays
+    /// unrestricted, since SSO logins pass through other hosts.
+    static func isMentimeterURL(_ url: URL) -> Bool {
+        guard url.scheme?.lowercased() == "https", let host = url.host?.lowercased() else { return false }
+        return ["mentimeter.com", "menti.com"].contains { host == $0 || host.hasSuffix("." + $0) }
+    }
 }
 
 // Route result exports (Excel/PDF "attachment" responses) to a download.
@@ -98,10 +106,21 @@ extension MentiBrowser: WKNavigationDelegate {
     }
 }
 
-// Ask where to save the export (defaulting to the deck's folder) and remember it.
+// Confirm the download (a page can start one on its own), then ask where to save
+// the export (defaulting to the deck's folder) and remember it.
 extension MentiBrowser: WKDownloadDelegate {
     func download(_ download: WKDownload, decideDestinationUsing response: URLResponse,
                   suggestedFilename: String, completionHandler: @escaping (URL?) -> Void) {
+        let alert = NSAlert()
+        alert.messageText = "Download “\(suggestedFilename)”?"
+        alert.informativeText = "\(response.url?.host ?? "This page") wants to save a file on your Mac."
+        alert.addButton(withTitle: "Save…")
+        alert.addButton(withTitle: "Cancel")
+        guard alert.runModal() == .alertFirstButtonReturn else {
+            completionHandler(nil)
+            return
+        }
+
         let panel = NSSavePanel()
         panel.nameFieldStringValue = suggestedFilename
         panel.canCreateDirectories = true
