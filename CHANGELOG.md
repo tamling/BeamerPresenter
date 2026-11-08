@@ -1,5 +1,59 @@
 # Changelog
 
+## v7.0 — 2026-11-08
+
+Security, pentest and usability audit — reports in `docs/SECURITY_REVIEW.md`,
+`docs/PENTEST.md` and `docs/USABILITY_REVIEW.md`.
+
+**Security (macOS, Linux, iPad)**
+- **Opening a `.tex` no longer runs it unasked.** The app asks before
+  compiling a LaTeX project or converting a PowerPoint/ODP file ("Always trust
+  this folder" is offered; on macOS never for Home, Downloads, Desktop or temp
+  folders). latexmk runs with `-norc` (a `latexmkrc` in the project can no
+  longer run code), all engines with `-no-shell-escape`, and TeX may only read
+  and write inside the project folder (`openin_any=p`, `openout_any=p`). On
+  macOS, symlinks that lead out of the project folder trigger an extra warning.
+  Note: `\input{../…}` and other files outside the deck's folder no longer
+  compile; the error explains why.
+- **Time limits**: LaTeX 3 min, LibreOffice 2 min, pptx unpacking 30 s, with
+  the whole process tree stopped on timeout; the macOS compile window has a
+  Cancel button. LibreOffice converts with a throwaway profile.
+- **iPad remote pairing**: 6-digit code that changes after every pairing and
+  after 5 wrong attempts (then a 30 s lock); the iPad stops advertising while a
+  remote is connected; the remote lists the presenters it finds and pairs only
+  with the one you pick. Packets over 64 KB are dropped and received states are
+  clamped, so a hostile device can't crash the remote.
+- **Linux**: a real Content-Security-Policy, file access only to the folder of
+  the deck you opened, 5 MB caps when reading notes, robust local storage.
+  Builds, conversions and `.pptx` notes run in the background, so the window
+  stays responsive (there is no Cancel button on Linux yet).
+- Settings › LaTeX & LibreOffice › **Forget All** resets the trusted folders
+  (macOS).
+- Size caps and no quadratic scans when reading `.tex` / `.pptx` notes; zip
+  bombs and symlinks in a `.pptx` are refused.
+- **No more data loss in `<deck>.notes.txt`**: a file that isn't UTF-8 is read
+  as Latin-1 and is never deleted.
+- Exports and saved notes can't overwrite the open deck; files are written via
+  a temporary file. Mentimeter asks before downloads.
+- `build-app.sh` keeps the hardened runtime in its signing fallback; CI builds
+  with read-only rights, publishes releases in a separate job, and pins all
+  actions to commit SHAs and the Tauri CLI to a fixed version.
+
+**Usability (macOS)**
+- `T` starts/stops the timer, `F` toggles the audience full screen.
+- When a deck opens blacked out, the timer starts when you first lift the
+  black screen, not at load.
+- Clearing the ink (`C`) can be undone with `Z`.
+- The notes pane names where notes come from (`.tex`, `.pptx`, split PDF).
+- Every console button shows its function and key as a tooltip.
+
+**Tests**
+- New Foundation-only library `BeamerCore` (notes parsing, safe process
+  runner, remote protocol) shared by macOS and iPad, with attack-simulation
+  tests; Rust tests for the Linux backend; Node tests for the notes escaping.
+  New `tests` CI workflow runs all three. `Tools/pentest.sh` prepares attack
+  fixtures to open in the app and checks the result.
+
 ## v6.3 — 2026-10-31
 
 - **Fixed a macOS-hostile case collision**: the repo carried both `Tools/` and

@@ -193,11 +193,13 @@ struct WelcomeView: View {
         (["Home", "End"], "First / last slide"),
         (["G"], "Slide overview"),
         (["B"], "Black audience screen"),
+        (["F"], "Audience full screen"),
         (["W"], "Whiteboard"),
         (["P"], "Pen"),
         (["L"], "Laser pointer"),
         (["Z"], "Undo stroke"),
         (["C"], "Clear strokes"),
+        (["T"], "Start / stop timer"),
         (["R"], "Reset timer"),
         (["E"], "Translated deck in console"),
         (["Esc"], "Close tool, board or overview"),
@@ -247,8 +249,8 @@ struct WelcomeView: View {
         -> (favorites: Int, recents: Int, rowHeight: CGFloat) {
         let baseRow: CGFloat = 80       // card (~72 pt) + 8 pt spacing
         // padding, headers, section gap, hint line — plus the shortcuts card
-        // (~7 rows + title) while it's shown.
-        let overhead: CGFloat = 170 + (showsShortcuts ? 320 : 0)
+        // (~8 rows + title) while it's shown.
+        let overhead: CGFloat = 170 + (showsShortcuts ? 354 : 0)
         let rows = max(2, Int((height - overhead) / baseRow))
         var fav = min(favorites.count, max(1, rows / 2))
         let rec = min(recents.count, rows - fav)

@@ -1,6 +1,14 @@
 use std::fs;
+use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
+use std::sync::{mpsc, Arc, Mutex};
+use std::thread;
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+
+/// Largest text file the frontend may read (.tex/.nav) and largest single
+/// .pptx entry we decompress — real decks are far below this.
+const MAX_TEXT_BYTES: u64 = 5 * 1024 * 1024;
 
 /// Reads a text file as UTF-8, falling back to Latin-1 (like the macOS app's
 /// TexNotes reader) so older .tex files still parse.
@@ -27,10 +35,33 @@ fn file_exists(path: String) -> bool {
     Path::new(&path).is_file()
 }
 
-/// Text of a file (for .tex / .nav parsing in the frontend); None if unreadable.
+/// Text of a file (for .tex / .nav parsing in the frontend); None if unreadable,
+/// not a regular file, or larger than `MAX_TEXT_BYTES`.
 #[tauri::command]
 fn read_text(path: String) -> Option<String> {
-    read_text_lossy(Path::new(&path))
+    let path = Path::new(&path);
+    let meta = fs::metadata(path).ok()?;
+    if !meta.is_file() || meta.len() > MAX_TEXT_BYTES {
+        return None;
+    }
+    read_text_lossy(path)
+}
+
+/// Lets the asset protocol serve the deck's folder (non-recursive) — the scope
+/// starts empty, so the webviews can only load decks the presenter opened.
+/// Twin decks (talk-en.pdf next to talk-no.pdf) sit in the same folder, so one
+/// grant covers both. The scope is app-wide: the audience window shares it.
+#[tauri::command]
+fn grant_deck(app: tauri::AppHandle, path: String) -> Result<(), String> {
+    let deck = Path::new(&path);
+    if !deck.is_absolute() || !deck.is_file() {
+        return Err(format!("Not a file: {path}"));
+    }
+    let dir = deck.parent().ok_or_else(|| format!("No parent folder: {path}"))?;
+    let scope = app.asset_protocol_scope();
+    scope.allow_directory(dir, false).map_err(|e| e.to_string())?;
+    // `*` skips dotfiles on Unix; allow the deck itself explicitly as well.
+    scope.allow_file(deck).map_err(|e| e.to_string())
 }
 
 /// The .tex files worth trying for `\note{}` extraction: same base name first,
@@ -65,22 +96,52 @@ pub struct CompileResult {
     pub log: String,
 }
 
+/// LaTeX tools in order of preference.
+const LATEX_ENGINES: [&str; 4] = ["latexmk", "pdflatex", "xelatex", "lualatex"];
+
+/// Wall-clock limits: a runaway document (or an endless latexmk loop) must
+/// not hang the app.
+const LATEX_TIMEOUT: Duration = Duration::from_secs(180);
+const OFFICE_TIMEOUT: Duration = Duration::from_secs(120);
+
+/// Child output kept for the error log — only its tail is shown anyway.
+const LOG_CAP: usize = 64 * 1024;
+
+/// Command-line flags per LaTeX tool. `-norc` keeps latexmk from running a
+/// `latexmkrc` (Perl) shipped inside the project; shell escape is off for all.
+fn engine_args(engine: &str) -> &'static [&'static str] {
+    if engine == "latexmk" {
+        &["-norc", "-pdf", "-interaction=nonstopmode", "-halt-on-error", "-no-shell-escape"]
+    } else {
+        &["-no-shell-escape", "-interaction=nonstopmode", "-halt-on-error"]
+    }
+}
+
+/// kpathsea overrides (env beats texmf.cnf): TeX may only read and write
+/// files in the project folder and below (plus its own trees), and never
+/// runs shell commands — even if a texmf.cnf says otherwise.
+fn tex_env() -> [(&'static str, &'static str); 3] {
+    [("openin_any", "p"), ("openout_any", "p"), ("shell_escape", "f")]
+}
+
+/// The main file as TeX gets it: relative to its folder (the working
+/// directory), because paranoid mode refuses absolute input names — even the
+/// main file's. The `./` keeps a name like `-draft.tex` from parsing as a flag.
+fn latex_input(tex: &Path) -> Option<PathBuf> {
+    tex.file_name().map(|name| Path::new(".").join(name))
+}
+
 /// Compiles a .tex next to itself using the first LaTeX tool found
 /// (latexmk → pdflatex → xelatex → lualatex). Returns the sibling PDF path.
-#[tauri::command]
-fn compile_tex(tex_path: String) -> CompileResult {
+fn compile_tex_blocking(tex_path: String) -> CompileResult {
     let tex = PathBuf::from(&tex_path);
     let dir = tex.parent().unwrap_or(Path::new("."));
-    let engines: [(&str, &[&str]); 4] = [
-        ("latexmk", &["-pdf", "-interaction=nonstopmode", "-halt-on-error"]),
-        ("pdflatex", &["-interaction=nonstopmode", "-halt-on-error"]),
-        ("xelatex", &["-interaction=nonstopmode", "-halt-on-error"]),
-        ("lualatex", &["-interaction=nonstopmode", "-halt-on-error"]),
-    ];
-    let Some((engine, args)) = engines
-        .iter()
-        .find(|(name, _)| which(name).is_some())
-        .copied()
+    let Some(input) = latex_input(&tex) else {
+        return CompileResult { ok: false, pdf_path: None, log: "Not a file path.".into() };
+    };
+    let Some(engine) = LATEX_ENGINES
+        .into_iter()
+        .find(|name| which(name).is_some())
     else {
         return CompileResult {
             ok: false,
@@ -93,30 +154,47 @@ fn compile_tex(tex_path: String) -> CompileResult {
     let passes = if engine == "latexmk" { 1 } else { 2 };
     let mut log = String::new();
     for _ in 0..passes {
-        match Command::new(engine).args(args).arg(&tex).current_dir(dir).output() {
-            Ok(out) => {
-                log = String::from_utf8_lossy(&out.stdout).into_owned()
-                    + &String::from_utf8_lossy(&out.stderr);
-                if !out.status.success() {
-                    return CompileResult { ok: false, pdf_path: None, log: tail(&log, 40) };
+        let mut cmd = Command::new(engine);
+        cmd.args(engine_args(engine))
+            .arg(&input)
+            .current_dir(dir)
+            .envs(tex_env())
+            .env_remove("TEXMFOUTPUT"); // would re-allow absolute paths below it
+        match run_capped(cmd, LATEX_TIMEOUT) {
+            Ok((ok, out)) => {
+                log = out;
+                if !ok {
+                    return CompileResult { ok: false, pdf_path: None, log: latex_failure_log(&log) };
                 }
             }
-            Err(e) => {
-                return CompileResult { ok: false, pdf_path: None, log: e.to_string() };
-            }
+            Err(e) => return CompileResult { ok: false, pdf_path: None, log: e },
         }
     }
     let pdf = tex.with_extension("pdf");
     if pdf.is_file() {
         CompileResult { ok: true, pdf_path: Some(pdf.to_string_lossy().into_owned()), log: String::new() }
     } else {
-        CompileResult { ok: false, pdf_path: None, log: tail(&log, 40) }
+        CompileResult { ok: false, pdf_path: None, log: latex_failure_log(&log) }
+    }
+}
+
+/// Shown above the log when kpathsea's paranoid mode refused a file — the
+/// usual cause is a shared preamble or figure in a sibling folder.
+const PARANOID_HINT: &str = "BeamerPresenter only lets LaTeX read and write files in the deck's folder and below — \\input{../…} or \\includegraphics{../…} is refused. Move those files into the deck's folder, or compile the deck yourself and open the PDF.";
+
+/// The tail of a failed LaTeX run, with an explanation first when the
+/// failure came from the folder restriction (`tex_env`).
+fn latex_failure_log(log: &str) -> String {
+    let out = tail(log, 40);
+    if log.contains("openin_any = p") || log.contains("openout_any = p") {
+        format!("{PARANOID_HINT}\n\n{out}")
+    } else {
+        out
     }
 }
 
 /// Converts a PowerPoint/ODP to a sibling PDF via headless LibreOffice.
-#[tauri::command]
-fn convert_office(path: String) -> CompileResult {
+fn convert_office_blocking(path: String) -> CompileResult {
     let source = PathBuf::from(&path);
     let dir = source.parent().unwrap_or(Path::new("."));
     let Some(soffice) = office_binary() else {
@@ -126,24 +204,127 @@ fn convert_office(path: String) -> CompileResult {
             log: "LibreOffice not found — install it (e.g. libreoffice-impress) to open .pptx.".into(),
         };
     };
-    match Command::new(soffice)
+    // A throwaway profile: the user's own (macro trust settings, trusted
+    // locations, a running instance that would take the job) stays out of it.
+    let nanos = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
+    let profile = std::env::temp_dir()
+        .join(format!("beamerpresenter-lo-{}-{nanos}", std::process::id()));
+    let mut cmd = Command::new(soffice);
+    cmd.arg(format!("-env:UserInstallation={}", file_url(&profile)))
         .args(["--headless", "--convert-to", "pdf", "--outdir"])
         .arg(dir)
-        .arg(&source)
-        .output()
-    {
-        Ok(out) => {
+        .arg(&source);
+    let result = run_capped(cmd, OFFICE_TIMEOUT);
+    let _ = fs::remove_dir_all(&profile);
+    match result {
+        Ok((ok, log)) => {
             let pdf = source.with_extension("pdf");
-            if out.status.success() && pdf.is_file() {
+            if ok && pdf.is_file() {
                 CompileResult { ok: true, pdf_path: Some(pdf.to_string_lossy().into_owned()), log: String::new() }
             } else {
-                let log = String::from_utf8_lossy(&out.stdout).into_owned()
-                    + &String::from_utf8_lossy(&out.stderr);
                 CompileResult { ok: false, pdf_path: None, log: tail(&log, 40) }
             }
         }
-        Err(e) => CompileResult { ok: false, pdf_path: None, log: e.to_string() },
+        Err(e) => CompileResult { ok: false, pdf_path: None, log: e },
     }
+}
+
+/// `file://` URL for a local path, percent-encoding everything but the
+/// unreserved characters and `/` (LibreOffice wants a URL, not a path).
+fn file_url(path: &Path) -> String {
+    let mut url = String::from("file://");
+    for &b in path.to_string_lossy().as_bytes() {
+        if b.is_ascii_alphanumeric() || b"/-._~".contains(&b) {
+            url.push(b as char);
+        } else {
+            url.push_str(&format!("%{b:02X}"));
+        }
+    }
+    url
+}
+
+/// Runs `cmd` with stdin closed and returns `(exited successfully, output)`.
+/// Only the last `LOG_CAP` bytes of stdout+stderr are kept, and the command
+/// (with everything it spawned) is killed once `timeout` has passed.
+fn run_capped(mut cmd: Command, timeout: Duration) -> Result<(bool, String), String> {
+    cmd.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
+    // Own process group, so a timeout also kills pdflatex under latexmk or
+    // soffice.bin under the soffice wrapper.
+    #[cfg(unix)]
+    std::os::unix::process::CommandExt::process_group(&mut cmd, 0);
+    let mut child = cmd.spawn().map_err(|e| e.to_string())?;
+
+    let buffer = Arc::new(Mutex::new(Vec::<u8>::new()));
+    let (done_tx, done_rx) = mpsc::channel::<()>();
+    let pipes: [Option<Box<dyn Read + Send>>; 2] = [
+        child.stdout.take().map(|p| Box::new(p) as Box<dyn Read + Send>),
+        child.stderr.take().map(|p| Box::new(p) as Box<dyn Read + Send>),
+    ];
+    let mut readers = 0;
+    for mut pipe in pipes.into_iter().flatten() {
+        let buffer = Arc::clone(&buffer);
+        let done_tx = done_tx.clone();
+        readers += 1;
+        thread::spawn(move || {
+            let mut chunk = [0u8; 8192];
+            while let Ok(n) = pipe.read(&mut chunk) {
+                if n == 0 {
+                    break;
+                }
+                let mut buf = buffer.lock().unwrap();
+                buf.extend_from_slice(&chunk[..n]);
+                if buf.len() > LOG_CAP {
+                    let excess = buf.len() - LOG_CAP;
+                    buf.drain(..excess);
+                }
+            }
+            let _ = done_tx.send(());
+        });
+    }
+    drop(done_tx);
+
+    let deadline = Instant::now() + timeout;
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break Some(status),
+            Ok(None) if Instant::now() < deadline => thread::sleep(Duration::from_millis(50)),
+            Ok(None) => {
+                kill_tree(&mut child);
+                break None;
+            }
+            Err(e) => {
+                kill_tree(&mut child);
+                return Err(e.to_string());
+            }
+        }
+    };
+    // Collect the rest of the output, but don't hang on a straggler that
+    // inherited the pipes and keeps them open.
+    for _ in 0..readers {
+        if done_rx.recv_timeout(Duration::from_secs(2)).is_err() {
+            break;
+        }
+    }
+    let mut log = String::from_utf8_lossy(&buffer.lock().unwrap()).into_owned();
+    match status {
+        Some(status) => Ok((status.success(), log)),
+        None => {
+            log.push_str(&format!("\n[timed out after {} s]", timeout.as_secs()));
+            Ok((false, log))
+        }
+    }
+}
+
+/// Kills a `run_capped` child and its process group, then reaps it.
+fn kill_tree(child: &mut std::process::Child) {
+    #[cfg(unix)]
+    let _ = Command::new("kill")
+        .args(["-KILL", "--", &format!("-{}", child.id())])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status();
+    let _ = child.kill();
+    let _ = child.wait();
 }
 
 /// Which LibreOffice binary (if any) is installed — shown on the home screen.
@@ -161,7 +342,7 @@ fn office_binary() -> Option<&'static str> {
 /// Which LaTeX engine (if any) is installed — shown on the home screen.
 #[tauri::command]
 fn latex_engine() -> Option<String> {
-    ["latexmk", "pdflatex", "xelatex", "lualatex"]
+    LATEX_ENGINES
         .iter()
         .find(|name| which(name).is_some())
         .map(|s| s.to_string())
@@ -190,8 +371,7 @@ fn tail(s: &str, lines: usize) -> String {
 
 /// Speaker notes per slide (in presentation order, "" where a slide has none)
 /// for the .pptx with the same base name as the given PDF.
-#[tauri::command]
-fn pptx_notes(pdf_path: String) -> Vec<String> {
+fn pptx_notes_blocking(pdf_path: String) -> Vec<String> {
     let pptx = PathBuf::from(&pdf_path).with_extension("pptx");
     let Ok(file) = fs::File::open(&pptx) else { return vec![] };
     let Ok(mut archive) = zip::ZipArchive::new(file) else { return vec![] };
@@ -224,11 +404,15 @@ fn pptx_notes(pdf_path: String) -> Vec<String> {
         .collect()
 }
 
+/// A ZIP entry as text; None if missing, not UTF-8, or (declared) larger than
+/// `MAX_TEXT_BYTES` — `take` also caps entries that lie about their size.
 fn zip_text(archive: &mut zip::ZipArchive<fs::File>, name: &str) -> Option<String> {
-    use std::io::Read;
-    let mut entry = archive.by_name(name).ok()?;
+    let entry = archive.by_name(name).ok()?;
+    if entry.size() > MAX_TEXT_BYTES {
+        return None;
+    }
     let mut s = String::new();
-    entry.read_to_string(&mut s).ok()?;
+    entry.take(MAX_TEXT_BYTES).read_to_string(&mut s).ok()?;
     Some(s)
 }
 
@@ -345,6 +529,91 @@ mod tests {
     use super::*;
     use std::io::Write;
 
+    #[test]
+    fn latexmk_ignores_rc_files_and_shell_escape() {
+        assert_eq!(
+            engine_args("latexmk"),
+            ["-norc", "-pdf", "-interaction=nonstopmode", "-halt-on-error", "-no-shell-escape"]
+        );
+    }
+
+    #[test]
+    fn every_engine_disables_shell_escape() {
+        for engine in ["pdflatex", "xelatex", "lualatex"] {
+            assert_eq!(
+                engine_args(engine),
+                ["-no-shell-escape", "-interaction=nonstopmode", "-halt-on-error"]
+            );
+        }
+        for engine in LATEX_ENGINES {
+            assert!(engine_args(engine).contains(&"-no-shell-escape"), "{engine}");
+        }
+    }
+
+    #[test]
+    fn tex_runs_are_paranoid() {
+        let env: std::collections::HashMap<_, _> = tex_env().into_iter().collect();
+        assert_eq!(env.len(), 3);
+        assert_eq!(env["openin_any"], "p");
+        assert_eq!(env["openout_any"], "p");
+        assert_eq!(env["shell_escape"], "f");
+    }
+
+    #[test]
+    fn paranoid_refusals_get_a_hint() {
+        let refused = "x\npdflatex: Not reading from ../common/preamble.tex (openin_any = p).\n! Emergency stop.";
+        assert!(latex_failure_log(refused).starts_with(PARANOID_HINT));
+        assert!(latex_failure_log(refused).ends_with("! Emergency stop."));
+        assert_eq!(latex_failure_log("! Undefined control sequence."), "! Undefined control sequence.");
+    }
+
+    #[test]
+    fn latex_input_is_relative_to_the_project() {
+        assert_eq!(latex_input(Path::new("/home/a/talk.tex")), Some(PathBuf::from("./talk.tex")));
+        assert_eq!(latex_input(Path::new("/x/-draft.tex")), Some(PathBuf::from("./-draft.tex")));
+        assert_eq!(latex_input(Path::new("/")), None);
+    }
+
+    #[test]
+    fn file_url_percent_encodes() {
+        assert_eq!(file_url(Path::new("/tmp/a b/ä")), "file:///tmp/a%20b/%C3%A4");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn run_capped_collects_output() {
+        let mut cmd = Command::new("sh");
+        cmd.args(["-c", "echo out; echo err >&2"]);
+        let (ok, log) = run_capped(cmd, Duration::from_secs(10)).unwrap();
+        assert!(ok);
+        assert!(log.contains("out") && log.contains("err"), "{log}");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn run_capped_keeps_only_the_tail() {
+        let mut cmd = Command::new("sh");
+        cmd.args(["-c", "head -c 200000 /dev/zero | tr '\\0' a; echo END"]);
+        let (ok, log) = run_capped(cmd, Duration::from_secs(10)).unwrap();
+        assert!(ok);
+        assert!(log.len() <= LOG_CAP);
+        assert!(log.ends_with("END\n"), "{}", &log[log.len().saturating_sub(20)..]);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn run_capped_kills_runaway_process_groups() {
+        // The background `sleep` inherits the pipes; only a group kill ends it.
+        let mut cmd = Command::new("sh");
+        cmd.args(["-c", "sleep 30 & sleep 30; echo never"]);
+        let started = Instant::now();
+        let (ok, log) = run_capped(cmd, Duration::from_millis(300)).unwrap();
+        assert!(!ok);
+        assert!(log.contains("timed out"), "{log}");
+        assert!(!log.contains("never"));
+        assert!(started.elapsed() < Duration::from_secs(2), "{:?}", started.elapsed());
+    }
+
     /// Builds a minimal two-slide .pptx (second slide reordered first, notes on
     /// one slide only) and checks the whole extraction chain.
     #[test]
@@ -368,7 +637,7 @@ mod tests {
         z.write_all(br#"<p:sp><p:ph type="sldImg"/></p:sp><p:sp><p:nvSpPr><p:ph type="body" idx="1"/></p:nvSpPr><p:txBody><a:p><a:r><a:t>Greet the </a:t></a:r><a:r><a:t>audience &amp; smile</a:t></a:r></a:p><a:p><a:r><a:t>Second line</a:t></a:r></a:p></p:txBody></p:sp>"#).unwrap();
         z.finish().unwrap();
 
-        let notes = pptx_notes(dir.join("deck.pdf").to_string_lossy().into_owned());
+        let notes = pptx_notes_blocking(dir.join("deck.pdf").to_string_lossy().into_owned());
         fs::remove_dir_all(&dir).ok();
 
         assert_eq!(notes.len(), 2);
@@ -377,12 +646,47 @@ mod tests {
     }
 }
 
+// The slow commands are async and do their work on the blocking pool: Tauri
+// runs plain (sync) commands on the main thread, so a 3-minute LaTeX build or
+// a big .pptx would freeze both windows for its whole duration.
+
+/// Runs `job` on Tauri's blocking pool; `fallback` if the task panics.
+async fn off_main<T: Send + 'static>(job: impl FnOnce() -> T + Send + 'static, fallback: T) -> T {
+    tauri::async_runtime::spawn_blocking(job).await.unwrap_or(fallback)
+}
+
+#[tauri::command]
+async fn compile_tex(tex_path: String) -> CompileResult {
+    let fallback = CompileResult {
+        ok: false,
+        pdf_path: None,
+        log: "The LaTeX build stopped unexpectedly.".into(),
+    };
+    off_main(move || compile_tex_blocking(tex_path), fallback).await
+}
+
+#[tauri::command]
+async fn convert_office(path: String) -> CompileResult {
+    let fallback = CompileResult {
+        ok: false,
+        pdf_path: None,
+        log: "The LibreOffice conversion stopped unexpectedly.".into(),
+    };
+    off_main(move || convert_office_blocking(path), fallback).await
+}
+
+#[tauri::command]
+async fn pptx_notes(pdf_path: String) -> Vec<String> {
+    off_main(move || pptx_notes_blocking(pdf_path), Vec::new()).await
+}
+
 pub fn run() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
             pick_file,
             file_exists,
             read_text,
+            grant_deck,
             tex_candidates,
             compile_tex,
             latex_engine,

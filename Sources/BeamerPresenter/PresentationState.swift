@@ -1,6 +1,7 @@
 import SwiftUI
 import PDFKit
 import Combine
+import BeamerCore
 
 /// Active drawing tool on the slide.
 enum Tool { case none, pen, laser }
@@ -50,10 +51,24 @@ enum SlidePositions {
     }
 }
 
+/// Where the current deck's speaker notes come from (shown in the console's
+/// notes placeholders).
+enum NotesSource: Equatable {
+    case none
+    case splitPDF                  // right half of a notes-layout PDF
+    case tex(fileName: String?)    // `\note{}` text; nil = the exact `.tex` is not known
+    case pptx(fileName: String)    // PowerPoint speaker notes
+}
+
 /// Single source of truth shared by both windows. A keypress or click mutates
 /// state here and the presenter + audience views update in lockstep.
 final class PresentationState: ObservableObject {
-    @Published private(set) var sourceURL: URL?          // the opened PDF on disk
+    @Published private(set) var sourceURL: URL? {        // the opened PDF on disk
+        didSet { Self.openDeckURL = sourceURL }
+    }
+    /// The deck open right now (app-wide), so exporters can refuse to write
+    /// over it even when a caller forgets to pass it.
+    private(set) static var openDeckURL: URL?
     @Published private(set) var slideDoc: PDFDocument?   // left half (or full page)
     @Published private(set) var notesDoc: PDFDocument?   // right half, nil for plain PDFs
 
@@ -64,6 +79,7 @@ final class PresentationState: ObservableObject {
     @Published var showReference = false
     var hasReference: Bool { referenceDoc != nil }
     @Published private(set) var textNotes: [Int: String] = [:]   // notes parsed from a sibling .tex
+    @Published private(set) var notesSource: NotesSource = .none
     @Published private(set) var pageCount: Int = 0
     @Published private(set) var isLoaded: Bool = false
 
@@ -74,7 +90,17 @@ final class PresentationState: ObservableObject {
     @Published private(set) var slideAspect: CGFloat = 16.0 / 9.0
 
     @Published var index: Int = 0
-    @Published var blackout: Bool = false
+    @Published var blackout: Bool = false {
+        didSet {
+            // A deck that opened blacked out starts its clock on the first
+            // un-blackout, i.e. when the talk actually begins.
+            if oldValue && !blackout && timerAwaitsUnblackout {
+                timerAwaitsUnblackout = false
+                startDate = Date()
+                timerRunning = true
+            }
+        }
+    }
     @Published var showOverview: Bool = false
     @Published var scratch: String = ""          // free-form notes, saved next to the PDF as .txt
 
@@ -82,6 +108,9 @@ final class PresentationState: ObservableObject {
     @Published private(set) var timerRunning = true
     @Published private(set) var startDate = Date()   // start of the current running segment
     private var accumulated: TimeInterval = 0        // time banked from previous segments
+    /// The deck opened blacked out and the timer waits for the first un-blackout.
+    /// Cleared once that happens, or as soon as the user starts/resets the timer.
+    private var timerAwaitsUnblackout = false
 
     /// Total elapsed presentation time, accounting for pauses.
     var elapsedSeconds: TimeInterval {
@@ -119,6 +148,9 @@ final class PresentationState: ObservableObject {
     @Published var tool: Tool = .none
     @Published var penColor: Color = .red
     @Published var strokes: [Int: [Stroke]] = [:] { didSet { hasUnsavedChanges = true } }
+    /// Ink removed by the last Clear, per slide: the next Undo on that slide
+    /// brings it all back, as long as nothing new was drawn there since.
+    private var clearedStrokes: [Int: [Stroke]] = [:]
     @Published var currentStroke: [CGPoint] = []
     @Published var laserPoint: CGPoint?
 
@@ -171,14 +203,25 @@ final class PresentationState: ObservableObject {
         // PowerPoint speaker notes from a sibling `.pptx` (converted decks).
         if split {
             textNotes = [:]
+            notesSource = .splitPDF
         } else {
             let tex = TexNotes.load(forPDF: url, pageCount: doc.pageCount)
-            textNotes = tex.isEmpty ? PptxNotes.load(forPDF: url, pageCount: doc.pageCount) : tex
+            if !tex.isEmpty {
+                textNotes = tex
+                // TexNotes may fall back to another `.tex` in the folder and
+                // doesn't say which one it used, so no file name is claimed.
+                notesSource = .tex(fileName: nil)
+            } else {
+                textNotes = PptxNotes.load(forPDF: url, pageCount: doc.pageCount)
+                notesSource = textNotes.isEmpty ? .none : .pptx(fileName:
+                    url.deletingPathExtension().appendingPathExtension("pptx").lastPathComponent)
+            }
         }
         title = url.deletingPathExtension().lastPathComponent
         loadScratch()
         thumbCache.removeAllObjects()
         strokes.removeAll()
+        clearedStrokes.removeAll()
         currentStroke = []
         laserPoint = nil
         tool = .none
@@ -198,12 +241,16 @@ final class PresentationState: ObservableObject {
         // Start blacked out (per Settings) only when starting fresh — when the
         // deck resumes mid-presentation, jump straight to the slide instead of
         // the clock screen.
+        timerAwaitsUnblackout = false   // (before touching blackout: no stale start)
         blackout = index == 0
             && (UserDefaults.standard.object(forKey: "startBlackedOut") as? Bool ?? true)
         showOverview = false
         accumulated = 0
-        timerRunning = true
         startDate = Date()
+        // Opening blacked out holds the timer until the talk starts (first
+        // un-blackout); otherwise it runs from the moment the deck is loaded.
+        timerRunning = !blackout
+        timerAwaitsUnblackout = blackout
         isLoaded = true
         hasUnsavedChanges = false   // a freshly loaded deck has nothing to save yet
         return true
@@ -219,10 +266,12 @@ final class PresentationState: ObservableObject {
         referenceDoc = nil
         showReference = false
         textNotes = [:]
+        notesSource = .none
         pageCount = 0
         title = ""
         thumbCache.removeAllObjects()
         strokes.removeAll()
+        clearedStrokes.removeAll()
         currentStroke = []
         laserPoint = nil
         tool = .none
@@ -231,6 +280,7 @@ final class PresentationState: ObservableObject {
         selectedItemID = nil
         boardStroke = []
         index = 0
+        timerAwaitsUnblackout = false
         blackout = false
         showOverview = false
         isLoaded = false
@@ -269,20 +319,59 @@ final class PresentationState: ObservableObject {
         sourceURL?.deletingPathExtension().appendingPathExtension("notes").appendingPathExtension("txt")
     }
 
+    /// The notes file existed when the deck was loaded (and was read).
+    private var scratchExisted = false
+    /// The notes file existed but could not be read — it is never written or removed.
+    private var scratchUnreadable = false
+    /// The app created the notes file in this session, so it may remove it again
+    /// once the notes are emptied. A file that existed before is never deleted.
+    private var scratchCreatedHere = false
+    /// Encoding the existing file was read with; saving keeps it when possible.
+    private var scratchEncoding: String.Encoding = .utf8
+
     private func loadScratch() {
-        if let url = scratchURL, let text = try? String(contentsOf: url, encoding: .utf8) {
-            scratch = text
-        } else {
-            scratch = ""
+        scratch = ""
+        scratchExisted = false
+        scratchUnreadable = false
+        scratchCreatedHere = false
+        scratchEncoding = .utf8
+        guard let url = scratchURL, FileManager.default.fileExists(atPath: url.path) else { return }
+        guard let data = try? Data(contentsOf: url) else {
+            scratchUnreadable = true
+            return
         }
+        if let text = String(data: data, encoding: .utf8) {
+            scratch = text
+        } else if let text = String(data: data, encoding: .isoLatin1) {   // older, non-UTF-8 notes
+            scratch = text
+            scratchEncoding = .isoLatin1
+        } else {
+            scratchUnreadable = true
+            return
+        }
+        scratchExisted = true
     }
 
     func saveScratch() {
-        guard let url = scratchURL else { return }
+        guard let url = scratchURL, !scratchUnreadable else { return }
+        let fm = FileManager.default
         if scratch.isEmpty {
-            try? FileManager.default.removeItem(at: url)
+            if scratchCreatedHere {
+                try? fm.removeItem(at: url)
+                scratchCreatedHere = false
+            } else if scratchExisted {
+                // The user cleared notes they had before: empty the file, keep it.
+                try? scratch.write(to: url, atomically: true, encoding: scratchEncoding)
+            }
         } else {
-            try? scratch.write(to: url, atomically: true, encoding: .utf8)
+            let existed = fm.fileExists(atPath: url.path)
+            var saved = (try? scratch.write(to: url, atomically: true, encoding: scratchEncoding)) != nil
+            if !saved, scratchEncoding != .utf8 {
+                // Text the original encoding can't hold is saved as UTF-8 instead.
+                saved = (try? scratch.write(to: url, atomically: true, encoding: .utf8)) != nil
+                if saved { scratchEncoding = .utf8 }
+            }
+            if saved && !existed && !scratchExisted { scratchCreatedHere = true }
         }
     }
 
@@ -316,12 +405,14 @@ final class PresentationState: ObservableObject {
     }
 
     func resetTimer() {
+        timerAwaitsUnblackout = false   // a manual reset overrides the auto-start
         accumulated = 0
         startDate = Date()
     }
 
     /// Pauses or resumes the elapsed timer.
     func toggleTimer() {
+        timerAwaitsUnblackout = false   // the user took over the timer
         if timerRunning {
             accumulated += Date().timeIntervalSince(startDate)
             timerRunning = false
@@ -346,6 +437,7 @@ final class PresentationState: ObservableObject {
         defer { currentStroke = [] }
         guard currentStroke.count > 1 else { return }
         strokes[index, default: []].append(Stroke(points: currentStroke, color: penColor, width: width))
+        clearedStrokes[index] = nil   // new ink: the cleared strokes can't come back
     }
 
     func setLaser(_ p: CGPoint?) { laserPoint = p }
@@ -354,6 +446,11 @@ final class PresentationState: ObservableObject {
     /// so the control bar and keyboard shortcuts work in both contexts.
     func undoStroke() {
         if activeBoardIndex != nil { boardUndo(); return }
+        // Right after a Clear, Undo restores everything it removed.
+        if let restored = clearedStrokes.removeValue(forKey: index) {
+            strokes[index] = restored
+            return
+        }
         guard var s = strokes[index], !s.isEmpty else { return }
         s.removeLast()
         strokes[index] = s.isEmpty ? nil : s
@@ -361,6 +458,7 @@ final class PresentationState: ObservableObject {
 
     func clearStrokes() {
         if activeBoardIndex != nil { boardClearInk(); return }
+        if let s = strokes[index], !s.isEmpty { clearedStrokes[index] = s }
         strokes[index] = nil
         currentStroke = []
     }
@@ -368,6 +466,11 @@ final class PresentationState: ObservableObject {
     var hasInkOnCurrentSlide: Bool {
         if let board = activeBoard { return !board.strokes.isEmpty }
         return !(strokes[index]?.isEmpty ?? true)
+    }
+
+    /// Undo has something to do: ink to remove, or a Clear on this slide to revert.
+    var canUndoInk: Bool {
+        hasInkOnCurrentSlide || (activeBoardIndex == nil && clearedStrokes[index] != nil)
     }
 
     // MARK: - Whiteboards

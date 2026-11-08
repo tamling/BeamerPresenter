@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 import Combine
 import UniformTypeIdentifiers
+import BeamerCore
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDelegate {
@@ -452,7 +453,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         case #selector(setPenColor(_:)):
             item.state = (item.representedObject as? Color) == state.penColor ? .on : .off
             return state.isLoaded
-        case #selector(undoInk(_:)), #selector(clearInk(_:)):
+        case #selector(undoInk(_:)):
+            // canUndoInk also covers restoring ink removed by Clear.
+            return state.isLoaded && state.canUndoInk
+        case #selector(clearInk(_:)):
             return state.isLoaded && state.hasInkOnCurrentSlide
 
         case #selector(nextBoard(_:)), #selector(previousBoard(_:)),
@@ -587,7 +591,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         panel.nameFieldStringValue = "\(state.title) annotated.pdf"
         panel.directoryURL = source.deletingLastPathComponent()
         panel.canCreateDirectories = true
-        guard panel.runModal() == .OK, let dest = panel.url else { return false }
+        guard panel.runModal() == .OK, let dest = panel.url,
+              BoardExporter.allowsDestination(dest, deck: source) else { return false }
 
         guard let summary = BoardExporter.exportPresentation(
                 sourceURL: source, split: state.notesDoc != nil, aspect: state.slideAspect,
@@ -622,7 +627,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         panel.allowedContentTypes = [.plainText]
         panel.nameFieldStringValue = "\(state.title.isEmpty ? "notes" : state.title) notes.txt"
         panel.canCreateDirectories = true
-        guard panel.runModal() == .OK, let url = panel.url else { return }
+        guard panel.runModal() == .OK, let url = panel.url,
+              BoardExporter.allowsDestination(url, deck: state.sourceURL) else { return }
         if (try? state.scratch.write(to: url, atomically: true, encoding: .utf8)) == nil {
             let alert = NSAlert()
             alert.messageText = "Could not save the notes"
@@ -732,8 +738,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         panel.allowedContentTypes = [.pdf]
         panel.nameFieldStringValue = "\(board.name).pdf"
         panel.canCreateDirectories = true
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        if !BoardExporter.writePDF(board: board, aspect: state.slideAspect, to: url) {
+        guard panel.runModal() == .OK, let url = panel.url,
+              BoardExporter.allowsDestination(url, deck: state.sourceURL) else { return }
+        if !BoardExporter.writePDF(board: board, aspect: state.slideAspect, to: url,
+                                   protecting: state.sourceURL) {
             let alert = NSAlert()
             alert.messageText = "Could not save the whiteboard"
             alert.informativeText = url.lastPathComponent
@@ -747,7 +755,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         panel.allowedContentTypes = [.pdf]
         panel.nameFieldStringValue = "\(state.title) + \(board.name).pdf"
         panel.canCreateDirectories = true
-        guard panel.runModal() == .OK, let dest = panel.url else { return }
+        guard panel.runModal() == .OK, let dest = panel.url,
+              BoardExporter.allowsDestination(dest, deck: source) else { return }
         if !BoardExporter.insertIntoCopy(of: source, board: board, afterIndex: state.index,
                                          aspect: state.slideAspect, to: dest) {
             let alert = NSAlert()
@@ -795,9 +804,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
 
     private func latexMaker(_ texURL: URL) {
         if let engine = Dependencies.latexEngine() {
+            guard confirmProjectLinks(for: texURL) else { return }
+            guard confirmBuild(
+                in: texURL, title: "Compile this LaTeX project?", button: "Compile",
+                info: { "There is no PDF next to “\(texURL.lastPathComponent)” yet. "
+                    + "BeamerPresenter can compile it with LaTeX in the folder\n\($0)\n\n"
+                    + "LaTeX projects can contain build scripts and can read or overwrite your files, "
+                    + "so only compile projects you trust." })
+            else { return }
             convertToPDF(texURL, title: "Compiling \(texURL.lastPathComponent)…",
                          detail: "Running LaTeX…",
-                         work: { Dependencies.compile(texURL: texURL, engine: engine) },
+                         work: { Dependencies.compile(texURL: texURL, engine: engine, cancel: $0) },
                          onFailure: { self.offerEditor(for: texURL, message: $0) })
         } else {
             offerEditor(for: texURL, message: "No PDF next to it and no LaTeX install found to compile it.")
@@ -806,9 +823,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
 
     private func libreOfficeMaker(_ url: URL) {
         if let soffice = Dependencies.soffice() {
+            guard confirmBuild(
+                in: url, title: "Convert with LibreOffice?", button: "Convert",
+                info: { "There is no PDF next to “\(url.lastPathComponent)” yet. "
+                    + "BeamerPresenter can convert it with LibreOffice, writing the PDF into the folder\n\($0)\n\n"
+                    + "Office documents are processed by LibreOffice on your Mac, so only convert files you trust." })
+            else { return }
             convertToPDF(url, title: "Converting \(url.lastPathComponent)…",
                          detail: "Using LibreOffice…",
-                         work: { Dependencies.convertToPDF(url, soffice: soffice) },
+                         work: { Dependencies.convertToPDF(url, soffice: soffice, cancel: $0) },
                          onFailure: { self.offerOpenDefault(for: url, message: $0) })
         } else {
             offerOpenDefault(for: url,
@@ -816,18 +839,102 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         }
     }
 
-    /// Shared compile/convert flow: HUD, run `work` off the main actor, then load
-    /// the PDF or report the failure.
+    /// UserDefaults key: folders whose LaTeX / LibreOffice builds the user chose
+    /// to always trust (standardized, symlink-resolved paths).
+    private static let trustedBuildFoldersKey = "trustedBuildFolders"
+
+    /// Drops every "Always trust this folder" choice (for a Settings control).
+    static func forgetTrustedBuildFolders() {
+        UserDefaults.standard.removeObject(forKey: trustedBuildFoldersKey)
+    }
+
+    /// Folders where downloaded or unpacked files land (Downloads, Desktop, the
+    /// temp folders, the home folder itself). Trusting one would wave through
+    /// every future project that ends up there, so they are never trusted.
+    private static func isSharedFolder(_ folder: String) -> Bool {
+        let fm = FileManager.default
+        func resolved(_ url: URL) -> String { url.standardizedFileURL.resolvingSymlinksInPath().path }
+        let home = resolved(fm.homeDirectoryForCurrentUser)
+        if folder == home || folder == "/" { return true }
+        var roots = [fm.temporaryDirectory, URL(fileURLWithPath: "/tmp"),
+                     URL(fileURLWithPath: "/private/tmp"), URL(fileURLWithPath: "/var/folders"),
+                     URL(fileURLWithPath: "/private/var/folders")]
+        roots += fm.urls(for: .downloadsDirectory, in: .userDomainMask)
+        roots += fm.urls(for: .desktopDirectory, in: .userDomainMask)
+        return roots.map(resolved).contains { folder == $0 || folder.hasPrefix($0 + "/") }
+    }
+
+    /// Checks a LaTeX project for symbolic links that point outside its folder:
+    /// TeX follows them, so they can read files into the PDF or make the build
+    /// overwrite files elsewhere (e.g. `talk.log -> ~/.zshrc`). Asks before
+    /// compiling such a project — every time, folder trust doesn't skip this.
+    /// Returns `false` when the user cancelled.
+    private func confirmProjectLinks(for texURL: URL) -> Bool {
+        let scan = SafeProcess.linksLeavingFolder(texURL.deletingLastPathComponent())
+        if scan.complete && scan.escaping.isEmpty { return true }
+
+        let details: String
+        if scan.escaping.isEmpty {
+            details = "The project folder is too large or deep to check fully for "
+                + "symbolic links that point outside it."
+        } else {
+            let shown = scan.escaping.prefix(5).map { "• \($0)" }.joined(separator: "\n")
+            let more = scan.escaping.count > 5 ? "\n…and \(scan.escaping.count - 5) more" : ""
+            details = "The project contains symbolic links that point outside its folder:\n\(shown)\(more)"
+        }
+        let alert = NSAlert()
+        alert.alertStyle = .critical
+        alert.messageText = "This LaTeX project links to files outside its folder"
+        alert.informativeText = details + "\n\nLaTeX follows such links, so compiling can read "
+            + "or overwrite your files elsewhere. Only continue if you created these links yourself."
+        alert.addButton(withTitle: "Cancel")              // the default: Return doesn't compile
+        alert.addButton(withTitle: "Compile Anyway")
+        return alert.runModal() == .alertSecondButtonReturn
+    }
+
+    /// Asks before running a build tool on `source`'s folder — a LaTeX project can
+    /// carry a latexmkrc (code) and pull other files into the PDF. Skipped for
+    /// folders the user trusted via the suppression checkbox (never offered, or
+    /// honoured, for shared folders like Downloads). `info` gets the
+    /// folder path. Returns `false` when the user cancelled.
+    private func confirmBuild(in source: URL, title: String, button: String,
+                              info: (String) -> String) -> Bool {
+        let folder = source.deletingLastPathComponent()
+            .standardizedFileURL.resolvingSymlinksInPath().path
+        let trusted = UserDefaults.standard.stringArray(forKey: Self.trustedBuildFoldersKey) ?? []
+        let shared = Self.isSharedFolder(folder)
+        if trusted.contains(folder) && !shared { return true }
+
+        let alert = NSAlert()
+        alert.messageText = title
+        alert.informativeText = info(folder)
+        alert.addButton(withTitle: button)
+        alert.addButton(withTitle: "Cancel")
+        alert.showsSuppressionButton = !shared
+        alert.suppressionButton?.title = "Always trust this folder"
+        guard alert.runModal() == .alertFirstButtonReturn else { return false }
+        if !shared, alert.suppressionButton?.state == .on {
+            UserDefaults.standard.set(trusted + [folder], forKey: Self.trustedBuildFoldersKey)
+        }
+        return true
+    }
+
+    /// Shared compile/convert flow: HUD (with Cancel), run `work` off the main
+    /// actor, then load the PDF or report the failure.
     private func convertToPDF(_ source: URL, title: String, detail: String,
-                              work: @escaping @Sendable () -> Dependencies.CompileResult,
+                              work: @escaping @Sendable (SafeProcess.CancelToken) -> Dependencies.CompileResult,
                               onFailure: @escaping (String) -> Void) {
-        showCompileHUD(title: title, detail: detail)
+        let token = SafeProcess.CancelToken()
+        showCompileHUD(title: title, detail: detail, onCancel: { token.cancel() })
         Task { @MainActor in
-            let result = await Task.detached(operation: work).value
+            let result = await Task.detached { work(token) }.value
             hideCompileHUD()
             switch result {
             case .success(let pdf): loadPDF(pdf)
             case .failure(let log): onFailure("Failed.\n\n\(log)")
+            case .timedOut(let limit, let log):
+                onFailure("Stopped: it took longer than \(Int(limit / 60)) minutes.\n\n\(log)")
+            case .cancelled: break   // the user stopped it — nothing to report
             }
         }
     }
@@ -860,14 +967,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
 
     // MARK: - Compile / convert HUD
 
-    private func showCompileHUD(title: String, detail: String) {
+    private func showCompileHUD(title: String, detail: String, onCancel: @escaping () -> Void) {
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 320, height: 120),
                               styleMask: [.borderless], backing: .buffered, defer: false)
         window.isOpaque = false
         window.backgroundColor = .clear
         window.level = .floating
         window.hasShadow = true
-        window.contentView = NSHostingView(rootView: CompileHUD(title: title, detail: detail).themed())
+        window.contentView = NSHostingView(
+            rootView: CancellableCompileHUD(title: title, detail: detail, onCancel: onCancel).themed())
         window.center()
         window.orderFrontRegardless()
         compileHUD = window
@@ -1111,6 +1219,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         case 11:           state.blackout.toggle()       // B
         case 14:           state.toggleReference()       // E — translated deck in console
         case 15:           state.resetTimer()            // R
+        case 17:           state.toggleTimer()           // T — start / stop
+        case 3:                                          // F — audience full screen
+            // Same rule as the menu item: only meaningful with a second screen.
+            if NSScreen.screens.count > 1 { toggleAudienceFullscreen(nil) }
         case 13:           state.toggleBoard()           // W
         case 35:           state.toggleTool(.pen)        // P
         case 37:           state.toggleTool(.laser)      // L
@@ -1125,6 +1237,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         default:           return false
         }
         return true
+    }
+}
+
+/// The compile HUD plus a Cancel button that stops the running build (the HUD
+/// window closes once the tool has actually exited).
+private struct CancellableCompileHUD: View {
+    let title: String
+    let detail: String
+    let onCancel: () -> Void
+
+    var body: some View {
+        CompileHUD(title: title, detail: detail)
+            .overlay(alignment: .topTrailing) {
+                Button(action: onCancel) {
+                    Label("Cancel", systemImage: "xmark.circle.fill").labelStyle(.iconOnly)
+                }
+                .buttonStyle(.borderless)
+                .foregroundStyle(.secondary)
+                .help("Cancel")
+                .padding(10)
+            }
     }
 }
 

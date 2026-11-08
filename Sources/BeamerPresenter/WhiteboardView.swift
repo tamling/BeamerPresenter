@@ -575,13 +575,71 @@ enum BoardExporter {
         return success ? data as Data : nil
     }
 
-    /// Writes the board to its own single-page PDF file.
+    // MARK: Destination safety
+
+    /// `true` when `url` and `other` name the same file: equal after
+    /// standardizing and resolving symlinks, or — for existing files — the same
+    /// file identity (catches other letter case on APFS and hard links).
+    static func isSameFile(_ url: URL, _ other: URL) -> Bool {
+        let a = url.standardizedFileURL.resolvingSymlinksInPath()
+        let b = other.standardizedFileURL.resolvingSymlinksInPath()
+        if a.path == b.path { return true }
+        guard let idA = (try? a.resourceValues(forKeys: [.fileResourceIdentifierKey]))?.fileResourceIdentifier,
+              let idB = (try? b.resourceValues(forKeys: [.fileResourceIdentifierKey]))?.fileResourceIdentifier
+        else { return false }
+        return idA.isEqual(idB)
+    }
+
+    /// Returns `false` (after an alert) when `dest` is the open deck itself — an
+    /// export reads from that file and must never replace it.
+    static func allowsDestination(_ dest: URL, deck: URL?) -> Bool {
+        guard let deck, isSameFile(dest, deck) else { return true }
+        let alert = NSAlert()
+        alert.messageText = "Choose a different file name"
+        alert.informativeText = "“\(dest.lastPathComponent)” is the presentation that is open right now. "
+            + "Exports are saved as a new file and never replace the original."
+        alert.runModal()
+        return false
+    }
+
+    /// Lets `write` produce the file under a temporary name in `dest`'s folder,
+    /// then moves it into place — a failed export never leaves a half-written
+    /// file at `dest` or clobbers an existing one.
+    static func writeViaTemporary(to dest: URL, _ write: (URL) -> Bool) -> Bool {
+        let fm = FileManager.default
+        // A fixed-length name: one built from dest's would push a long (but
+        // valid) file name past the 255-byte limit.
+        let tmp = dest.deletingLastPathComponent()
+            .appendingPathComponent(".bp-\(UUID().uuidString).tmp")
+        guard write(tmp) else {
+            try? fm.removeItem(at: tmp)
+            return false
+        }
+        do {
+            if fm.fileExists(atPath: dest.path) {
+                _ = try fm.replaceItemAt(dest, withItemAt: tmp)
+            } else {
+                try fm.moveItem(at: tmp, to: dest)
+            }
+            return true
+        } catch {
+            try? fm.removeItem(at: tmp)
+            return false
+        }
+    }
+
+    // MARK: Writers
+
+    /// Writes the board to its own single-page PDF file. Refuses to write over
+    /// `deck`, or the open presentation when no deck is given.
     @discardableResult
-    static func writePDF(board: Whiteboard, aspect: CGFloat, to url: URL) -> Bool {
+    static func writePDF(board: Whiteboard, aspect: CGFloat, to url: URL,
+                         protecting deck: URL? = nil) -> Bool {
+        if let deck = deck ?? PresentationState.openDeckURL, isSameFile(url, deck) { return false }
         let height: CGFloat = 1080
         guard let data = renderPDFData(board: board, size: CGSize(width: max(1, height * aspect), height: height))
         else { return false }
-        return (try? data.write(to: url)) != nil
+        return writeViaTemporary(to: url) { tmp in (try? data.write(to: tmp)) != nil }
     }
 
     /// Loads the original deck, inserts the board as a new page right after
@@ -591,7 +649,8 @@ enum BoardExporter {
     @discardableResult
     static func insertIntoCopy(of sourceURL: URL, board: Whiteboard,
                                afterIndex: Int, aspect: CGFloat, to dest: URL) -> Bool {
-        guard let doc = PDFDocument(url: sourceURL), doc.pageCount > 0 else { return false }
+        guard !isSameFile(dest, sourceURL),
+              let doc = PDFDocument(url: sourceURL), doc.pageCount > 0 else { return false }
         let refIndex = min(max(afterIndex, 0), doc.pageCount - 1)
         let pageHeight = doc.page(at: refIndex)?.bounds(for: .mediaBox).height ?? 540
         let size = CGSize(width: max(1, pageHeight * aspect), height: pageHeight)
@@ -601,7 +660,7 @@ enum BoardExporter {
               let boardPage = boardDoc.page(at: 0)?.copy() as? PDFPage else { return false }
 
         doc.insert(boardPage, at: min(afterIndex + 1, doc.pageCount))
-        return doc.write(to: dest)
+        return writeViaTemporary(to: dest) { tmp in doc.write(to: tmp) }
     }
 
     /// Result of a full-presentation export.
@@ -617,7 +676,8 @@ enum BoardExporter {
     static func exportPresentation(sourceURL: URL, split: Bool, aspect: CGFloat,
                                    strokes: [Int: [Stroke]], boards: [Whiteboard],
                                    to dest: URL) -> ExportSummary? {
-        guard let slides = PDFModel.croppedDocument(url: sourceURL, half: split ? .left : .full),
+        guard !isSameFile(dest, sourceURL),
+              let slides = PDFModel.croppedDocument(url: sourceURL, half: split ? .left : .full),
               let first = slides.page(at: 0) else { return nil }
 
         let pageSize = first.bounds(for: .cropBox).size
@@ -632,51 +692,58 @@ enum BoardExporter {
             insertedAfter.append(board.slideIndex + 1)
         }
 
-        var mediaBox = CGRect(origin: .zero, size: pageSize)
-        guard let consumer = CGDataConsumer(url: dest as CFURL),
-              let ctx = CGContext(consumer: consumer, mediaBox: &mediaBox, nil) else { return nil }
+        // Written to a temporary file first; the context and its consumer are
+        // released when the closure returns, before the file is moved into place.
+        var summary: ExportSummary?
+        let written = writeViaTemporary(to: dest) { tmp in
+            var mediaBox = CGRect(origin: .zero, size: pageSize)
+            guard let consumer = CGDataConsumer(url: tmp as CFURL),
+                  let ctx = CGContext(consumer: consumer, mediaBox: &mediaBox, nil) else { return false }
 
-        var inkSlides = 0
-        for i in 0..<slides.pageCount {
-            guard let page = slides.page(at: i) else { continue }
-            let box = page.bounds(for: .cropBox)
+            var inkSlides = 0
+            for i in 0..<slides.pageCount {
+                guard let page = slides.page(at: i) else { continue }
+                let box = page.bounds(for: .cropBox)
 
-            ctx.beginPDFPage(nil)
-            ctx.saveGState()
-            ctx.translateBy(x: -box.minX, y: -box.minY)
-            page.draw(with: .cropBox, to: ctx)
-            ctx.restoreGState()
-
-            if let pageStrokes = strokes[i], !pageStrokes.isEmpty {
-                inkSlides += 1
-                ctx.saveGState()
-                ctx.setLineCap(.round)
-                ctx.setLineJoin(.round)
-                for stroke in pageStrokes {
-                    ctx.setStrokeColor(NSColor(stroke.color).cgColor)
-                    ctx.setLineWidth(max(0.5, stroke.width * box.width))
-                    for (k, pt) in stroke.points.enumerated() {
-                        let p = CGPoint(x: pt.x * box.width, y: (1 - pt.y) * box.height)
-                        if k == 0 { ctx.move(to: p) } else { ctx.addLine(to: p) }
-                    }
-                    ctx.strokePath()
-                }
-                ctx.restoreGState()
-            }
-            ctx.endPDFPage()
-
-            for bpage in boardPages[i] ?? [] {
-                let bb = bpage.bounds(for: .mediaBox)
                 ctx.beginPDFPage(nil)
                 ctx.saveGState()
-                ctx.translateBy(x: -bb.minX, y: -bb.minY)
-                bpage.draw(with: .mediaBox, to: ctx)
+                ctx.translateBy(x: -box.minX, y: -box.minY)
+                page.draw(with: .cropBox, to: ctx)
                 ctx.restoreGState()
+
+                if let pageStrokes = strokes[i], !pageStrokes.isEmpty {
+                    inkSlides += 1
+                    ctx.saveGState()
+                    ctx.setLineCap(.round)
+                    ctx.setLineJoin(.round)
+                    for stroke in pageStrokes {
+                        ctx.setStrokeColor(NSColor(stroke.color).cgColor)
+                        ctx.setLineWidth(max(0.5, stroke.width * box.width))
+                        for (k, pt) in stroke.points.enumerated() {
+                            let p = CGPoint(x: pt.x * box.width, y: (1 - pt.y) * box.height)
+                            if k == 0 { ctx.move(to: p) } else { ctx.addLine(to: p) }
+                        }
+                        ctx.strokePath()
+                    }
+                    ctx.restoreGState()
+                }
                 ctx.endPDFPage()
+
+                for bpage in boardPages[i] ?? [] {
+                    let bb = bpage.bounds(for: .mediaBox)
+                    ctx.beginPDFPage(nil)
+                    ctx.saveGState()
+                    ctx.translateBy(x: -bb.minX, y: -bb.minY)
+                    bpage.draw(with: .mediaBox, to: ctx)
+                    ctx.restoreGState()
+                    ctx.endPDFPage()
+                }
             }
+            ctx.closePDF()
+            summary = ExportSummary(inkSlides: inkSlides, boardsAfterSlides: insertedAfter.sorted())
+            return true
         }
-        ctx.closePDF()
-        return ExportSummary(inkSlides: inkSlides, boardsAfterSlides: insertedAfter.sorted())
+        return written ? summary : nil
     }
 }
 

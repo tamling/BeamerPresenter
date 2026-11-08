@@ -17,7 +17,8 @@ function makeSlides() {
 
   async function open(path) {
     const url = window.__TAURI__.core.convertFileSrc(path);
-    pdf = await pdfjsLib.getDocument({ url }).promise;
+    // No eval: the CSP forbids it, and pdf.js then interprets fonts instead.
+    pdf = await pdfjsLib.getDocument({ url, isEvalSupported: false }).promise;
     const first = await pdf.getPage(1);
     const vp = first.getViewport({ scale: 1 });
     split = vp.width / Math.max(vp.height, 1) > 2.4;

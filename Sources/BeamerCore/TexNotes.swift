@@ -7,12 +7,12 @@ import Foundation
 /// Page ranges come from the Beamer `.nav` file when it sits beside the PDF
 /// (exact and overlay-aware); otherwise each frame is assumed to be a single
 /// page, in document order.
-enum TexNotes {
+public enum TexNotes {
     /// Returns a page-index → note map for the PDF. It prefers a `.tex` with the
     /// same base name next to the PDF; if that is missing or carries no notes, it
     /// falls back to any other `.tex` in the same folder, using the first that has
     /// `\note{}` content. Returns an empty map when nothing usable is found.
-    static func load(forPDF pdfURL: URL, pageCount: Int) -> [Int: String] {
+    public static func load(forPDF pdfURL: URL, pageCount: Int) -> [Int: String] {
         for texURL in candidateTexURLs(for: pdfURL) {
             let notes = notes(fromTex: texURL, pageCount: pageCount)
             if !notes.isEmpty { return notes }
@@ -62,8 +62,22 @@ enum TexNotes {
 
     // MARK: - File reading
 
+    /// Sources larger than this are skipped — no real deck needs more.
+    private static let maxFileBytes = 5 * 1024 * 1024
+
+    /// Reads `url` as text if it is (or links to) a regular file of at most
+    /// `maxFileBytes`. Resource values describe a symlink itself and report 0
+    /// for a FIFO, so the link is resolved and the type checked first; the read
+    /// is bounded anyway, in case the file changes after the check.
     private static func readText(_ url: URL) -> String? {
-        guard let data = try? Data(contentsOf: url) else { return nil }
+        let resolved = url.resolvingSymlinksInPath()
+        guard let values = try? resolved.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey]),
+              values.isRegularFile == true,
+              (values.fileSize ?? 0) <= maxFileBytes,
+              let handle = try? FileHandle(forReadingFrom: resolved) else { return nil }
+        defer { try? handle.close() }
+        guard let data = try? handle.read(upToCount: maxFileBytes + 1),
+              data.count <= maxFileBytes else { return nil }
         return String(data: data, encoding: .utf8) ?? String(data: data, encoding: .isoLatin1)
     }
 
@@ -72,7 +86,7 @@ enum TexNotes {
     /// Each `\beamer@framepages {start}{end}` in the `.nav` file gives the 1-based
     /// page range of a frame, emitted once per frame in document order. Converted
     /// here to 0-based closed ranges.
-    private static func framePages(_ nav: String) -> [ClosedRange<Int>] {
+    static func framePages(_ nav: String) -> [ClosedRange<Int>] {
         let pattern = #"\\beamer@framepages\s*\{(\d+)\}\{(\d+)\}"#
         guard let re = try? NSRegularExpression(pattern: pattern) else { return [] }
         let ns = nav as NSString
@@ -90,15 +104,17 @@ enum TexNotes {
     // MARK: - .tex parsing
 
     /// Walks the (comment-stripped) source, counting frames and collecting the
-    /// `\note{...}` bodies that belong to each one.
-    private static func framesWithNotes(in rawSource: String) -> [Int: String] {
+    /// `\note{...}` bodies that belong to each one. An unterminated group ends
+    /// the scan: everything after it is inside that group anyway, and rescanning
+    /// to the end for every later `\note` would be quadratic.
+    static func framesWithNotes(in rawSource: String) -> [Int: String] {
         let chars = Array(stripComments(rawSource))
         let n = chars.count
         var notes: [Int: String] = [:]
         var frame = -1            // index of the most recently opened frame
         var i = 0
 
-        while i < n {
+        scan: while i < n {
             guard chars[i] == "\\" else { i += 1; continue }
 
             // Read the control-word name (letters/`@`) following the backslash.
@@ -112,26 +128,33 @@ enum TexNotes {
                 frame += 1
                 i = j
             case "begin":
-                if let (env, after) = bracedGroup(chars, skipSpaces(chars, j)), env == "frame" {
-                    frame += 1
-                    i = after
+                let k = skipSpaces(chars, j)
+                if let (env, after) = bracedGroup(chars, k) {
+                    if env == "frame" { frame += 1 }
+                    i = after                                    // never rescan the argument
+                } else if k < n, chars[k] == "{" {
+                    break scan                                   // unterminated \begin{
                 } else {
                     i = j
                 }
             case "note":
                 var k = skipSpaces(chars, j)
-                k = skipOptional(chars, k, open: "<", close: ">")   // \note<2>{…}
-                k = skipSpaces(chars, k)
-                k = skipOptional(chars, k, open: "[", close: "]")   // \note[item]{…}
-                k = skipSpaces(chars, k)
+                guard let afterOverlay = skipOptional(chars, k, open: "<", close: ">")  // \note<2>{…}
+                else { break scan }                                 // unterminated \note<
+                k = skipSpaces(chars, afterOverlay)
+                guard let afterOption = skipOptional(chars, k, open: "[", close: "]")   // \note[item]{…}
+                else { break scan }                                 // unterminated \note[
+                k = skipSpaces(chars, afterOption)
                 if let (body, after) = bracedGroup(chars, k) {
                     let text = cleanup(body)
                     if frame >= 0, !text.isEmpty {
                         notes[frame] = notes[frame].map { $0 + "\n\n" + text } ?? text
                     }
                     i = after
+                } else if k < n, chars[k] == "{" {
+                    break scan                                   // unterminated \note{
                 } else {
-                    i = j
+                    i = max(j, k)                                // never rescan a <…>/[…] group
                 }
             default:
                 i = j
@@ -140,25 +163,25 @@ enum TexNotes {
         return notes
     }
 
-    private static func skipSpaces(_ c: [Character], _ i: Int) -> Int {
+    static func skipSpaces(_ c: [Character], _ i: Int) -> Int {
         var i = i
         while i < c.count, c[i] == " " || c[i] == "\t" || c[i] == "\n" || c[i] == "\r" { i += 1 }
         return i
     }
 
     /// If `c[i]` opens an optional group, returns the index just past its close;
-    /// otherwise returns `i` unchanged.
-    private static func skipOptional(_ c: [Character], _ i: Int, open: Character, close: Character) -> Int {
+    /// otherwise returns `i` unchanged. `nil` when the group is never closed.
+    static func skipOptional(_ c: [Character], _ i: Int, open: Character, close: Character) -> Int? {
         guard i < c.count, c[i] == open else { return i }
         var j = i + 1
         while j < c.count, c[j] != close { j += 1 }
-        return j < c.count ? j + 1 : i
+        return j < c.count ? j + 1 : nil
     }
 
     /// Reads a balanced `{ … }` group starting at `c[i] == "{"`, honouring nested
     /// braces and `\{` / `\}` escapes. Returns the inner text and the index past
     /// the closing brace.
-    private static func bracedGroup(_ c: [Character], _ i: Int) -> (String, Int)? {
+    static func bracedGroup(_ c: [Character], _ i: Int) -> (String, Int)? {
         guard i < c.count, c[i] == "{" else { return nil }
         var depth = 0
         var j = i
@@ -179,7 +202,7 @@ enum TexNotes {
     // MARK: - Comment & markup cleanup
 
     /// Drops everything after an unescaped `%` on each line.
-    private static func stripComments(_ s: String) -> String {
+    static func stripComments(_ s: String) -> String {
         var out = ""
         out.reserveCapacity(s.count)
         for line in s.split(separator: "\n", omittingEmptySubsequences: false) {
@@ -196,7 +219,7 @@ enum TexNotes {
     }
 
     /// Best-effort conversion of a LaTeX note body to readable plain text.
-    private static func cleanup(_ tex: String) -> String {
+    static func cleanup(_ tex: String) -> String {
         var s = tex
 
         // List markup → bullets / blank lines.
@@ -226,7 +249,7 @@ enum TexNotes {
         return s.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    private static func regexReplace(_ s: String, _ pattern: String, _ template: String) -> String {
+    static func regexReplace(_ s: String, _ pattern: String, _ template: String) -> String {
         guard let re = try? NSRegularExpression(pattern: pattern) else { return s }
         let range = NSRange(location: 0, length: (s as NSString).length)
         return re.stringByReplacingMatches(in: s, range: range, withTemplate: template)

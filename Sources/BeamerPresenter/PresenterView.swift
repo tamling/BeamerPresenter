@@ -176,7 +176,8 @@ struct PresenterView: View {
         panel.allowedContentTypes = [.plainText]
         panel.nameFieldStringValue = "\(state.title.isEmpty ? "notes" : state.title) notes.txt"
         panel.canCreateDirectories = true
-        guard panel.runModal() == .OK, let url = panel.url else { return }
+        guard panel.runModal() == .OK, let url = panel.url,
+              BoardExporter.allowsDestination(url, deck: state.sourceURL) else { return }
         do {
             try state.scratch.write(to: url, atomically: true, encoding: .utf8)
         } catch {
@@ -231,8 +232,10 @@ struct PresenterView: View {
         panel.allowedContentTypes = [.pdf]
         panel.nameFieldStringValue = "\(board.name).pdf"
         panel.canCreateDirectories = true
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        if !BoardExporter.writePDF(board: board, aspect: state.slideAspect, to: url) {
+        guard panel.runModal() == .OK, let url = panel.url,
+              BoardExporter.allowsDestination(url, deck: state.sourceURL) else { return }
+        if !BoardExporter.writePDF(board: board, aspect: state.slideAspect, to: url,
+                                   protecting: state.sourceURL) {
             let alert = NSAlert()
             alert.messageText = "Could not save the whiteboard"
             alert.informativeText = url.lastPathComponent
@@ -249,7 +252,8 @@ struct PresenterView: View {
         panel.allowedContentTypes = [.pdf]
         panel.nameFieldStringValue = "\(state.title) + \(board.name).pdf"
         panel.canCreateDirectories = true
-        guard panel.runModal() == .OK, let dest = panel.url else { return }
+        guard panel.runModal() == .OK, let dest = panel.url,
+              BoardExporter.allowsDestination(dest, deck: source) else { return }
         if !BoardExporter.insertIntoCopy(of: source, board: board, afterIndex: state.index,
                                          aspect: state.slideAspect, to: dest) {
             let alert = NSAlert()
@@ -286,11 +290,21 @@ struct PresenterView: View {
         } else if state.hasNotes {
             placeholder(icon: "note.text",
                         title: "No note for this slide",
-                        detail: "Notes loaded from the .tex source.")
+                        detail: notesOrigin)
         } else {
             placeholder(icon: "note.text",
                         title: "No notes for this presentation",
-                        detail: "Show notes on a second screen with:\n\\setbeameroption{show notes on second screen=right}\n\nor keep a <name>.tex with \\note{…} next to the PDF.")
+                        detail: "Show notes on a second screen with:\n\\setbeameroption{show notes on second screen=right}\n\nor keep a <name>.tex with \\note{…} — or the <name>.pptx\nwith speaker notes — next to the PDF.")
+        }
+    }
+
+    /// Where this deck's notes were read from, for the "no note" placeholder.
+    private var notesOrigin: String {
+        switch state.notesSource {
+        case .tex(let name?):      return "Notes loaded from \(name)."
+        case .tex(nil):            return "Notes loaded from the .tex next to the PDF."
+        case .pptx(let name):      return "Notes loaded from \(name)."
+        case .splitPDF, .none:     return "Notes loaded from the PDF."
         }
     }
 
@@ -374,7 +388,7 @@ private struct ControlBar: View {
 
     var body: some View {
         HStack(alignment: .center, spacing: 14) {
-            tool("Exit", "rectangle.portrait.and.arrow.right") {
+            tool("Exit", "rectangle.portrait.and.arrow.right", help: "Exit presentation (⌘W)") {
                 // The AppDelegate runs the leave flow (save check, then
                 // home screen / quit choice).
                 NotificationCenter.default.post(name: .exitPresentationRequested, object: nil)
@@ -383,7 +397,7 @@ private struct ControlBar: View {
             groupDivider
 
             // Navigation
-            tool("Prev", "chevron.left", disabled: state.index == 0) { state.previous() }
+            tool("Prev", "chevron.left", help: "Previous slide (← / Page Up)", disabled: state.index == 0) { state.previous() }
             captioned("Slide") {
                 Text(String(format: "%02d / %02d", state.index + 1, state.pageCount))
                     .font(.mono(14, bold: true)).foregroundStyle(Theme.textPrimary)
@@ -391,24 +405,25 @@ private struct ControlBar: View {
                     .background(Theme.inset, in: RoundedRectangle(cornerRadius: 9))
                     .overlay(RoundedRectangle(cornerRadius: 9).stroke(Theme.hairline, lineWidth: 1))
             }
-            tool("Next", "chevron.right", disabled: state.index + 1 >= state.pageCount) { state.next() }
+            tool("Next", "chevron.right", help: "Next slide (→ / Space)", disabled: state.index + 1 >= state.pageCount) { state.next() }
 
             groupDivider
 
             // View
-            tool("Grid", "square.grid.2x2", active: state.showOverview) { state.showOverview.toggle() }
-            tool("Black", state.blackout ? "eye.slash.fill" : "eye.slash", active: state.blackout) { state.blackout.toggle() }
-            tool("Board", "square.and.pencil", active: state.isBoardActive) { state.toggleBoard() }
+            tool("Grid", "square.grid.2x2", help: "Overview (G)", active: state.showOverview) { state.showOverview.toggle() }
+            tool("Black", state.blackout ? "eye.slash.fill" : "eye.slash",
+                 help: "Black screen (B)", active: state.blackout) { state.blackout.toggle() }
+            tool("Board", "square.and.pencil", help: "Whiteboard (W)", active: state.isBoardActive) { state.toggleBoard() }
             if state.hasReference {
-                tool("Transl", "globe", active: state.showReference) { state.toggleReference() }
+                tool("Transl", "globe", help: "Translated deck in console (E)", active: state.showReference) { state.toggleReference() }
             }
 
             groupDivider
 
             // Annotate
-            tool("Cursor", "cursorarrow", active: state.tool == .none) { state.tool = .none }
-            tool("Pen", "pencil.tip", active: state.tool == .pen) { state.toggleTool(.pen) }
-            tool("Laser", "dot.circle.and.cursorarrow", active: state.tool == .laser) { state.toggleTool(.laser) }
+            tool("Cursor", "cursorarrow", help: "Cursor — no tool (Esc)", active: state.tool == .none) { state.tool = .none }
+            tool("Pen", "pencil.tip", help: "Pen (P)", active: state.tool == .pen) { state.toggleTool(.pen) }
+            tool("Laser", "dot.circle.and.cursorarrow", help: "Laser (L)", active: state.tool == .laser) { state.toggleTool(.laser) }
 
             ForEach(PenPalette.colors, id: \.name) { name, color in
                 captioned("") {
@@ -425,20 +440,22 @@ private struct ControlBar: View {
                             .frame(height: 34)
                     }
                     .buttonStyle(.plain)
-                    .help(name)
+                    .help("Pen colour: \(name)")
                 }
             }
 
-            tool("Undo", "arrow.uturn.backward", disabled: !state.hasInkOnCurrentSlide) { state.undoStroke() }
-            tool("Clear", "trash", disabled: !state.hasInkOnCurrentSlide) { state.clearStrokes() }
+            tool("Undo", "arrow.uturn.backward", help: "Undo stroke (Z)",
+                 disabled: !state.canUndoInk) { state.undoStroke() }
+            tool("Clear", "trash", help: "Clear ink (C)", disabled: !state.hasInkOnCurrentSlide) { state.clearStrokes() }
 
             Spacer(minLength: 8)
 
             // Right cluster: the timer (start/stop, reset) and clocks.
             tool(state.timerRunning ? "Pause" : "Start",
                  state.timerRunning ? "pause" : "play",
+                 help: "Timer start/stop (T)",
                  active: !state.timerRunning) { state.toggleTimer() }
-            tool("Reset", "arrow.counterclockwise") { state.resetTimer() }
+            tool("Reset", "arrow.counterclockwise", help: "Reset timer (R)") { state.resetTimer() }
             captioned("Elapsed") { elapsedChip }
             if state.remainingSeconds != nil {
                 captioned("Left") { remainingChip }
@@ -521,6 +538,7 @@ private struct ControlBar: View {
         .menuStyle(.borderlessButton)
         .menuIndicator(.hidden)
         .fixedSize()
+        .help("Lecture length target")
         .popover(isPresented: $showCustomTarget, arrowEdge: .bottom) { customTargetEditor }
     }
 
@@ -577,7 +595,8 @@ private struct ControlBar: View {
     }
 
     /// A tactile key: key surface + hairline; lime border + glow when active.
-    private func tool(_ caption: String, _ systemImage: String,
+    /// `help` is the hover tooltip: the function plus its key.
+    private func tool(_ caption: String, _ systemImage: String, help: String,
                       active: Bool = false, disabled: Bool = false,
                       action: @escaping () -> Void) -> some View {
         Button(action: action) {
@@ -597,6 +616,7 @@ private struct ControlBar: View {
         }
         .buttonStyle(.plain)
         .disabled(disabled)
+        .help(help)
     }
 
     /// A control stacked above a mono uppercase caption.

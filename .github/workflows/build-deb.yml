@@ -6,13 +6,17 @@ on:
     branches: [main]
     tags: ["v*"]
 
+# Actions are pinned to full commit SHAs (tag in the comment): a moved tag
+# can't change what runs here.
 jobs:
   deb:
     runs-on: ubuntu-latest
     permissions:
-      contents: write   # attach the .deb to releases on tag pushes
+      contents: read
+    outputs:
+      version: ${{ steps.appver.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Install system dependencies
         run: |
@@ -21,16 +25,18 @@ jobs:
             pkg-config libssl-dev libxdo-dev libayatana-appindicator3-dev \
             librsvg2-dev
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
         with:
           workspaces: Linux/src-tauri
 
       - name: Build .deb
         run: ./Linux/build-deb.sh
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: BeamerPresenter-deb
           path: Linux/src-tauri/target/release/bundle/deb/*.deb
@@ -41,13 +47,25 @@ jobs:
         run: |
           echo "version=$(sed -n 's/^version = "\(.*\)"/\1/p' Linux/src-tauri/Cargo.toml | head -1)" >> "$GITHUB_OUTPUT"
 
-      # Every push to main publishes/updates the release for the current app
-      # version, with the .deb attached — so the download always sits on the
-      # repo's Releases page, no local toolchain needed.
-      - name: Publish release with .deb
-        if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
+  # Every push to main publishes/updates the release for the current app
+  # version, with the .deb attached — so the download always sits on the
+  # repo's Releases page, no local toolchain needed. A separate job, so only
+  # this step (not the build) holds write access to the repo.
+  release:
+    needs: deb
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # create/update the release and attach the .deb
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          tag_name: v${{ steps.appver.outputs.version }}
-          name: BeamerPresenter ${{ steps.appver.outputs.version }}
-          files: Linux/src-tauri/target/release/bundle/deb/*.deb
+          name: BeamerPresenter-deb
+          path: deb
+
+      - name: Publish release with .deb
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
+        with:
+          tag_name: v${{ needs.deb.outputs.version }}
+          name: BeamerPresenter ${{ needs.deb.outputs.version }}
+          files: deb/*.deb

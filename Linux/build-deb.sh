@@ -7,6 +7,10 @@
 set -euo pipefail
 cd "$(dirname "$0")/src-tauri"
 
+# Exact Tauri CLI for the npx path (no floating ^2 from the registry), and
+# --locked for every cargo build so Cargo.lock is what ships.
+TAURI_CLI_VERSION=2.12.4
+
 # ---- Preflight: fail early, with instructions, not mid-build. --------------
 missing=()
 command -v cargo >/dev/null || missing+=(
@@ -26,11 +30,11 @@ if [ ${#missing[@]} -gt 0 ]; then
 fi
 
 if command -v cargo-tauri >/dev/null; then
-    cargo tauri build --bundles deb
+    cargo tauri build --bundles deb -- --locked
     echo; echo "Package:"; ls -1 target/release/bundle/deb/*.deb
     exit 0
 elif command -v npx >/dev/null; then
-    npx --yes @tauri-apps/cli@^2 build --bundles deb
+    npx --yes "@tauri-apps/cli@${TAURI_CLI_VERSION}" build --bundles deb -- --locked
     echo; echo "Package:"; ls -1 target/release/bundle/deb/*.deb
     exit 0
 fi
@@ -38,7 +42,7 @@ fi
 echo "No Tauri CLI found — packaging with cargo + dpkg-deb."
 command -v dpkg-deb >/dev/null || { echo "dpkg-deb not found — install dpkg-dev."; exit 1; }
 
-cargo build --release
+cargo build --release --locked
 
 VERSION=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
 ARCH=$(dpkg --print-architecture)

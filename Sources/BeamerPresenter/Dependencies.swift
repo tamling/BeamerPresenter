@@ -1,10 +1,14 @@
 import Foundation
+import BeamerCore
 
 /// Startup checks and on-demand LaTeX compilation. A LaTeX install lets the app
 /// compile a `.tex` to its PDF; nothing here is required to present a PDF.
 enum Dependencies {
-    /// LaTeX engines we consider, in order of preference.
-    private static let latexTools = ["latexmk", "pdflatex", "lualatex", "xelatex"]
+    /// LaTeX engines we consider, in order of preference. lualatex is left out
+    /// on purpose: a document's `\directlua` can still delete or rename any
+    /// user file (`os.remove`, `lfs.*`) — TeX's `openin_any`/`openout_any`
+    /// don't cover those, and `--safer` breaks luaotfload's font cache.
+    private static let latexTools = ["latexmk", "pdflatex", "xelatex"]
     /// Common install locations (MacTeX / TeX Live, Homebrew).
     static let searchDirs = [
         "/Library/TeX/texbin", "/usr/texbin",
@@ -34,64 +38,68 @@ enum Dependencies {
     }
 
     enum CompileResult {
-        case success(URL)     // the produced PDF
-        case failure(String)  // a (truncated) log to show
+        case success(URL)                                // the produced PDF
+        case failure(String)                             // a (truncated) log to show
+        case timedOut(after: TimeInterval, log: String)  // stopped by the time limit
+        case cancelled                                   // stopped by the user — nothing to report
     }
+
+    /// Time limits for the external tools: a hung build must not hang the app.
+    static let compileTimeout: TimeInterval = 180
+    static let convertTimeout: TimeInterval = 120
 
     /// Converts a presentation file (`.pptx`, `.ppt`, `.odp`, …) to PDF in its own
     /// folder using LibreOffice. Runs synchronously — call it off the main actor.
-    static func convertToPDF(_ input: URL, soffice: String) -> CompileResult {
+    static func convertToPDF(_ input: URL, soffice: String,
+                             cancel: SafeProcess.CancelToken? = nil) -> CompileResult {
         let dir = input.deletingLastPathComponent()
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: soffice)
-        process.arguments = ["--headless", "--convert-to", "pdf", "--outdir", dir.path, input.path]
+        // A throwaway profile, removed again afterwards (see SafeProcess).
+        let profile = SafeProcess.throwawayDirectory(prefix: "soffice-profile")
+        defer { try? FileManager.default.removeItem(at: profile) }
 
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-        do { try process.run() } catch {
-            return .failure("Could not start LibreOffice: \(error.localizedDescription)")
+        let result = SafeProcess.run(
+            executable: URL(fileURLWithPath: soffice),
+            arguments: SafeProcess.sofficeArguments(input: input, outputDirectory: dir,
+                                                    profileDirectory: profile),
+            environment: nil, currentDirectory: nil,
+            timeout: convertTimeout, cancel: cancel)
+        if let error = result.launchError {
+            return .failure("Could not start LibreOffice: \(error)")
         }
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
+        if result.cancelled { return .cancelled }
+        let log = String(result.output.suffix(1500))
+        if result.timedOut { return .timedOut(after: convertTimeout, log: log) }
 
         let pdf = dir.appendingPathComponent(input.deletingPathExtension().lastPathComponent + ".pdf")
         if FileManager.default.fileExists(atPath: pdf.path) { return .success(pdf) }
-        return .failure(String((String(data: data, encoding: .utf8) ?? "").suffix(1500)))
+        return .failure(log)
     }
 
     /// Compiles `texURL` with the given engine, in the file's own folder. Runs
-    /// synchronously — call it off the main actor.
-    static func compile(texURL: URL, engine: (name: String, path: String)) -> CompileResult {
-        let process = Process()
-        process.currentDirectoryURL = texURL.deletingLastPathComponent()
-        process.executableURL = URL(fileURLWithPath: engine.path)
-        let file = texURL.lastPathComponent
-        process.arguments = engine.name == "latexmk"
-            ? ["-pdf", "-interaction=nonstopmode", "-halt-on-error", file]
-            : ["-interaction=nonstopmode", "-halt-on-error", file]
-
-        // latexmk shells out to pdflatex etc., so make sure the TeX bin is on PATH.
-        var env = ProcessInfo.processInfo.environment
-        env["PATH"] = searchDirs.joined(separator: ":") + ":" + (env["PATH"] ?? "")
-        process.environment = env
-
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-
-        do { try process.run() } catch {
-            return .failure("Could not start \(engine.name): \(error.localizedDescription)")
+    /// synchronously — call it off the main actor. TeX follows symbolic links,
+    /// so callers check the folder with `SafeProcess.linksLeavingFolder` first.
+    static func compile(texURL: URL, engine: (name: String, path: String),
+                        cancel: SafeProcess.CancelToken? = nil) -> CompileResult {
+        let result = SafeProcess.run(
+            executable: URL(fileURLWithPath: engine.path),
+            arguments: SafeProcess.latexArguments(engine: engine.name, texURL: texURL),
+            // latexmk shells out to pdflatex etc., so the TeX bin goes on PATH;
+            // the environment also locks down TeX's file access.
+            environment: SafeProcess.latexEnvironment(base: ProcessInfo.processInfo.environment,
+                                                      searchDirs: searchDirs),
+            currentDirectory: texURL.deletingLastPathComponent(),
+            timeout: compileTimeout, cancel: cancel)
+        if let error = result.launchError {
+            return .failure("Could not start \(engine.name): \(error)")
         }
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
+        if result.cancelled { return .cancelled }
+        let log = String(result.output.suffix(1500))
+        if result.timedOut { return .timedOut(after: compileTimeout, log: log) }
 
         let pdf = texURL.deletingPathExtension().appendingPathExtension("pdf")
         // Beamer can exit non-zero yet still produce a usable PDF, so accept the
         // PDF whenever it exists.
         if FileManager.default.fileExists(atPath: pdf.path) { return .success(pdf) }
-
-        let log = String(data: data, encoding: .utf8) ?? ""
-        return .failure(String(log.suffix(1500)))
+        return .failure(log)
     }
 }

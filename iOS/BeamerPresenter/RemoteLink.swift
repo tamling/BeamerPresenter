@@ -6,26 +6,38 @@ import MultipeerConnectivity
 /// MultipeerConnectivity (Wi-Fi / Bluetooth, no server, auto-discovery,
 /// encrypted). One instance acts either as the **presenter** (advertises, shows
 /// a pairing code, accepts only a remote that sends the matching code, applies
-/// its commands, pushes state) or the **remote** (browses for a presenter, asks
-/// for the code, sends commands, shows the pushed state).
+/// its commands, pushes state) or the **remote** (browses for presenters, lets
+/// the user pick one, asks for its code, sends commands, shows the pushed state).
 ///
-/// Pairing: the presenter generates a random 4-digit code and shows it on its
+/// Pairing: the presenter generates a random 6-digit code and shows it on its
 /// screen. The remote must send that exact code in the invitation `context`;
-/// the advertiser rejects any invitation whose code does not match. This stops
-/// an unknown device on the same Wi-Fi/Bluetooth from silently taking over the
-/// talk — auto-accept is gone.
+/// the advertiser rejects any invitation whose code does not match. A code is
+/// single-use (rotated after every successful pairing), five wrong codes in a
+/// row rotate it and lock pairing for 30 s, and the presenter stops advertising
+/// while a remote is connected. The remote only ever sends the code to the one
+/// presenter the user picked, so a rogue advertiser cannot harvest it.
 @MainActor
 final class RemoteLink: NSObject, ObservableObject {
     enum Role { case presenter, remote }
+
+    /// Remote side: a presenter seen while browsing, for the picker.
+    struct FoundPresenter: Identifiable {
+        let peerID: MCPeerID
+        let name: String
+        let title: String?
+        var id: ObjectIdentifier { ObjectIdentifier(peerID) }
+    }
 
     @Published private(set) var connected = false
     @Published private(set) var peerName: String?
     @Published private(set) var presenterState: PresenterState?   // remote side
 
-    /// Presenter side: the 4-digit code to show on screen; the remote must enter it.
+    /// Presenter side: the 6-digit code to show on screen; the remote must enter it.
     @Published private(set) var pairingCode = ""
-    /// Remote side: a presenter has been discovered nearby (prompt for the code).
-    @Published private(set) var foundPresenter = false
+    /// Presenter side: too many wrong codes — pairing is paused for a moment.
+    @Published private(set) var lockedOut = false
+    /// Remote side: presenters discovered nearby; the user picks one.
+    @Published private(set) var presenters: [FoundPresenter] = []
     /// Remote side: the last pairing attempt was rejected (wrong code) — let the user retry.
     @Published private(set) var pairingFailed = false
 
@@ -43,22 +55,36 @@ final class RemoteLink: NSObject, ObservableObject {
     private var advertiser: MCNearbyServiceAdvertiser?
     private var browser: MCNearbyServiceBrowser?
 
-    // Remote side: presenters seen while browsing, and the code the user typed.
-    private var foundPeers: [MCPeerID] = []
-    private var remoteCode = ""
-    private var didAttemptInvite = false
+    // Presenter side: lockout bookkeeping. `isStarted` keeps a late delegate
+    // callback from re-advertising after stop().
+    private static let maxFailedAttempts = 5
+    private static let lockoutSeconds: UInt64 = 30
+    private var isStarted = false
+    private var failedAttempts = 0
+    private var lockoutTask: Task<Void, Never>?
+    private var isAdvertising = false
+
+    // Remote side: the presenter we invited, and a counter so a stale timeout
+    // task cannot flag a later attempt as failed.
+    // Published so the view can disable "Connect" while an invitation is pending.
+    @Published private var invitedPeer: MCPeerID?
+    private var inviteGeneration = 0
+
+    /// Remote side: an invitation is in flight — don't send another one.
+    var isInviting: Bool { invitedPeer != nil }
 
     init(role: Role) { self.role = role; super.init() }
 
     func start(title: String = "") {
+        isStarted = true
         switch role {
         case .presenter:
-            pairingCode = Self.makeCode()
+            pairingCode = PairingCode.make()
             let info = title.isEmpty ? nil : ["title": String(title.prefix(60))]
             let a = MCNearbyServiceAdvertiser(peer: myPeerID, discoveryInfo: info, serviceType: serviceType)
             a.delegate = self
-            a.startAdvertisingPeer()
             advertiser = a
+            startAdvertising()
         case .remote:
             let b = MCNearbyServiceBrowser(peer: myPeerID, serviceType: serviceType)
             b.delegate = self
@@ -68,47 +94,123 @@ final class RemoteLink: NSObject, ObservableObject {
     }
 
     func stop() {
-        advertiser?.stopAdvertisingPeer(); advertiser = nil
+        isStarted = false
+        lockoutTask?.cancel(); lockoutTask = nil
+        stopAdvertising(); advertiser = nil
         browser?.stopBrowsingForPeers(); browser = nil
         session.disconnect()
         connected = false; peerName = nil; presenterState = nil
-        pairingCode = ""; foundPresenter = false; pairingFailed = false
-        foundPeers.removeAll(); remoteCode = ""; didAttemptInvite = false
+        pairingCode = ""; lockedOut = false; failedAttempts = 0
+        presenters.removeAll(); pairingFailed = false
+        invitedPeer = nil; inviteGeneration &+= 1
     }
 
-    /// Remote side: try to pair with the discovered presenter(s) using `code`.
-    func connect(code: String) {
+    // MARK: Presenter side
+
+    private func startAdvertising() {
+        guard isStarted, !lockedOut, !connected, !isAdvertising, let advertiser else { return }
+        advertiser.startAdvertisingPeer()
+        isAdvertising = true
+    }
+
+    private func stopAdvertising() {
+        guard isAdvertising else { return }
+        advertiser?.stopAdvertisingPeer()
+        isAdvertising = false
+    }
+
+    private func rotateCode() { pairingCode = PairingCode.make() }
+
+    /// Decides one invitation. Returns whether to accept it.
+    private func shouldAccept(context: Data?) -> Bool {
+        guard role == .presenter, isStarted, !lockedOut,
+              !connected, session.connectedPeers.isEmpty else { return false }
+        // A 6-digit code is 6 bytes; refuse anything bigger before decoding it.
+        guard let context, context.count <= 16,
+              let sent = String(data: context, encoding: .utf8) else { return registerFailure() }
+        guard !pairingCode.isEmpty, PairingCode.matches(sent, pairingCode) else { return registerFailure() }
+        failedAttempts = 0
+        rotateCode()        // the code is consumed by this pairing
+        stopAdvertising()   // one remote at a time
+        return true
+    }
+
+    /// Counts a wrong code; after `maxFailedAttempts` in a row rotates the code
+    /// and pauses pairing for `lockoutSeconds`. Always returns false.
+    private func registerFailure() -> Bool {
+        failedAttempts += 1
+        guard failedAttempts >= Self.maxFailedAttempts else { return false }
+        failedAttempts = 0
+        rotateCode()
+        lockedOut = true
+        stopAdvertising()
+        lockoutTask?.cancel()
+        lockoutTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: Self.lockoutSeconds * 1_000_000_000)
+            guard let self, !Task.isCancelled, self.isStarted else { return }
+            self.lockedOut = false
+            self.lockoutTask = nil
+            self.rotateCode()   // fresh code once the lockout ends
+            self.startAdvertising()
+        }
+        return false
+    }
+
+    // MARK: Remote side
+
+    /// Remote side: try to pair with the presenter the user picked, using `code`.
+    /// The code is sent to that one peer only — never broadcast to every advertiser.
+    func connect(to presenter: FoundPresenter, code: String) {
         let trimmed = code.trimmingCharacters(in: .whitespaces)
-        guard role == .remote, trimmed.count == 4 else { return }
-        remoteCode = trimmed
+        // One invitation at a time: a duplicate would reach the presenter after it
+        // already rotated the code and count as a wrong attempt toward the lockout.
+        guard role == .remote, invitedPeer == nil, !connected, PairingCode.isWellFormed(trimmed),
+              presenters.contains(where: { $0.peerID == presenter.peerID }) else { return }
         pairingFailed = false
-        inviteFoundPeers()
-    }
-
-    private func inviteFoundPeers() {
-        guard role == .remote, !foundPeers.isEmpty, let data = remoteCode.data(using: .utf8) else { return }
-        for peer in foundPeers {
-            didAttemptInvite = true
-            browser?.invitePeer(peer, to: session, withContext: data, timeout: 12)
-        }
+        inviteGeneration &+= 1
+        let generation = inviteGeneration
+        invitedPeer = presenter.peerID
+        browser?.invitePeer(presenter.peerID, to: session, withContext: Data(trimmed.utf8), timeout: 12)
         // A declined invitation gives no browser callback, so flag a wrong code by timeout.
-        Task { @MainActor in
+        Task { @MainActor [weak self] in
             try? await Task.sleep(nanoseconds: 13_000_000_000)
-            if !self.connected, self.didAttemptInvite {
-                self.pairingFailed = true
-                self.didAttemptInvite = false
-            }
+            guard let self, self.inviteGeneration == generation,
+                  self.invitedPeer != nil, !self.connected else { return }
+            self.pairingFailed = true
+            self.invitedPeer = nil
         }
     }
 
-    private static func makeCode() -> String { String(format: "%04d", Int.random(in: 0...9999)) }
+    /// Remote side: abandon a pending invitation (the user went back to the list).
+    func cancelPairing() {
+        guard role == .remote, let invited = invitedPeer else { return }
+        invitedPeer = nil
+        inviteGeneration &+= 1      // the pending timeout task must not flag a failure
+        pairingFailed = false
+        if !connected { session.cancelConnectPeer(invited) }
+    }
+
+    // MARK: Sending
 
     func send(command: RemoteCommand) { send(.command(command)) }
-    func send(state: PresenterState) { send(.state(state)) }
+
+    func send(state: PresenterState) {
+        let s = state.sanitized()
+        // If the note still does not fit (heavy JSON escaping), send the state
+        // without it rather than leaving the remote on a stale slide and timer.
+        var bare = s
+        bare.note = ""
+        guard let data = RemotePacket.state(s).encoded() ?? RemotePacket.state(bare).encoded() else { return }
+        send(data: data)
+    }
 
     private func send(_ packet: RemotePacket) {
-        guard !session.connectedPeers.isEmpty,
-              let data = try? JSONEncoder().encode(packet) else { return }
+        guard let data = packet.encoded() else { return }
+        send(data: data)
+    }
+
+    private func send(data: Data) {
+        guard !session.connectedPeers.isEmpty else { return }
         try? session.send(data, toPeers: session.connectedPeers, with: .reliable)
     }
 }
@@ -123,16 +225,20 @@ extension RemoteLink: MCSessionDelegate {
                 self.connected = true
                 self.peerName = peerID.displayName
                 self.pairingFailed = false
-                self.didAttemptInvite = false
+                self.invitedPeer = nil
+                if self.role == .presenter { self.stopAdvertising() }
             case .notConnected:
                 if self.session.connectedPeers.isEmpty {
                     self.connected = false; self.peerName = nil; self.presenterState = nil
-                    // Remote: a peer dropping back to notConnected after we invited it
+                    // Remote: the peer we invited dropping back to notConnected
                     // (without ever connecting) means the code was rejected.
-                    if self.role == .remote, self.didAttemptInvite {
+                    if self.role == .remote, let invited = self.invitedPeer, invited == peerID {
                         self.pairingFailed = true
-                        self.didAttemptInvite = false
+                        self.invitedPeer = nil
                     }
+                    // Presenter: open for a new pairing (with the already-rotated
+                    // code) unless stopped or locked out — startAdvertising checks.
+                    if self.role == .presenter { self.startAdvertising() }
                 }
             @unknown default: break
             }
@@ -140,17 +246,25 @@ extension RemoteLink: MCSessionDelegate {
     }
 
     nonisolated func session(_ session: MCSession, didReceive data: Data, fromPeer peerID: MCPeerID) {
-        guard let packet = try? JSONDecoder().decode(RemotePacket.self, from: data) else { return }
+        guard let packet = RemotePacket.decode(data) else { return }
         Task { @MainActor in
-            switch packet {
-            case .command(let c): self.onCommand?(c)
-            case .state(let s): self.presenterState = s
+            // Each side only accepts the packet kind the other side may send.
+            switch (packet, self.role) {
+            case (.command(let c), .presenter): self.onCommand?(c)
+            case (.state(let s), .remote): self.presenterState = s
+            default: break
             }
         }
     }
 
-    nonisolated func session(_ s: MCSession, didReceive stream: InputStream, withName: String, fromPeer: MCPeerID) {}
-    nonisolated func session(_ s: MCSession, didStartReceivingResourceWithName: String, fromPeer: MCPeerID, with: Progress) {}
+    // The protocol uses data packets only. Refuse streams and resources, which
+    // would otherwise bypass the packet size cap (resources are spooled to disk).
+    nonisolated func session(_ s: MCSession, didReceive stream: InputStream, withName: String, fromPeer: MCPeerID) {
+        stream.close()
+    }
+    nonisolated func session(_ s: MCSession, didStartReceivingResourceWithName: String, fromPeer: MCPeerID, with progress: Progress) {
+        progress.cancel()
+    }
     nonisolated func session(_ s: MCSession, didFinishReceivingResourceWithName: String, fromPeer: MCPeerID, at: URL?, withError: Error?) {}
 }
 
@@ -160,9 +274,8 @@ extension RemoteLink: MCNearbyServiceAdvertiserDelegate {
                                 withContext context: Data?,
                                 invitationHandler: @escaping (Bool, MCSession?) -> Void) {
         Task { @MainActor in
-            // Accept only if the remote sent the exact 4-digit code we are showing.
-            let sent = context.flatMap { String(data: $0, encoding: .utf8) }
-            let ok = !self.pairingCode.isEmpty && sent == self.pairingCode
+            // The handler is called exactly once, on every path.
+            let ok = self.shouldAccept(context: context)
             invitationHandler(ok, ok ? self.session : nil)
         }
     }
@@ -172,17 +285,22 @@ extension RemoteLink: MCNearbyServiceBrowserDelegate {
     nonisolated func browser(_ browser: MCNearbyServiceBrowser, foundPeer peerID: MCPeerID,
                              withDiscoveryInfo info: [String: String]?) {
         Task { @MainActor in
-            if !self.foundPeers.contains(peerID) { self.foundPeers.append(peerID) }
-            self.foundPresenter = true
-            // If the user already entered a code, invite this freshly-found peer too.
-            if !self.remoteCode.isEmpty { self.inviteFoundPeers() }
+            // List it for the user to pick — no automatic invitation.
+            let title = info?["title"].map { String($0.prefix(60)) }
+            if let i = self.presenters.firstIndex(where: { $0.peerID == peerID }) {
+                // Re-discovery (Wi-Fi + Bluetooth) hands us an equal but distinct
+                // MCPeerID; keep the original so the entry's id stays stable.
+                let known = self.presenters[i].peerID
+                self.presenters[i] = FoundPresenter(peerID: known, name: known.displayName, title: title)
+            } else {
+                self.presenters.append(FoundPresenter(peerID: peerID, name: peerID.displayName, title: title))
+            }
         }
     }
 
     nonisolated func browser(_ browser: MCNearbyServiceBrowser, lostPeer peerID: MCPeerID) {
         Task { @MainActor in
-            self.foundPeers.removeAll { $0 == peerID }
-            self.foundPresenter = !self.foundPeers.isEmpty
+            self.presenters.removeAll { $0.peerID == peerID }
         }
     }
 }
