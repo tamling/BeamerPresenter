@@ -41,7 +41,7 @@ Restrisiken nach einer ausdrücklichen Benutzerbestätigung.
 |---|---|---|---|---|
 | Hoch | 1 | 1 | – | – |
 | Mittel | 4 + 1 (Linux) | 4 | 1 | – |
-| Niedrig | 10 + 11 (Linux) | 13 | 2 | 6 |
+| Niedrig | 10 + 11 (Linux) | 15 | 3 | 3 |
 | Info | 7 + 2 (Linux) | – | – | 9 |
 
 ## Befunde macOS / iPad
@@ -62,7 +62,7 @@ Restrisiken nach einer ausdrücklichen Benutzerbestätigung.
 | L7 | Niedrig | macOS · LibreOffice | `soffice` lief mit dem Profil des Benutzers (Makro-Einstellungen, vertrauenswürdige Orte) und ohne Zeitlimit. | **teilweise** — Rückfrage vor der Konvertierung, Wegwerf-Profil (`-env:UserInstallation`), 120 s Limit. Kein Sandboxing von LibreOffice selbst (außerhalb der App nicht machbar). |
 | L8 | Niedrig | macOS · Build | Die Codesign-Rückfallebene in `build-app.sh` verlor die Hardened Runtime. | **behoben** — Rückfall nur ohne `--timestamp`, `--options runtime` bleibt. Ad-hoc-Signatur (ohne Identität) hat weiterhin keine Hardened Runtime, siehe I-Punkte. |
 | L9 | Niedrig | macOS · Weitergabe | Bei Build-Fehlern bietet die App an, die Datei im Editor / in der Standard-App zu öffnen. | **akzeptiert** — nur auf ausdrücklichen Klick. |
-| L10 | Niedrig | macOS · Vertrauen | „Always trust this folder“ ist dauerhaft und lässt sich in der Oberfläche nicht zurücknehmen; `AppDelegate.forgetTrustedBuildFolders()` existiert, wird aber nirgends aufgerufen. | **offen** — Schalter in `SettingsView.swift` fehlt. Gemildert: für Home, `/`, Downloads, Desktop und Temp-Ordner wird Vertrauen nie angeboten oder beachtet. |
+| L10 | Niedrig | macOS · Vertrauen | „Always trust this folder“ ist dauerhaft und lässt sich in der Oberfläche nicht zurücknehmen; `AppDelegate.forgetTrustedBuildFolders()` existiert, wird aber nirgends aufgerufen. | **behoben** — Einstellungen › „LaTeX & LibreOffice“ › „Forget All“ ruft `forgetTrustedBuildFolders()` auf. Zusätzlich gilt: für Home, `/`, Downloads, Desktop und Temp-Ordner wird Vertrauen nie angeboten oder beachtet. |
 | I1 | Info | macOS | Zuletzt geöffnete Dateien, Favoriten und Security-Scoped-Bookmarks enthalten Klartextpfade (`UserDefaults`). | akzeptiert — lokal, für die Funktion nötig. |
 | I2 | Info | macOS | Beim Start werden bis zu 40 Bookmarks wiederhergestellt (`AccessBookmarks.maxEntries`), d. h. breiter Dateizugriff ab Start. | akzeptiert — Komfortfunktion; Liste ist begrenzt und wird bereinigt. |
 | I3 | Info | Tools | `Tools/make-signing-cert.sh` nutzt ein fest kodiertes PKCS#12-Passwort (`beamer`) für eine temporäre Datei. | akzeptiert — Datei liegt nur kurz in einem `mktemp`-Ordner, Zertifikat ist selbstsigniert und lokal. |
@@ -86,8 +86,8 @@ Restrisiken nach einer ausdrücklichen Benutzerbestätigung.
 | LX9 | Niedrig | IPC | Alle Commands sind aus beiden Fenstern aufrufbar (keine Capabilities pro Fenster), `withGlobalTauri: true`; `grant_deck` nimmt jeden absoluten Dateipfad. | **akzeptiert** — beide Fenster laden nur eigene, gebündelte Seiten; mit der CSP (LX1) und den escapenden DOM-Senken gibt es keinen bekannten Weg, fremdes Skript einzuschleusen. |
 | LX10 | Info | IPC | `file_exists` / `tex_candidates` beantworten Existenzfragen zu beliebigen Pfaden. | akzeptiert — nur für eigenes Frontend erreichbar (siehe LX9). |
 | LX11 | Niedrig | `compile_tex` | Restabweichungen zu macOS: keine Symlink-Prüfung vor dem Build (ein Link `s.tex -> ../geheim` umgeht `openin_any=p`), `lualatex` steht noch in `LATEX_ENGINES` (`\directlua` → `os.remove`), „Always trust this folder“ auch für `/tmp`, Downloads usw. | **offen** — alles erst nach Bestätigung des Benutzers ausnutzbar; Vorlage ist `SafeProcess.linksLeavingFolder` bzw. `AppDelegate.isSharedFolder`. |
-| LX12 | Niedrig | `texnotes.js` | Der Frontend-Notizparser ist noch die alte, quadratische Fassung: ein offenes `\note{` gefolgt von vielen weiteren `\note{` lässt `bracedGroup` jedes Mal bis zum Dateiende laufen. Gemessen: 2 000 / 4 000 / 8 000 Zeilen → 0,14 / 0,47 / 1,9 s; eine 3,7-MB-Datei (unter dem 5-MB-Limit) blockiert die Konsole hochgerechnet ~10 min. | **offen** — Swift-Fix (`TexNotes.skipOptional`/Abbruch bei offener Gruppe) nach `Linux/ui/js/texnotes.js` portieren. |
-| LX13 | Niedrig | Verfügbarkeit | `compile_tex`, `convert_office` und `pptx_notes` sind synchrone Tauri-Commands; Tauri führt diese im IPC-Handler auf dem Hauptthread aus (`tauri-macros` 2.6.3, `body_blocking`). Ein Build friert das Fenster bis zu 180 s ein; es gibt keinen Abbrechen-Knopf. | **offen** — als `async fn` bzw. `#[tauri::command(async)]` deklarieren und ein Abbrechen-Command ergänzen. |
+| LX12 | Niedrig | `texnotes.js` | Der Frontend-Notizparser ist noch die alte, quadratische Fassung: ein offenes `\note{` gefolgt von vielen weiteren `\note{` lässt `bracedGroup` jedes Mal bis zum Dateiende laufen. Gemessen: 2 000 / 4 000 / 8 000 Zeilen → 0,14 / 0,47 / 1,9 s; eine 3,7-MB-Datei (unter dem 5-MB-Limit) blockiert die Konsole hochgerechnet ~10 min. | **behoben** — wie in Swift beendet eine offene Gruppe (`\note{`, `\note<`, `\note[`, `\begin{`) den Scan; Tests in `Linux/ui/test/texnotes.test.mjs` (150 000 offene `\note{` in < 1,5 s, vorher > 2 min). |
+| LX13 | Niedrig | Verfügbarkeit | `compile_tex`, `convert_office` und `pptx_notes` sind synchrone Tauri-Commands; Tauri führt diese im IPC-Handler auf dem Hauptthread aus (`tauri-macros` 2.6.3, `body_blocking`). Ein Build fror das Fenster bis zu 180 s ein; es gibt keinen Abbrechen-Knopf. | **teilweise** — die drei Commands sind jetzt `async` und laufen auf dem Blocking-Pool (`off_main` → `spawn_blocking`), das Fenster bleibt bedienbar. **Offen:** ein Abbrechen-Knopf; bis dahin greift das 180-s-Limit. |
 | LX14 | Info | Build | `compile_tex` schreibt Hilfsdateien und PDF neben die Quelle. | akzeptiert — gewolltes Verhalten wie auf macOS. |
 
 ## Umgesetzte Korrekturen
@@ -140,9 +140,8 @@ Restrisiken nach einer ausdrücklichen Benutzerbestätigung.
 |---|---|
 | LaTeX nach Bestätigung: `biber` ignoriert die kpathsea-Variablen (`\addbibresource{/abs/pfad}` wird gelesen); Symlinks nach „Compile Anyway“. | Die Rückfrage ist die Hauptschutzlinie; ein vollständiges Sandboxing von TeX ist ohne eigenen Container nicht machbar. |
 | `PptxNotes` entpackt synchron auf dem Hauptthread (M2-Rest). | Begrenzt auf 2 × 30 s; Verschieben in eine Hintergrundaufgabe ist für die nächste Iteration vorgesehen. |
-| Vertrauensliste nicht zurücksetzbar (L10). | Kleiner UI-Nachtrag in `SettingsView.swift`. |
 | Mentimeter-Navigation ohne Allow-List (L5). | SSO-Anmeldungen führen über fremde Hosts. |
 | Ad-hoc-signierte Builds ohne Hardened Runtime (I7). | Nur lokale Entwickler-Builds; `Tools/make-signing-cert.sh` erzeugt eine Identität, mit der `build-app.sh` die Hardened Runtime setzt. |
 | `SafeProcess.linksLeavingFolder` ohne eigenen Unit-Test, keine Symlink-Fixture im Parcours. | Funktion wurde beim Implementieren in einem Wegwerf-Test geprüft; ein dauerhafter Test in `SafeProcessTests` steht aus. |
 | Linux LX4 (TOCTOU), LX9, LX10, LX14. | Lokale, vom Benutzer ausgelöste Abläufe; kein Fremdinhalt im eigenen Frontend. |
-| Linux LX11–LX13. | Offen, nicht akzeptiert — Verfügbarkeits- bzw. Restrisiken; als nächste Korrekturen eingeplant. |
+| Linux LX11 (keine Symlink-Prüfung, `lualatex`, Vertrauen auch für Downloads/Temp) und LX13-Rest (kein Abbrechen-Knopf). | Offen, nicht akzeptiert — als nächste Korrekturen eingeplant. |

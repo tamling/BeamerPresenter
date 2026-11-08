@@ -25,6 +25,10 @@ Security, pentest and usability audit — reports in `docs/SECURITY_REVIEW.md`,
   clamped, so a hostile device can't crash the remote.
 - **Linux**: a real Content-Security-Policy, file access only to the folder of
   the deck you opened, 5 MB caps when reading notes, robust local storage.
+  Builds, conversions and `.pptx` notes run in the background, so the window
+  stays responsive (there is no Cancel button on Linux yet).
+- Settings › LaTeX & LibreOffice › **Forget All** resets the trusted folders
+  (macOS).
 - Size caps and no quadratic scans when reading `.tex` / `.pptx` notes; zip
   bombs and symlinks in a `.pptx` are refused.
 - **No more data loss in `<deck>.notes.txt`**: a file that isn't UTF-8 is read

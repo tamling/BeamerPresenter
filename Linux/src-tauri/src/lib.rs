@@ -133,8 +133,7 @@ fn latex_input(tex: &Path) -> Option<PathBuf> {
 
 /// Compiles a .tex next to itself using the first LaTeX tool found
 /// (latexmk → pdflatex → xelatex → lualatex). Returns the sibling PDF path.
-#[tauri::command]
-fn compile_tex(tex_path: String) -> CompileResult {
+fn compile_tex_blocking(tex_path: String) -> CompileResult {
     let tex = PathBuf::from(&tex_path);
     let dir = tex.parent().unwrap_or(Path::new("."));
     let Some(input) = latex_input(&tex) else {
@@ -195,8 +194,7 @@ fn latex_failure_log(log: &str) -> String {
 }
 
 /// Converts a PowerPoint/ODP to a sibling PDF via headless LibreOffice.
-#[tauri::command]
-fn convert_office(path: String) -> CompileResult {
+fn convert_office_blocking(path: String) -> CompileResult {
     let source = PathBuf::from(&path);
     let dir = source.parent().unwrap_or(Path::new("."));
     let Some(soffice) = office_binary() else {
@@ -373,8 +371,7 @@ fn tail(s: &str, lines: usize) -> String {
 
 /// Speaker notes per slide (in presentation order, "" where a slide has none)
 /// for the .pptx with the same base name as the given PDF.
-#[tauri::command]
-fn pptx_notes(pdf_path: String) -> Vec<String> {
+fn pptx_notes_blocking(pdf_path: String) -> Vec<String> {
     let pptx = PathBuf::from(&pdf_path).with_extension("pptx");
     let Ok(file) = fs::File::open(&pptx) else { return vec![] };
     let Ok(mut archive) = zip::ZipArchive::new(file) else { return vec![] };
@@ -640,13 +637,47 @@ mod tests {
         z.write_all(br#"<p:sp><p:ph type="sldImg"/></p:sp><p:sp><p:nvSpPr><p:ph type="body" idx="1"/></p:nvSpPr><p:txBody><a:p><a:r><a:t>Greet the </a:t></a:r><a:r><a:t>audience &amp; smile</a:t></a:r></a:p><a:p><a:r><a:t>Second line</a:t></a:r></a:p></p:txBody></p:sp>"#).unwrap();
         z.finish().unwrap();
 
-        let notes = pptx_notes(dir.join("deck.pdf").to_string_lossy().into_owned());
+        let notes = pptx_notes_blocking(dir.join("deck.pdf").to_string_lossy().into_owned());
         fs::remove_dir_all(&dir).ok();
 
         assert_eq!(notes.len(), 2);
         assert_eq!(notes[0], "Greet the audience & smile\nSecond line");
         assert_eq!(notes[1], "");
     }
+}
+
+// The slow commands are async and do their work on the blocking pool: Tauri
+// runs plain (sync) commands on the main thread, so a 3-minute LaTeX build or
+// a big .pptx would freeze both windows for its whole duration.
+
+/// Runs `job` on Tauri's blocking pool; `fallback` if the task panics.
+async fn off_main<T: Send + 'static>(job: impl FnOnce() -> T + Send + 'static, fallback: T) -> T {
+    tauri::async_runtime::spawn_blocking(job).await.unwrap_or(fallback)
+}
+
+#[tauri::command]
+async fn compile_tex(tex_path: String) -> CompileResult {
+    let fallback = CompileResult {
+        ok: false,
+        pdf_path: None,
+        log: "The LaTeX build stopped unexpectedly.".into(),
+    };
+    off_main(move || compile_tex_blocking(tex_path), fallback).await
+}
+
+#[tauri::command]
+async fn convert_office(path: String) -> CompileResult {
+    let fallback = CompileResult {
+        ok: false,
+        pdf_path: None,
+        log: "The LibreOffice conversion stopped unexpectedly.".into(),
+    };
+    off_main(move || convert_office_blocking(path), fallback).await
+}
+
+#[tauri::command]
+async fn pptx_notes(pdf_path: String) -> Vec<String> {
+    off_main(move || pptx_notes_blocking(pdf_path), Vec::new()).await
 }
 
 pub fn run() {

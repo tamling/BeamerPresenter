@@ -44,6 +44,14 @@ struct SettingsView: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
 
+            Section("LaTeX & LibreOffice") {
+                LabeledContent("Trusted folders") {
+                    Button("Forget All") { AppDelegate.forgetTrustedBuildFolders() }
+                }
+                Text("The app asks before it compiles a .tex or converts a PowerPoint file, unless you chose “Always trust this folder”. Forget All brings the question back everywhere.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+
             Section("Presenter console") {
                 Picker("Open a slide (strip & overview) with", selection: $doubleClickSlides) {
                     Text("Single click").tag(false)

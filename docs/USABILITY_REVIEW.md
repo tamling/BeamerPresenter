@@ -63,7 +63,7 @@ Einzeltasten wirken nur mit geöffnetem Deck und nicht, während ein Textfeld de
 | F | Publikum Vollbild (neu, nur mit 2. Bildschirm) | Publikum Vollbild | – |
 | P / L | Stift / Laser | – | – |
 | C | Tinte der Folie löschen (mit Z rückholbar) | **Whiteboard** leeren (nur bei offenem Board) | – |
-| Z | Strich rückgängig | Strich rückgängig | – |
+| Z | Strich rückgängig (Folie und Board) | Strich rückgängig (**nur Whiteboard**) | – |
 | G / E / W / R | ja | ja | – |
 | B | Schwarz | Schwarz | Schwarz |
 | `.` (Presenter-Fernbedienungen senden oft `.` für Schwarz) | – | – | Schwarz |
@@ -202,10 +202,10 @@ Plattform-Tasten) und **ein** klarer Weg aus der Präsentation.
 | 🟡 | Whiteboard-Umschalter im Menü ohne ⌘-Kürzel | **offen** |
 | 🟡 | Schwarzbild-Einstellungen doppelt (Settings und Menü) | **offen** — Stufe 3 |
 | 🟡 | Mentimeter nur im File-Menü, eigenes Fenster | **offen** — Stufe 3 |
-| 🟡 | „Always trust this folder“ lässt sich nirgends zurücknehmen (macOS: `forgetTrustedBuildFolders` existiert, ist aber nicht verdrahtet; Linux: kein Gegenstück) | **offen** (Sicherheitsbefund L10) — Stufe 1-Nachtrag |
+| 🟡 | „Always trust this folder“ lässt sich nirgends zurücknehmen (macOS: `forgetTrustedBuildFolders` existiert, ist aber nicht verdrahtet; Linux: kein Gegenstück) | **macOS behoben** (Einstellungen › „Forget All“; Sicherheitsbefund L10), Linux offen — Stufe 1-Nachtrag |
 | 🟡 | Tastenbelegung je Plattform verschieden (T/F/P/L/C/Esc/`.`) | **teilweise** — T und F jetzt auf macOS; Rest Stufe 2 |
-| 🟡 | Linux: Fenster reagiert während eines Builds nicht, kein Abbrechen | **offen** (Sicherheitsbefund LX13) |
-| 🟡 | Linux: Konsole hängt bei einer `.tex` mit offenem `\note{` minutenlang (Fixture `notes-unclosed`) | **offen** (Sicherheitsbefund LX12) |
+| 🟡 | Linux: Fenster reagierte während eines Builds nicht, kein Abbrechen | **teilweise** — Fenster bleibt jetzt bedienbar; Abbrechen fehlt (LX13-Rest) |
+| 🟡 | Linux: Konsole hängt bei einer `.tex` mit offenem `\note{` minutenlang (Fixture `notes-unclosed`) | **behoben** (Sicherheitsbefund LX12) |
 | 🟢 | Esc verlässt die Präsentation nie | **akzeptiert** — schützt vor versehentlichem Ende vor Publikum |
 | 🟢 | Wort „tap“ auf macOS (Whiteboard-Tooltip „Drag to move · tap to select“) | **offen** |
 | 🟢 | Settings-Fenster fest, nicht skalierbar (Startgröße 480×340, Inhalt 500×620) | **offen** — auf dem Mac prüfen, ob unten etwas abgeschnitten wird |
@@ -240,7 +240,7 @@ Plattform-Tasten) und **ein** klarer Weg aus der Präsentation.
 - **Notizen-Quelle wählbar:** „Notes › Choose Notes File…“ auf macOS (wie
   `NotesPanel` auf dem iPad); `TexNotes` meldet den tatsächlich benutzten Dateinamen.
 - **Hilfe:** Tastenübersicht dauerhaft über Help-Menü und `?`.
-- **Linux:** Builds asynchron mit Abbrechen-Knopf (LX13).
+- **Linux:** Abbrechen-Knopf für Builds (LX13-Rest; asynchron laufen sie bereits).
 
 ### Stufe 3 — Struktur (größerer Umbau)
 

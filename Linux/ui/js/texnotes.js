@@ -92,6 +92,7 @@ const TexNotes = (() => {
         i = j;
       } else if (name === "begin") {
         const g = bracedGroup(s, skipSpaces(s, j));
+        if (g === UNTERMINATED) break; // nothing after it can be a group either
         if (g && g.body === "frame") {
           frame++;
           i = g.after;
@@ -101,10 +102,13 @@ const TexNotes = (() => {
       } else if (name === "note") {
         let k = skipSpaces(s, j);
         k = skipOptional(s, k, "<", ">"); // \note<2>{…}
+        if (k < 0) break;
         k = skipSpaces(s, k);
         k = skipOptional(s, k, "[", "]"); // \note[item]{…}
+        if (k < 0) break;
         k = skipSpaces(s, k);
         const g = bracedGroup(s, k);
+        if (g === UNTERMINATED) break;
         if (g) {
           const text = cleanup(g.body);
           if (frame >= 0 && text) {
@@ -127,16 +131,21 @@ const TexNotes = (() => {
   }
 
   // If s[i] opens an optional group, returns the index just past its close;
-  // otherwise returns i unchanged.
+  // otherwise returns i unchanged. -1 when the group never closes: the caller
+  // stops there, since rescanning the rest for every later \note would make a
+  // crafted file quadratic (like the macOS TexNotes).
   function skipOptional(s, i, open, close) {
     if (i >= s.length || s[i] !== open) return i;
     let j = i + 1;
     while (j < s.length && s[j] !== close) j++;
-    return j < s.length ? j + 1 : i;
+    return j < s.length ? j + 1 : -1;
   }
 
+  const UNTERMINATED = { unterminated: true };
+
   // Reads a balanced `{ … }` group starting at s[i] === "{", honouring nested
-  // braces and `\{` / `\}` escapes.
+  // braces and `\{` / `\}` escapes. null when s[i] isn't "{", UNTERMINATED
+  // when the group runs to the end of the file.
   function bracedGroup(s, i) {
     if (i >= s.length || s[i] !== "{") return null;
     let depth = 0;
@@ -152,7 +161,7 @@ const TexNotes = (() => {
       }
       j++;
     }
-    return null;
+    return UNTERMINATED;
   }
 
   // ---- Comment & markup cleanup ------------------------------------------
