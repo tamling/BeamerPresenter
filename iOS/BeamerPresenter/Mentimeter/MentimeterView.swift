@@ -16,6 +16,8 @@ struct MentimeterView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
+                originBar
+                Divider()
                 MentiWebView(browser: browser)
                 Divider()
                 audienceBar
@@ -44,9 +46,39 @@ struct MentimeterView: View {
         .sheet(isPresented: $showShare) { if let url = shareURL { ShareSheet(items: [url]) } }
     }
 
+    /// The page's real origin. The navigation title always reads "Mentimeter", so
+    /// this is the only way to tell a login page on mentimeter.com from one that
+    /// merely looks like it.
+    @ViewBuilder private var originBar: some View {
+        let url = URL(string: browser.urlString)
+        let host = url?.host ?? ""
+        let trusted = url?.scheme == "https" && Self.isMentimeterHost(host)
+        HStack(spacing: 6) {
+            Image(systemName: trusted ? "lock.fill" : "exclamationmark.triangle.fill")
+                .font(.caption)
+                .foregroundStyle(trusted ? Color.secondary : Color.orange)
+            Text(host.isEmpty ? "Loading…" : host)
+                .font(.caption.monospaced())
+                .foregroundStyle(trusted ? Color.secondary : Color.primary)
+                .lineLimit(1).truncationMode(.middle)
+            if !trusted && !host.isEmpty {
+                Text("not mentimeter.com").font(.caption2).foregroundStyle(.orange)
+            }
+            Spacer()
+        }
+        .padding(.horizontal, 16).padding(.vertical, 6)
+        .background(.bar)
+    }
+
+    /// Label-boundary-safe host test, so `mentimeter.com.example` is not trusted.
+    private static func isMentimeterHost(_ host: String) -> Bool {
+        let host = host.lowercased()
+        return host == "mentimeter.com" || host.hasSuffix(".mentimeter.com")
+    }
+
     @ViewBuilder private var audienceBar: some View {
         HStack(spacing: 12) {
-            if model.mentiActive {
+            if model.mentiActive && external.isConnected {
                 Circle().fill(.green).frame(width: 9, height: 9)
                 Text("Live on display").font(.callout.weight(.medium))
                 Spacer()
@@ -69,7 +101,7 @@ struct MentimeterView: View {
                     }
                 } label: { Label("Present on display", systemImage: "play.rectangle.on.rectangle") }
                     .buttonStyle(.borderedProminent)
-                    .disabled(browser.currentURL == nil)
+                    .disabled(browser.currentURL == nil || !external.isConnected)
             }
         }
         .padding(.horizontal, 16).padding(.vertical, 10)
@@ -84,7 +116,8 @@ struct MentimeterView: View {
                 ForEach(recents) { link in
                     Button(link.title) {
                         browser.load(link.url)
-                        model.startMenti(link.url)
+                        // Only claim it is live once there is a display to put it on.
+                        if external.isConnected { model.startMenti(link.url) }
                     }
                 }
                 Divider()

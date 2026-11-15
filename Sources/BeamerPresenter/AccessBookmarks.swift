@@ -53,10 +53,12 @@ enum AccessBookmarks {
     /// Call once early at launch.
     static func restoreAll() {
         var map = loadMap()
+        trim(&map)   // cap first: only what we keep is worth resolving
 
         for (path, entry) in map {
             var stale = false
-            if let url = resolve(entry.data, stale: &stale) {
+            do {
+                let url = try resolve(entry.data, stale: &stale)
                 if url.startAccessingSecurityScopedResource() { accessed.append(url) }
                 if stale || url.path != path {
                     // The file moved: re-store under its new path and drop the
@@ -65,21 +67,25 @@ enum AccessBookmarks {
                     map[url.path] = Entry(data: bookmarkData(for: url) ?? entry.data,
                                           lastUsed: entry.lastUsed)
                 }
-            } else if FileManager.default.fileExists(atPath: path) {
-                // Bookmark broke but the file is still there — re-create it
-                // from the path instead of carrying the dead data forever.
-                let url = URL(fileURLWithPath: path)
-                if let data = bookmarkData(for: url) {
+            } catch {
+                // Prune only what is definitely gone — the error says "no such
+                // file" *and* the enclosing folder is there. A share that isn't
+                // mounted right now keeps its entry, or one launch off the VPN
+                // would throw the remembered grant away.
+                let fm = FileManager.default
+                let parent = URL(fileURLWithPath: path).deletingLastPathComponent().path
+                guard isMissing(error), fm.fileExists(atPath: parent) else { continue }
+                if fm.fileExists(atPath: path),
+                   let data = bookmarkData(for: URL(fileURLWithPath: path)) {
+                    // Bookmark broke but the file is still there — re-create it
+                    // from the path instead of carrying the dead data forever.
                     map[path] = Entry(data: data, lastUsed: entry.lastUsed)
                 } else {
                     map[path] = nil
                 }
-            } else {
-                map[path] = nil
             }
         }
 
-        trim(&map)
         saveMap(map)
     }
 
@@ -99,13 +105,29 @@ enum AccessBookmarks {
             ?? (try? url.bookmarkData())
     }
 
-    private static func resolve(_ data: Data, stale: inout Bool) -> URL? {
-        if let url = try? URL(resolvingBookmarkData: data, options: [.withSecurityScope],
+    /// Resolution never mounts a volume or puts up a panel: `restoreAll` runs
+    /// before the first window exists, so a bookmark to an absent network
+    /// share must fail fast instead of blocking launch on a mount attempt.
+    /// Throws the plain attempt's error, which tells the caller whether the
+    /// file is gone or merely out of reach.
+    private static func resolve(_ data: Data, stale: inout Bool) throws -> URL {
+        let options: URL.BookmarkResolutionOptions = [.withoutMounting, .withoutUI]
+        if let url = try? URL(resolvingBookmarkData: data,
+                              options: options.union(.withSecurityScope),
                               relativeTo: nil, bookmarkDataIsStale: &stale) {
             return url
         }
-        return try? URL(resolvingBookmarkData: data, options: [],
-                        relativeTo: nil, bookmarkDataIsStale: &stale)
+        return try URL(resolvingBookmarkData: data, options: options,
+                       relativeTo: nil, bookmarkDataIsStale: &stale)
+    }
+
+    /// Whether resolution failed because the file is gone, rather than because
+    /// its volume is away (or the user denied access). Anything unrecognised
+    /// counts as "away", keeping the entry.
+    private static func isMissing(_ error: Error) -> Bool {
+        let error = error as NSError
+        guard error.domain == NSCocoaErrorDomain else { return false }
+        return error.code == NSFileNoSuchFileError || error.code == NSFileReadNoSuchFileError
     }
 
     /// Keeps only the most recently used entries.

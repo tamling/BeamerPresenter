@@ -102,9 +102,17 @@ fi
 
 if [ -n "$SIGN_IDENTITY" ]; then
     echo "▶︎ Codesigning with: $SIGN_IDENTITY"
-    # Self-signed identities can't get an Apple timestamp — fall back quietly.
-    codesign --force --options runtime --timestamp --sign "$SIGN_IDENTITY" "$APP" 2>/dev/null \
-        || codesign --force --sign "$SIGN_IDENTITY" "$APP"
+    # Self-signed identities can't get an Apple timestamp — retry without it,
+    # but keep the hardened runtime and show why the first attempt failed:
+    # `codesign --verify` doesn't look at the runtime flag, so a silent
+    # fallback would ship an unhardened app unnoticed.
+    SIGN_ERR="$(mktemp)"
+    trap 'rm -f "$SIGN_ERR"' EXIT
+    if ! codesign --force --options runtime --timestamp --sign "$SIGN_IDENTITY" "$APP" 2>"$SIGN_ERR"; then
+        echo "  ⚠︎ Timestamped signing failed — signing without --timestamp:" >&2
+        cat "$SIGN_ERR" >&2
+        codesign --force --options runtime --sign "$SIGN_IDENTITY" "$APP"
+    fi
     codesign --verify --verbose "$APP"
 else
     echo "▶︎ Codesigning ad-hoc (no identity found)."

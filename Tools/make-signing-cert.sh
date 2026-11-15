@@ -36,7 +36,10 @@ openssl pkcs12 -export -inkey "$TMP/key.pem" -in "$TMP/cert.pem" \
     -name "$NAME" -out "$TMP/cert.p12" -passout pass:beamer >/dev/null 2>&1
 
 echo "▶︎ Importing into the login keychain…"
-security import "$TMP/cert.p12" -k "$KEYCHAIN" -P beamer -T /usr/bin/codesign >/dev/null
+# -x marks the key non-extractable (codesign uses it in place, so signing still
+# works) and -T limits its use to codesign, so nothing else can lift the key out
+# of the keychain, which stays unlocked for the whole login session.
+security import "$TMP/cert.p12" -k "$KEYCHAIN" -P beamer -x -T /usr/bin/codesign >/dev/null
 
 echo "▶︎ Trusting it for code signing (macOS may ask for your password)…"
 if ! security add-trusted-cert -p codeSign -k "$KEYCHAIN" "$TMP/cert.pem" 2>/dev/null; then

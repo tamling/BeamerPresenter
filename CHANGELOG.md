@@ -1,5 +1,139 @@
 # Changelog
 
+## v7.0 — 2026-11-15
+
+A security and robustness release. An audit of all three platforms produced 117
+confirmed findings — each one checked by three independent reviewers before it
+was accepted — and this release closes 110 of them. Major version because
+several changes are deliberately breaking: see **Breaking** below.
+
+### Security
+
+- **Opening an untrusted `.tex` could run arbitrary code.** `latexmk` was
+  started with the deck's own folder as its working directory and without
+  `-norc`, and it evaluates a `latexmkrc` found there as Perl. A downloaded talk
+  that shipped `talk.tex` alongside a `latexmkrc` therefore ran that file's code
+  on open, with no prompt. latexmk now starts in an empty scratch folder, takes
+  `-norc` as its first argument and `-cd`s into the deck only for the compile.
+  Your own `~/.latexmkrc` is restored explicitly, so your setup keeps working.
+  Fixed on macOS and in the Linux port.
+- `shell_escape`, `openin_any` and `openout_any` are pinned in the child
+  environment, which also binds the engines latexmk spawns — a
+  `-no-shell-escape` argument never reaches those. A crafted deck can no longer
+  read dot files or write outside its own folder.
+- Deck paths are anchored, so a file named like a command-line option cannot
+  pose as one, and latexmk refuses paths containing `$` or `` ` ``.
+- The `.pptx` reader no longer extracts an untrusted archive without limits,
+  leaves its temp tree behind when extraction fails, or deadlocks the main
+  thread on pipes it never drained. Its XML scans no longer backtrack
+  quadratically over unclosed tags.
+- `.tex` and `.nav` sources are size-capped, and a crafted `.nav` frame range no
+  longer spins the main thread.
+- Linux: both WebViews get a real Content-Security-Policy instead of none, and
+  `read_text` is restricted to `.tex`/`.nav` instead of being a
+  whole-filesystem read reachable from the page.
+- Compile and conversion children now have a deadline and a bounded log, and on
+  Linux they lead their own process group so a timeout reaches what they spawned.
+
+### Breaking
+
+- **A deck's own `latexmkrc` is no longer run.** Decks that relied on one (for
+  `$pdf_mode`, a custom `$bibtex`, extra dependencies) now build without it; the
+  failure log says so. Compile such a deck in a terminal and open the PDF.
+- **⌘Z now undoes typing, not ink.** There is a proper Edit menu at last, so
+  Undo/Redo/Cut/Copy/Paste/Select All work in every text field. Undoing a pen
+  stroke moves to ⌥⌘Z, and Clear Ink gains ⇧⌘K.
+- **← and → move the caret in text fields** instead of changing the slide. Page
+  Up/Page Down still drive the deck, so clickers are unaffected, and esc leaves
+  the field.
+- **The iPhone remote's pairing protocol changed and is not compatible with
+  older builds.** The code is no longer sent over the network: the presenter
+  advertises a nonce, both sides prove they know the code, only one remote is
+  admitted at a time, the code is re-rolled after a disconnect and after five
+  rejected attempts, and the deck filename is no longer broadcast in discovery.
+  State from a peer is validated instead of trusted.
+- "Start with a black audience screen" now also applies to a resumed deck.
+- **Keep screen awake now defaults to on** on iPad.
+
+### macOS
+
+- The projector is identified as the external (non-built-in) display instead of
+  being assumed to be `screens[1]`, which inverted console and projector on many
+  arrangements. Screen changes no longer re-centre a window you moved.
+- Presenter keys act only while the console or the projector is frontmost, so
+  typing in Settings, the Mentimeter browser or a save panel no longer drives
+  the projector.
+- "Save Presentation As…" and "Insert into PDF (Copy)…" refused nothing and
+  would happily write over the deck PDFKit was still reading from, corrupting it
+  while reporting success. Both now refuse by file identity (symlinks and hard
+  links included).
+- A failed rebuild no longer passes a stale sibling PDF off as its own output,
+  and opening a `.tex`/`.pptx` whose PDF is older now asks instead of silently
+  presenting the old build.
+- A notes file the app cannot read is never deleted; clearing moves it to the
+  Trash, and an existing file is backed up before being written over.
+- A manually chosen translated deck is page-count checked, as the auto-detected
+  one already was, so the console cannot sit on a stale slide.
+- New Window menu; the audience window can be brought back instead of being lost
+  for the session, and no longer projects window buttons over the slide.
+- Text colours re-spaced for WCAG AA, thumbnails are keyboard-reachable, and
+  VoiceOver reports on/off state for the control-bar toggles.
+- Mentimeter exports download beside the target and replace it only once
+  complete, so an interrupted export cannot destroy the previous file.
+
+### iPad
+
+- **The external display never worked at all**: the audience window was a
+  scene-less `UIWindow` in a `WindowGroup` app. It is now hosted in the
+  `UIWindowScene` iOS creates for the external screen.
+- Decks reopen at the slide you left off, per deck.
+- The slide strip builds only visible thumbnails, so long decks open without a
+  multi-second freeze; the overview grid renders at its own size instead of
+  upscaling the strip's bitmaps.
+- Export & Share writes into Documents (visible in Files) instead of the temp
+  directory, never overwrites an existing file, and no longer marks annotations
+  saved before the share sheet has answered.
+- The Mentimeter browser shows the page's real host, with a warning when it is
+  not mentimeter.com.
+
+### Linux
+
+- The Content-Security-Policy added here forbids inline script, so the three
+  inline blocks the pages carried moved into their own files — including the one
+  that loads pdf.js. Verified end to end: a deck parses and renders under the
+  shipped CSP with no violations.
+- Thumbnails and the overview grid render on scroll and release off-screen
+  bitmaps instead of rendering every page up front; the overview no longer stays
+  blank for every deck after the first.
+- Closing or switching a deck frees the previous pdf.js document and its worker
+  instead of leaking one per deck.
+- Rapid navigation, toggling the twin deck and toggling blackout no longer leave
+  the projector blank or the console out of step.
+
+### Build and CI
+
+- Every third-party GitHub Action is pinned to a full commit SHA.
+- `.deb` builds use `--locked`, and a pushed `v*` tag that disagrees with the
+  version in `Cargo.toml` fails the workflow instead of publishing over the
+  matching release.
+- `build-app.sh` no longer hides a codesign failure or silently drops the
+  hardened runtime, and `Tools/make-signing-cert.sh` imports the key as
+  non-extractable.
+
+### Known gaps
+
+- The Tauri asset-protocol scope is still `**`. Narrowing it needs per-deck
+  runtime grants on the load path; with the new CSP in place this is
+  defence-in-depth, and it is tracked for the next release.
+- Five further findings are deferred, each with its reason recorded: a
+  page-count DoS in the Linux strip and overview build loops (both available
+  fixes would have regressed working behaviour); notes picked by hand for an
+  overlay deck on iOS, which needs changes spread across files this pass did not
+  own; a pdf.js version bump, declined as scope creep since the vendored 4.10.38
+  post-dates the CVE it was raised for; and two new files — a Dependabot config
+  for the action pins and a declarative pdf.js VERSION file, whose content is
+  recorded in Linux/README.md in the meantime.
+
 ## v6.3 — 2026-10-31
 
 - **Fixed a macOS-hostile case collision**: the repo carried both `Tools/` and

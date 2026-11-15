@@ -83,7 +83,20 @@ private struct BlackScreenView: View {
 
     private var backgroundImage: NSImage? {
         guard !imagePath.isEmpty else { return nil }
-        return NSImage(contentsOfFile: imagePath)
+        return Self.loaded(imagePath)
+    }
+
+    /// The background is loaded once per path and kept: `body` re-runs every
+    /// second for the clock, and reading the file from there would re-decode
+    /// (and re-upload) the whole image on every tick — and drop the background
+    /// altogether if the file became unreachable mid-talk.
+    private static var cached: (path: String, image: NSImage?)?
+
+    private static func loaded(_ path: String) -> NSImage? {
+        if let cached, cached.path == path { return cached.image }
+        let image = NSImage(contentsOfFile: path)
+        cached = (path, image)
+        return image
     }
 }
 

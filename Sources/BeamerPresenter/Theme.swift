@@ -42,10 +42,13 @@ enum Theme {
     static let blackout        = Color(hex: 0x08090B)                                 // audience black-out (always black)
 
     // Text & lines
+    // The ladder is spaced so every rung clears WCAG AA (4.5:1) on the surfaces
+    // it is drawn on: muted carries 9–10 pt captions and faint 12–13 pt prose,
+    // far below the large-text exemption.
     static var textPrimary: Color   { pick(Color(hex: 0xE9ECF0), Color(hex: 0x2A2A2A)) }
-    static var textSecondary: Color { pick(Color(hex: 0x8B939E), Color(hex: 0x4A4A4A)) }
-    static var textMuted: Color     { pick(Color(hex: 0x6F7682), Color(hex: 0x626262)) }
-    static var textFaint: Color     { pick(Color(hex: 0x5B636E), Color(hex: 0x8A8A8A)) }
+    static var textSecondary: Color { pick(Color(hex: 0xA4ADBA), Color(hex: 0x4A4A4A)) }
+    static var textMuted: Color     { pick(Color(hex: 0x929AA5), Color(hex: 0x565656)) }
+    static var textFaint: Color     { pick(Color(hex: 0x828993), Color(hex: 0x626262)) }
     static var hairline: Color       { pick(Color.white.opacity(0.06), Color.black.opacity(0.12)) }
     static var hairlineStrong: Color { pick(Color.white.opacity(0.08), Color.black.opacity(0.18)) }
 

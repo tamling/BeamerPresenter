@@ -4,11 +4,7 @@
   <meta charset="utf-8" />
   <title>BeamerPresenter</title>
   <link rel="stylesheet" href="css/night.css" />
-  <script>
-    // Apply the saved appearance before first paint (no dark→light flash).
-    try { if (localStorage.getItem("appearance") === "paper")
-            document.documentElement.dataset.theme = "paper"; } catch (e) {}
-  </script>
+  <script src="js/theme-boot.js"></script>
   <style>
     /* ---- Home screen ---- */
     #home { display: flex; flex-direction: column; height: 100%; }
@@ -320,12 +316,7 @@
     </div>
   </div>
 
-  <script type="module">
-    import * as pdfjs from "./vendor/pdfjs/pdf.min.mjs";
-    pdfjs.GlobalWorkerOptions.workerSrc = "vendor/pdfjs/pdf.worker.min.mjs";
-    window.pdfjsLib = pdfjs;
-    window.dispatchEvent(new Event("pdfjs-ready"));
-  </script>
+  <script type="module" src="js/pdfjs-boot.js"></script>
   <script src="js/texnotes.js" defer></script>
   <script src="js/notesmarkup.js" defer></script>
   <script src="js/slides.js" defer></script>

@@ -4,20 +4,18 @@
 // each frame is assumed to be one page, in document order.
 //
 // Exposes: TexNotes.load(pdfPath, pageCount) -> Promise<Map<pageIndex, note>>
-// (uses the Tauri commands `tex_candidates` and `read_text`).
+// (uses the Tauri command `read_text`).
 
 "use strict";
 
 const TexNotes = (() => {
   const invoke = window.__TAURI__.core.invoke;
 
+  // Only the `.tex` with the PDF's own base name is read: an unrelated `.tex`
+  // sitting in the same folder must not supply another deck's notes.
   async function load(pdfPath, pageCount) {
-    const candidates = await invoke("tex_candidates", { pdfPath });
-    for (const texPath of candidates) {
-      const map = await notesFromTex(texPath, pageCount);
-      if (map.size > 0) return map;
-    }
-    return new Map();
+    const texPath = pdfPath.replace(/\.[^./\\]*$/, "") + ".tex";
+    return await notesFromTex(texPath, pageCount);
   }
 
   async function notesFromTex(texPath, pageCount) {
@@ -41,8 +39,12 @@ const TexNotes = (() => {
       } else {
         continue; // nav present but frame unknown
       }
-      for (let p = lo; p <= hi; p++) {
-        if (p < 0 || p >= pageCount) continue;
+      // Clamp before iterating: a crafted `.nav` range is otherwise walked one
+      // page at a time, with the filter bounding the body, not the loop (and
+      // `parseInt` of a huge number gives Infinity, which never terminates).
+      const start = Math.max(0, lo);
+      const end = Math.min(hi, pageCount - 1);
+      for (let p = start; p <= end; p++) {
         byPage.set(p, byPage.has(p) ? byPage.get(p) + "\n\n" + note : note);
       }
     }
@@ -75,6 +77,10 @@ const TexNotes = (() => {
     const notes = new Map();
     let frame = -1; // index of the most recently opened frame
     let i = 0;
+    // An unterminated `{` makes bracedGroup walk to the end of the source, so a
+    // file full of `\note{` would cost O(n²). Group scanning draws on a budget a
+    // well-formed source never comes close to exhausting.
+    const budget = { left: 8 * n + (1 << 20) };
 
     const isLetter = (ch) => /[a-zA-Z@]/.test(ch);
 
@@ -91,7 +97,7 @@ const TexNotes = (() => {
         frame++;
         i = j;
       } else if (name === "begin") {
-        const g = bracedGroup(s, skipSpaces(s, j));
+        const g = bracedGroup(s, skipSpaces(s, j), budget);
         if (g && g.body === "frame") {
           frame++;
           i = g.after;
@@ -104,7 +110,7 @@ const TexNotes = (() => {
         k = skipSpaces(s, k);
         k = skipOptional(s, k, "[", "]"); // \note[item]{…}
         k = skipSpaces(s, k);
-        const g = bracedGroup(s, k);
+        const g = bracedGroup(s, k, budget);
         if (g) {
           const text = cleanup(g.body);
           if (frame >= 0 && text) {
@@ -126,31 +132,39 @@ const TexNotes = (() => {
     return i;
   }
 
+  // Overlay specs and `\note[item]` labels are short, so a longer "optional
+  // group" is malformed and not worth scanning for.
+  const MAX_OPTIONAL_GROUP = 1024;
+
   // If s[i] opens an optional group, returns the index just past its close;
-  // otherwise returns i unchanged.
+  // otherwise returns i unchanged. The scan is bounded, so an unterminated
+  // group costs a constant rather than a pass over the rest of the source.
   function skipOptional(s, i, open, close) {
     if (i >= s.length || s[i] !== open) return i;
     let j = i + 1;
-    while (j < s.length && s[j] !== close) j++;
-    return j < s.length ? j + 1 : i;
+    const limit = Math.min(s.length, i + 1 + MAX_OPTIONAL_GROUP);
+    while (j < limit && s[j] !== close) j++;
+    return j < limit ? j + 1 : i;
   }
 
   // Reads a balanced `{ … }` group starting at s[i] === "{", honouring nested
-  // braces and `\{` / `\}` escapes.
-  function bracedGroup(s, i) {
+  // braces and `\{` / `\}` escapes. Scanning is charged to `budget`, so
+  // unterminated groups cannot add up to a quadratic walk of the source.
+  function bracedGroup(s, i, budget) {
     if (i >= s.length || s[i] !== "{") return null;
     let depth = 0;
     let j = i;
     const start = i + 1;
-    while (j < s.length) {
+    while (j < s.length && budget.left > 0) {
       const ch = s[j];
-      if (ch === "\\") { j += 2; continue; } // skip escaped char
+      if (ch === "\\") { j += 2; budget.left -= 2; continue; } // skip escaped char
       if (ch === "{") depth++;
       else if (ch === "}") {
         depth--;
         if (depth === 0) return { body: s.slice(start, j), after: j + 1 };
       }
       j++;
+      budget.left -= 1;
     }
     return null;
   }
@@ -192,9 +206,12 @@ const TexNotes = (() => {
     }
 
     // Unwrap simple `\cmd[..]{text}` to its argument (a few passes for
-    // nesting), then drop any remaining bare commands and stray braces.
+    // nesting), then drop any remaining bare commands and stray braces. The
+    // optional argument is tied to its own `[` and bounded in length, so the two
+    // whitespace runs cannot trade characters and `[^\]]` cannot swallow the rest
+    // of the body — either would make a pass quadratic.
     for (let pass = 0; pass < 3; pass++) {
-      s = s.replace(/\\[a-zA-Z@]+\*?\s*(\[[^\]]*\])?\s*\{([^{}]*)\}/g, "$2");
+      s = s.replace(/\\[a-zA-Z@]+\*?\s*(?:(\[[^\]]{0,200}\])\s*)?\{([^{}]*)\}/g, "$2");
     }
     s = s.replace(/\\[a-zA-Z@]+\*?/g, "");
     s = s.replaceAll("{", "").replaceAll("}", "");

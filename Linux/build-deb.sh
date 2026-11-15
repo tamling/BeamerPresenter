@@ -25,12 +25,15 @@ if [ ${#missing[@]} -gt 0 ]; then
     exit 1
 fi
 
+# Every path builds from the committed Cargo.lock (--locked, passed through to
+# cargo after --); the npx CLI is pinned to an exact version because it runs as
+# the build tool — on CI runners without cargo-tauri this is the branch taken.
 if command -v cargo-tauri >/dev/null; then
-    cargo tauri build --bundles deb
+    cargo tauri build --bundles deb -- --locked
     echo; echo "Package:"; ls -1 target/release/bundle/deb/*.deb
     exit 0
 elif command -v npx >/dev/null; then
-    npx --yes @tauri-apps/cli@^2 build --bundles deb
+    npx --yes @tauri-apps/cli@2.11.5 build --bundles deb -- --locked
     echo; echo "Package:"; ls -1 target/release/bundle/deb/*.deb
     exit 0
 fi
@@ -38,7 +41,7 @@ fi
 echo "No Tauri CLI found — packaging with cargo + dpkg-deb."
 command -v dpkg-deb >/dev/null || { echo "dpkg-deb not found — install dpkg-dev."; exit 1; }
 
-cargo build --release
+cargo build --locked --release
 
 VERSION=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
 ARCH=$(dpkg --print-architecture)
