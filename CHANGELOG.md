@@ -4,7 +4,7 @@
 
 A security and robustness release. An audit of all three platforms produced 117
 confirmed findings — each one checked by three independent reviewers before it
-was accepted — and this release closes 112 of them. Major version because
+was accepted — and this release closes 110 of them. Major version because
 several changes are deliberately breaking: see **Breaking** below.
 
 ### Security
@@ -125,9 +125,14 @@ several changes are deliberately breaking: see **Breaking** below.
 - The Tauri asset-protocol scope is still `**`. Narrowing it needs per-deck
   runtime grants on the load path; with the new CSP in place this is
   defence-in-depth, and it is tracked for the next release.
-- Four further findings are deferred with reasons recorded in the audit report:
-  a page-count DoS in the Linux strip/overview build loops, and three iOS notes
-  improvements that need changes across files this pass did not touch.
+- Five further findings are deferred, each with its reason recorded: a
+  page-count DoS in the Linux strip and overview build loops (both available
+  fixes would have regressed working behaviour); notes picked by hand for an
+  overlay deck on iOS, which needs changes spread across files this pass did not
+  own; a pdf.js version bump, declined as scope creep since the vendored 4.10.38
+  post-dates the CVE it was raised for; and two new files — a Dependabot config
+  for the action pins and a declarative pdf.js VERSION file, whose content is
+  recorded in Linux/README.md in the meantime.
 
 ## v6.3 — 2026-10-31
 
