@@ -209,7 +209,16 @@ final class PresentationModel: ObservableObject {
 
     private var scopedURL: URL?
     private var deckKey: String?
-    private var thumbCache: [Int: UIImage] = [:]
+
+    /// Bounded thumbnail cache, keyed by page *and* height — the strip and the
+    /// overview grid ask for different sizes, and a page-only key hands whichever
+    /// renders first to both. `NSCache` also purges itself under memory pressure.
+    private let thumbCache: NSCache<NSString, UIImage> = {
+        let cache = NSCache<NSString, UIImage>()
+        cache.countLimit = 600
+        cache.totalCostLimit = 128 << 20   // ~128 MB of thumbnails
+        return cache
+    }()
 
     /// Append a quick value (time / deck name / slide number) to the scratch notes.
     func appendScratch(_ value: String) {
@@ -245,10 +254,11 @@ final class PresentationModel: ObservableObject {
         document = doc
         pageCount = doc.pageCount
         title = url.deletingPathExtension().lastPathComponent
-        index = 0
+        // Resume where this deck was left last time (first slide for new decks).
+        index = SlidePositions.restore(for: url.standardizedFileURL.path, pageCount: doc.pageCount)
         strokes = [:]
         currentStroke = []
-        thumbCache = [:]
+        thumbCache.removeAllObjects()
         notesByPage = [:]
         notesSourceName = nil
 
@@ -320,7 +330,7 @@ final class PresentationModel: ObservableObject {
         pageCount = 0
         title = ""
         strokes = [:]
-        thumbCache = [:]
+        thumbCache.removeAllObjects()
         notesByPage = [:]
         splitNotes = false
         notesSourceName = nil
@@ -343,7 +353,12 @@ final class PresentationModel: ObservableObject {
         guard pageCount > 0 else { return }
         let clamped = min(max(0, i), pageCount - 1)
         forward = clamped >= index
-        if clamped != index { currentStroke = [] }
+        if clamped != index {
+            currentStroke = []
+            // Persist only on an actual change — not on every tap at the first
+            // or last slide.
+            if let key = deckKey { SlidePositions.save(clamped, for: key) }
+        }
         index = clamped
     }
 
@@ -398,12 +413,32 @@ final class PresentationModel: ObservableObject {
 
     func thumbnail(_ i: Int, height: CGFloat = 90) -> UIImage? {
         guard let page = document?.page(at: i) else { return nil }
-        if let cached = thumbCache[i] { return cached }
+        let key = "\(i)@\(Int(height))" as NSString
+        if let cached = thumbCache.object(forKey: key) { return cached }
         let box = page.bounds(for: slideBox)
         let size = CGSize(width: height * (box.width / max(box.height, 1)), height: height)
         let image = page.thumbnail(of: size, for: slideBox)
-        thumbCache[i] = image
+        let pixels = size.width * size.height
+        thumbCache.setObject(image, forKey: key, cost: pixels.isFinite ? Int(pixels) * 4 : 0)
         return image
+    }
+}
+
+/// Remembers the last viewed slide per deck (keyed by file path), so reopening a
+/// presentation resumes where it was left instead of starting over — the same
+/// `lastSlideByPath` map the desktop app keeps.
+enum SlidePositions {
+    private static let key = "lastSlideByPath"
+
+    static func save(_ index: Int, for deckKey: String) {
+        var map = UserDefaults.standard.dictionary(forKey: key) as? [String: Int] ?? [:]
+        map[deckKey] = index
+        UserDefaults.standard.set(map, forKey: key)
+    }
+
+    static func restore(for deckKey: String, pageCount: Int) -> Int {
+        let map = UserDefaults.standard.dictionary(forKey: key) as? [String: Int] ?? [:]
+        return min(max(0, map[deckKey] ?? 0), max(0, pageCount - 1))
     }
 }
 

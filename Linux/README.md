@@ -84,6 +84,20 @@ by default, `--no-install-recommends` skips them for a minimal install.
 No Node/npm needed — the frontend is plain HTML/CSS/JS served from `ui/`,
 with pdf.js vendored under `ui/vendor/pdfjs/`.
 
+The vendored copy is **pdfjs-dist 4.10.38**, `legacy/build/` — recorded here so
+a pdf.js advisory can be matched against a version without grepping the
+minified bundles. Refresh it (and check the result) with:
+
+```sh
+V=4.10.38   # upstream release to vendor
+curl -sSL -o /tmp/pdfjs.tgz "https://registry.npmjs.org/pdfjs-dist/-/pdfjs-dist-$V.tgz"
+tar -xzf /tmp/pdfjs.tgz -C Linux/ui/vendor/pdfjs --strip-components=3 \
+  package/legacy/build/pdf.min.mjs package/legacy/build/pdf.worker.min.mjs
+sha256sum Linux/ui/vendor/pdfjs/*.mjs
+# 4.10.38: 44ec6f011027ee77791386b66c14876a5fc29e20bf0433c07c6726fff7212b72  pdf.min.mjs
+#          bd88805178a26c729db8c0107a5b630cb900ec070f4d8c7529a3e45530afd41d  pdf.worker.min.mjs
+```
+
 Optional: `latexmk`/TeX Live for compiling `.tex` files
 (`sudo apt install latexmk texlive-latex-extra`), and LibreOffice for opening
 `.pptx`/`.ppt`/`.odp` (`sudo apt install libreoffice-impress`).
@@ -100,7 +114,7 @@ Linux/
     js/texnotes.js     #   \note{} + .nav parser (port of TexNotes.swift)
     js/presenter.js    #   console logic
     js/audience.js     #   audience logic
-    vendor/pdfjs/      #   vendored pdf.js (legacy build)
+    vendor/pdfjs/      #   vendored pdf.js 4.10.38 (legacy build)
   src-tauri/           # Rust backend
     src/lib.rs         #   commands: file dialog, read files, compile .tex,
                        #   audience window control (second monitor, fullscreen)

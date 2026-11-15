@@ -43,12 +43,8 @@ enum NotesMarkup {
 
         // > quote
         if trimmed.hasPrefix("> ") {
-            var run = plain(indent, size: size) + markup("> ", size: size)
-            var body = inline(String(trimmed.dropFirst(2)), size: size)
-            body.swiftUI.foregroundColor = Theme.textSecondary
-            body.swiftUI.font = .mono(size).italic()
-            run += body
-            return run
+            return plain(indent, size: size) + markup("> ", size: size)
+                + inline(String(trimmed.dropFirst(2)), size: size, quote: true)
         }
 
         // - item, * item, + item, • item, 1. item
@@ -67,27 +63,47 @@ enum NotesMarkup {
 
     // MARK: Inline
 
-    private static func inline(_ s: String, size: CGFloat) -> AttributedString {
+    /// `quote` is set for the body of a `> ` line: every run is then slanted and
+    /// plain text goes secondary, while each run keeps its own colour — the same
+    /// layering the `.md-quote` CSS gives the Linux port.
+    private static func inline(_ s: String, size: CGFloat, quote: Bool = false) -> AttributedString {
         let c = Array(s)
         var out = AttributedString()
         var buffer = ""
         var i = 0
+        var hits: [String: Int] = [:]      // last match index, per pattern
+        var misses: Set<String> = []       // patterns with nothing left to match
 
         func flush() {
-            if !buffer.isEmpty { out += plain(buffer, size: size); buffer = "" }
+            if !buffer.isEmpty { out += plain(buffer, size: size, quote: quote); buffer = "" }
+        }
+
+        // `find` is only ever called with a non-decreasing start for any one
+        // pattern, so its last answer stays valid. Without the memo a line of
+        // unmatched markers rescans the rest of the line once per marker.
+        func locate(_ pattern: [Character], from start: Int) -> Int? {
+            let key = String(pattern)
+            if misses.contains(key) { return nil }
+            if let hit = hits[key], hit >= start { return hit }
+            guard let hit = find(c, pattern, from: start) else {
+                misses.insert(key)
+                return nil
+            }
+            hits[key] = hit
+            return hit
         }
 
         while i < c.count {
             // **bold**
             if c[i] == "*", i + 1 < c.count, c[i + 1] == "*",
-               let end = find(c, ["*", "*"], from: i + 2), end > i + 2 {
+               let end = locate(["*", "*"], from: i + 2), end > i + 2 {
                 flush()
-                out += markup("**", size: size)
+                out += markup("**", size: size, quote: quote)
                 var body = AttributedString(String(c[(i + 2)..<end]))
-                body.swiftUI.font = .mono(size, bold: true)
-                body.swiftUI.foregroundColor = Theme.textPrimary
+                body.swiftUI.font = monoFont(size, bold: true, quote: quote)
+                body.swiftUI.foregroundColor = quote ? Theme.textSecondary : Theme.textPrimary
                 out += body
-                out += markup("**", size: size)
+                out += markup("**", size: size, quote: quote)
                 i = end + 2
                 continue
             }
@@ -95,23 +111,23 @@ enum NotesMarkup {
             if c[i] == "*" || c[i] == "_",
                i == 0 || !(c[i - 1].isLetter || c[i - 1].isNumber),
                i + 1 < c.count, c[i + 1] != " ",
-               let end = find(c, [c[i]], from: i + 1), end > i + 1 {
+               let end = locate([c[i]], from: i + 1), end > i + 1 {
                 flush()
                 let mark = String(c[i])
-                out += markup(mark, size: size)
+                out += markup(mark, size: size, quote: quote)
                 var body = AttributedString(String(c[(i + 1)..<end]))
                 body.swiftUI.font = .mono(size).italic()
-                body.swiftUI.foregroundColor = Theme.textPrimary
+                body.swiftUI.foregroundColor = quote ? Theme.textSecondary : Theme.textPrimary
                 out += body
-                out += markup(mark, size: size)
+                out += markup(mark, size: size, quote: quote)
                 i = end + 1
                 continue
             }
             // `code`
-            if c[i] == "`", let end = find(c, ["`"], from: i + 1) {
+            if c[i] == "`", let end = locate(["`"], from: i + 1) {
                 flush()
                 var code = AttributedString(String(c[i...end]))
-                code.swiftUI.font = .mono(size)
+                code.swiftUI.font = monoFont(size, quote: quote)
                 code.swiftUI.foregroundColor = Theme.noteCode
                 code.swiftUI.backgroundColor = Theme.noteCodeBg
                 out += code
@@ -119,21 +135,21 @@ enum NotesMarkup {
                 continue
             }
             // [text](url)
-            if c[i] == "[", let close = find(c, ["]", "("], from: i + 1),
-               let paren = find(c, [")"], from: close + 2) {
+            if c[i] == "[", let close = locate(["]", "("], from: i + 1),
+               let paren = locate([")"], from: close + 2) {
                 flush()
-                out += markup("[", size: size)
+                out += markup("[", size: size, quote: quote)
                 var label = AttributedString(String(c[(i + 1)..<close]))
-                label.swiftUI.font = .mono(size)
+                label.swiftUI.font = monoFont(size, quote: quote)
                 label.swiftUI.foregroundColor = Theme.noteLink
                 out += label
-                out += markup("](", size: size)
+                out += markup("](", size: size, quote: quote)
                 var url = AttributedString(String(c[(close + 2)..<paren]))
-                url.swiftUI.font = .mono(size)
+                url.swiftUI.font = monoFont(size, quote: quote)
                 url.swiftUI.foregroundColor = Theme.noteLink
                 url.swiftUI.underlineStyle = .single
                 out += url
-                out += markup(")", size: size)
+                out += markup(")", size: size, quote: quote)
                 i = paren + 1
                 continue
             }
@@ -150,22 +166,30 @@ enum NotesMarkup {
         guard start <= c.count - pattern.count else { return nil }
         var i = start
         while i <= c.count - pattern.count {
-            if Array(c[i..<(i + pattern.count)]) == pattern { return i }
+            // Compared in place: slicing into an Array here allocated per step.
+            if (0..<pattern.count).allSatisfy({ c[i + $0] == pattern[$0] }) { return i }
             i += 1
         }
         return nil
     }
 
-    private static func plain(_ s: String, size: CGFloat) -> AttributedString {
+    /// The mono face for a run, slanted when the run sits inside a `> ` quote.
+    private static func monoFont(_ size: CGFloat, bold: Bool = false, quote: Bool) -> Font {
+        let face = Font.mono(size, bold: bold)
+        return quote ? face.italic() : face
+    }
+
+    private static func plain(_ s: String, size: CGFloat, quote: Bool = false) -> AttributedString {
         var a = AttributedString(s)
-        a.swiftUI.font = .mono(size)
-        a.swiftUI.foregroundColor = Theme.textPrimary
+        a.swiftUI.font = monoFont(size, quote: quote)
+        a.swiftUI.foregroundColor = quote ? Theme.textSecondary : Theme.textPrimary
         return a
     }
 
-    private static func markup(_ s: String, size: CGFloat, bold: Bool = false) -> AttributedString {
+    private static func markup(_ s: String, size: CGFloat, bold: Bool = false,
+                               quote: Bool = false) -> AttributedString {
         var a = AttributedString(s)
-        a.swiftUI.font = .mono(size, bold: bold)
+        a.swiftUI.font = monoFont(size, bold: bold, quote: quote)
         a.swiftUI.foregroundColor = Theme.noteMarkup
         return a
     }

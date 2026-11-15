@@ -52,22 +52,31 @@ struct PresenterView: View {
                     BoardBar(onSave: saveActiveBoard, onInsert: insertBoardIntoPDF)
                 }
 
-                HStack(spacing: 0) {
-                    currentPane
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                GeometryReader { geo in
+                    // A persisted width can be wider than the window is now, so
+                    // clamp it to what's left once the handle and a usable
+                    // current-slide pane are reserved.
+                    let room = max(sidebarRange.lowerBound, Double(geo.size.width) - 10 - 280)
+                    let sidebar = min(sidebarWidth, room)
 
-                    // Drag left/right to resize the side column (it sits to the
-                    // right of this handle, so dragging right shrinks it).
-                    ResizeHandle(axis: .horizontal) { translation in
-                        let start = sidebarDragStart ?? sidebarWidth
-                        sidebarDragStart = start
-                        sidebarWidth = (start - Double(translation)).clamped(to: sidebarRange)
-                    } onEnded: {
-                        sidebarDragStart = nil
+                    HStack(spacing: 0) {
+                        currentPane
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                        // Drag left/right to resize the side column (it sits to the
+                        // right of this handle, so dragging right shrinks it).
+                        ResizeHandle(axis: .horizontal) { translation in
+                            let start = sidebarDragStart ?? sidebar
+                            sidebarDragStart = start
+                            sidebarWidth = (start - Double(translation))
+                                .clamped(to: sidebarRange.lowerBound...min(sidebarRange.upperBound, room))
+                        } onEnded: {
+                            sidebarDragStart = nil
+                        }
+
+                        sideColumn
+                            .frame(width: sidebar)
                     }
-
-                    sideColumn
-                        .frame(width: sidebarWidth)
                 }
                 .frame(maxHeight: .infinity)
 
@@ -140,7 +149,9 @@ struct PresenterView: View {
                     Button("Deck name") { appendScratch(state.title) }
                     Button("Slide number") { appendScratch("Slide \(state.index + 1)/\(state.pageCount)") }
                 } label: {
-                    Image(systemName: "bolt")
+                    // The label on the image, not the Menu: the label view is
+                    // the accessibility element here.
+                    Image(systemName: "bolt").accessibilityLabel("Insert a quick value")
                 }
                 .menuStyle(.borderlessButton)
                 .menuIndicator(.hidden)
@@ -151,6 +162,7 @@ struct PresenterView: View {
                 }
                 .buttonStyle(.borderless)
                 .help("Save notes as a .txt file…")
+                .accessibilityLabel("Save notes as a text file")
             }
             TextEditor(text: $state.scratch)
                 .font(.ui(13)).foregroundStyle(Theme.textPrimary)
@@ -250,8 +262,19 @@ struct PresenterView: View {
         panel.nameFieldStringValue = "\(state.title) + \(board.name).pdf"
         panel.canCreateDirectories = true
         guard panel.runModal() == .OK, let dest = panel.url else { return }
+        // The deck is open and still being read from, so it can't be the
+        // destination — say that instead of the generic failure below.
+        if dest.resolvingSymlinksInPath().standardizedFileURL
+            == source.resolvingSymlinksInPath().standardizedFileURL {
+            let alert = NSAlert()
+            alert.messageText = "Choose a different file"
+            alert.informativeText = "The whiteboard can't be written into the deck that's open."
+            alert.runModal()
+            return
+        }
         if !BoardExporter.insertIntoCopy(of: source, board: board, afterIndex: state.index,
-                                         aspect: state.slideAspect, to: dest) {
+                                         aspect: state.slideAspect,
+                                         split: state.notesDoc != nil, to: dest) {
             let alert = NSAlert()
             alert.messageText = "Could not insert the whiteboard into the PDF"
             alert.informativeText = dest.lastPathComponent
@@ -276,7 +299,7 @@ struct PresenterView: View {
             PDFPageView(document: state.notesDoc, pageIndex: state.index)
         } else if let text = state.textNotes[state.index], !text.isEmpty {
             ScrollView {
-                Text(NotesMarkup.attributed(text, size: 14))
+                Text(NotesCache.attributed(text, size: 14))
                     .lineSpacing(4)
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -308,6 +331,23 @@ struct PresenterView: View {
     }
 }
 
+/// Memo for the parsed speaker note. The body re-runs on every published
+/// change — including each pen and laser sample — so re-tokenising the whole
+/// note inline showed up as stroke lag on long notes. The appearance is part
+/// of the key, since the markup colours are baked into the result.
+private enum NotesCache {
+    private static var key: (text: String, size: CGFloat, appearance: Appearance)?
+    private static var value = AttributedString()
+
+    static func attributed(_ text: String, size: CGFloat) -> AttributedString {
+        let appearance = Appearance.current
+        if let key, key.text == text, key.size == size, key.appearance == appearance { return value }
+        value = NotesMarkup.attributed(text, size: size)
+        key = (text, size, appearance)
+        return value
+    }
+}
+
 /// A thin, draggable divider. Reports the cumulative drag translation (in points)
 /// along its axis so the parent can resize the adjacent pane, and shows the
 /// matching resize cursor on hover.
@@ -319,6 +359,7 @@ struct ResizeHandle: View {
     let onEnded: () -> Void
 
     @State private var hovering = false
+    @State private var pushedCursor = false
 
     private var isHorizontal: Bool { axis == .horizontal }
 
@@ -335,14 +376,20 @@ struct ResizeHandle: View {
         .frame(maxWidth: isHorizontal ? nil : .infinity,
                maxHeight: isHorizontal ? .infinity : nil)
         .contentShape(Rectangle())
+        // Push and pop in pairs: SwiftUI delivers no hover-out when the handle
+        // goes away (leaving the presentation with the pointer parked on it),
+        // so an unbalanced push would leak the resize cursor for the session.
         .onHover { inside in
             hovering = inside
             if inside {
+                guard !pushedCursor else { return }
                 (isHorizontal ? NSCursor.resizeLeftRight : NSCursor.resizeUpDown).push()
+                pushedCursor = true
             } else {
-                NSCursor.pop()
+                popCursor()
             }
         }
+        .onDisappear { popCursor() }
         .gesture(
             // Global coordinates: the handle moves with the pane it resizes, so
             // a local translation would feed back on itself and jitter.
@@ -350,6 +397,12 @@ struct ResizeHandle: View {
                 .onChanged { onChanged(isHorizontal ? $0.translation.width : $0.translation.height) }
                 .onEnded { _ in onEnded() }
         )
+    }
+
+    private func popCursor() {
+        guard pushedCursor else { return }
+        NSCursor.pop()
+        pushedCursor = false
     }
 }
 
@@ -396,19 +449,26 @@ private struct ControlBar: View {
             groupDivider
 
             // View
-            tool("Grid", "square.grid.2x2", active: state.showOverview) { state.showOverview.toggle() }
-            tool("Black", state.blackout ? "eye.slash.fill" : "eye.slash", active: state.blackout) { state.blackout.toggle() }
-            tool("Board", "square.and.pencil", active: state.isBoardActive) { state.toggleBoard() }
+            tool("Grid", "square.grid.2x2", active: state.showOverview,
+                 selected: state.showOverview) { state.showOverview.toggle() }
+            tool("Black", state.blackout ? "eye.slash.fill" : "eye.slash", active: state.blackout,
+                 selected: state.blackout) { state.blackout.toggle() }
+            tool("Board", "square.and.pencil", active: state.isBoardActive,
+                 selected: state.isBoardActive) { state.toggleBoard() }
             if state.hasReference {
-                tool("Transl", "globe", active: state.showReference) { state.toggleReference() }
+                tool("Transl", "globe", active: state.showReference,
+                     selected: state.showReference) { state.toggleReference() }
             }
 
             groupDivider
 
             // Annotate
-            tool("Cursor", "cursorarrow", active: state.tool == .none) { state.tool = .none }
-            tool("Pen", "pencil.tip", active: state.tool == .pen) { state.toggleTool(.pen) }
-            tool("Laser", "dot.circle.and.cursorarrow", active: state.tool == .laser) { state.toggleTool(.laser) }
+            tool("Cursor", "cursorarrow", active: state.tool == .none,
+                 selected: state.tool == .none) { state.tool = .none }
+            tool("Pen", "pencil.tip", active: state.tool == .pen,
+                 selected: state.tool == .pen) { state.toggleTool(.pen) }
+            tool("Laser", "dot.circle.and.cursorarrow", active: state.tool == .laser,
+                 selected: state.tool == .laser) { state.toggleTool(.laser) }
 
             ForEach(PenPalette.colors, id: \.name) { name, color in
                 captioned("") {
@@ -426,6 +486,12 @@ private struct ControlBar: View {
                     }
                     .buttonStyle(.plain)
                     .help(name)
+                    // `.help` is only a hint: without a label the swatches are
+                    // four nameless buttons, and the ring is the only cue to
+                    // which pen is loaded.
+                    .accessibilityLabel(name)
+                    .accessibilityValue(state.penColor == color ? "on" : "off")
+                    .accessibilityAddTraits(state.penColor == color ? .isSelected : [])
                 }
             }
 
@@ -435,9 +501,12 @@ private struct ControlBar: View {
             Spacer(minLength: 8)
 
             // Right cluster: the timer (start/stop, reset) and clocks.
+            // `active` is the call to action here (lit while stopped), so the
+            // announced state is the timer's own.
             tool(state.timerRunning ? "Pause" : "Start",
                  state.timerRunning ? "pause" : "play",
-                 active: !state.timerRunning) { state.toggleTimer() }
+                 active: !state.timerRunning,
+                 selected: state.timerRunning) { state.toggleTimer() }
             tool("Reset", "arrow.counterclockwise") { state.resetTimer() }
             captioned("Elapsed") { elapsedChip }
             if state.remainingSeconds != nil {
@@ -451,8 +520,9 @@ private struct ControlBar: View {
             }
         }
         .padding(.horizontal, 16)
-        // Start right of the traffic lights, which float over the bar now
-        // that the window has no separate title bar (0 in full screen).
+        // Start right of the traffic lights, which float over the bar now that
+        // the window has no separate title bar (and slide back over it in full
+        // screen when the pointer reaches the top edge).
         .padding(.leading, chrome.trafficLightInset)
         .frame(height: 66)
         .background(Theme.raised)
@@ -577,17 +647,22 @@ private struct ControlBar: View {
     }
 
     /// A tactile key: key surface + hairline; lime border + glow when active.
+    /// `selected` marks the real on/off toggles, so assistive tech hears their
+    /// state — the ring and glow are only a visual cue. The ring matches the
+    /// 2.5 pt the thumbnails and swatches use for selection.
+    @ViewBuilder
     private func tool(_ caption: String, _ systemImage: String,
-                      active: Bool = false, disabled: Bool = false,
+                      active: Bool = false, selected: Bool? = nil, disabled: Bool = false,
                       action: @escaping () -> Void) -> some View {
-        Button(action: action) {
+        let key = Button(action: action) {
             VStack(spacing: 6) {
                 Image(systemName: systemImage).font(.system(size: 15, weight: .medium))
                     .foregroundStyle(active ? Theme.accentInk : Theme.textPrimary)
                     .frame(width: 40, height: 34)
                     .background(Theme.key, in: RoundedRectangle(cornerRadius: 9))
                     .overlay(RoundedRectangle(cornerRadius: 9)
-                        .stroke(active ? Theme.accentRing : Theme.hairline, lineWidth: 1))
+                        .stroke(active ? Theme.accentRing : Theme.hairline,
+                                lineWidth: active ? 2.5 : 1))
                     .shadow(color: active ? Theme.accent.opacity(0.5) : .clear, radius: 6)
                 Text(caption).font(.mono(9)).textCase(.uppercase).tracking(0.6)
                     .foregroundStyle(active ? Theme.accentInk : Theme.textMuted)
@@ -597,6 +672,15 @@ private struct ControlBar: View {
         }
         .buttonStyle(.plain)
         .disabled(disabled)
+
+        if let selected {
+            // `.isToggle` (which VoiceOver reads as on/off) is macOS 14, so
+            // spell the state out as the value too.
+            key.accessibilityValue(selected ? "on" : "off")
+                .accessibilityAddTraits(selected ? .isSelected : [])
+        } else {
+            key
+        }
     }
 
     /// A control stacked above a mono uppercase caption.

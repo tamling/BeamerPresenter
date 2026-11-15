@@ -123,63 +123,73 @@ struct WelcomeView: View {
 
     // MARK: - Right (library: favourites + recents, fits the window height)
 
-    /// Shows as many favourites/recents as the column height allows — no
-    /// scroll bar: resize the window and more entries appear.
+    /// Shows as many favourites/recents as the column height allows — resize
+    /// the window and more entries appear. The scroll view is only a safety
+    /// net: in a short window the sections themselves don't fit.
     private var library: some View {
         GeometryReader { geo in
             let layout = libraryLayout(for: geo.size.height - chrome.titlebarHeight)
-            VStack(alignment: .leading, spacing: 26) {
-                VStack(alignment: .leading, spacing: 12) {
-                    sectionHeader("Favorite Folders") {
-                        smallKeyButton("plus") { addFavoriteFolder() }
-                            .help("Add a folder of presentations")
-                    }
-                    if favorites.isEmpty {
-                        dashedBox("No favourite folders yet — drop a folder here to pin it.")
-                    } else {
-                        VStack(spacing: 8) {
-                            ForEach(Array(favorites.prefix(layout.favorites)), id: \.self) {
-                                favoriteCard($0, height: layout.rowHeight)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 26) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        sectionHeader("Favorite Folders") {
+                            smallKeyButton("plus") { addFavoriteFolder() }
+                                .help("Add a folder of presentations")
+                                .accessibilityLabel("Add a folder of presentations")
+                        }
+                        if favorites.isEmpty {
+                            dashedBox("No favourite folders yet — drop a folder here to pin it.")
+                        } else {
+                            VStack(spacing: 8) {
+                                ForEach(Array(favorites.prefix(layout.favorites)), id: \.self) {
+                                    favoriteCard($0, height: layout.rowHeight)
+                                }
                             }
-                        }
-                        if favorites.count > layout.favorites {
-                            Text("+ \(favorites.count - layout.favorites) more — enlarge the window to see them")
-                                .font(.ui(12)).foregroundStyle(Theme.textFaint)
-                        }
-                    }
-                }
-
-                VStack(alignment: .leading, spacing: 12) {
-                    sectionHeader("Recent") {
-                        if !recents.isEmpty {
-                            Button("Clear") { RecentFiles.clear(); recents = [] }
-                                .buttonStyle(.plain)
-                                .font(.ui(13, "Medium")).foregroundStyle(Theme.accentInk)
-                        }
-                    }
-                    if recents.isEmpty {
-                        dashedBox("No recent presentations yet.")
-                    } else {
-                        VStack(spacing: 8) {
-                            ForEach(Array(recents.prefix(layout.recents)), id: \.self) {
-                                recentCard($0, height: layout.rowHeight)
+                            if favorites.count > layout.favorites {
+                                Text("+ \(favorites.count - layout.favorites) more — enlarge the window to see them")
+                                    .font(.ui(12)).foregroundStyle(Theme.textFaint)
                             }
                         }
                     }
-                }
 
-                // With an empty list there's room to spare: fill it with the
-                // console's keyboard shortcuts (handy before a first talk).
-                if showsShortcuts {
-                    shortcutsCard
-                }
+                    VStack(alignment: .leading, spacing: 12) {
+                        sectionHeader("Recent") {
+                            if !recents.isEmpty {
+                                Button("Clear") { RecentFiles.clear(); recents = [] }
+                                    .buttonStyle(.plain)
+                                    .font(.ui(13, "Medium")).foregroundStyle(Theme.accentInk)
+                            }
+                        }
+                        if recents.isEmpty {
+                            dashedBox("No recent presentations yet.")
+                        } else {
+                            VStack(spacing: 8) {
+                                ForEach(Array(recents.prefix(layout.recents)), id: \.self) {
+                                    recentCard($0, height: layout.rowHeight)
+                                }
+                            }
+                            // Say so when entries were dropped, the way the
+                            // favourites list above does.
+                            if recents.count > layout.recents {
+                                Text("+ \(recents.count - layout.recents) more — enlarge the window to see them")
+                                    .font(.ui(12)).foregroundStyle(Theme.textFaint)
+                            }
+                        }
+                    }
 
-                Spacer(minLength: 0)
+                    // With an empty list there's room to spare: fill it with the
+                    // console's keyboard shortcuts (handy before a first talk).
+                    if layout.showsShortcuts {
+                        shortcutsCard
+                    }
+
+                    Spacer(minLength: 0)
+                }
+                .padding(28)
+                // Line the section headers up with the sidebar, which sits below
+                // the traffic lights.
+                .padding(.top, chrome.titlebarHeight)
             }
-            .padding(28)
-            // Line the section headers up with the sidebar, which sits below
-            // the traffic lights.
-            .padding(.top, chrome.titlebarHeight)
         }
         .background(Theme.base)
     }
@@ -244,18 +254,23 @@ struct WelcomeView: View {
     /// (half each, unused slots handed to the fuller one) — and when fewer
     /// entries exist than would fit, the cards grow to fill the free space.
     private func libraryLayout(for height: CGFloat)
-        -> (favorites: Int, recents: Int, rowHeight: CGFloat) {
+        -> (favorites: Int, recents: Int, rowHeight: CGFloat, showsShortcuts: Bool) {
         let baseRow: CGFloat = 80       // card (~72 pt) + 8 pt spacing
-        // padding, headers, section gap, hint line — plus the shortcuts card
-        // (~7 rows + title) while it's shown.
-        let overhead: CGFloat = 170 + (showsShortcuts ? 320 : 0)
+        let cardHeight: CGFloat = 320   // the shortcuts card (~7 rows + title)
+        // padding, headers, section gap, hint line — plus the dashed box an
+        // empty section shows in place of its rows.
+        let fixed: CGFloat = 170 + (favorites.isEmpty ? 62 : 0) + (recents.isEmpty ? 62 : 0)
+        // Only offer the shortcuts card while a row still fits beneath it;
+        // otherwise it pushes the lists off the bottom of the column.
+        let showsCard = showsShortcuts && height - fixed >= cardHeight + baseRow
+        let overhead = fixed + (showsCard ? cardHeight : 0)
         let rows = max(2, Int((height - overhead) / baseRow))
         var fav = min(favorites.count, max(1, rows / 2))
         let rec = min(recents.count, rows - fav)
         fav = min(favorites.count, rows - rec)   // hand back unused recent slots
         let shown = max(1, fav + rec)
         let row = min(118, max(72, (height - overhead) / CGFloat(shown) - 8))
-        return (fav, rec, row)
+        return (fav, rec, row, showsCard)
     }
 
     private func sectionHeader<T: View>(_ title: String, @ViewBuilder trailing: () -> T) -> some View {
@@ -335,9 +350,15 @@ struct WelcomeView: View {
             .buttonStyle(.plain)
             .help("Browse this folder")
 
-            Button { Favorites.remove(folder) } label: { Image(systemName: "minus.circle") }
-                .buttonStyle(.plain).foregroundStyle(Theme.textFaint)
-                .help("Remove from favorites")
+            // Named per row, so it's clear which folder goes — and given the
+            // plus button's hit area, since it removes something.
+            Button { Favorites.remove(folder) } label: {
+                Image(systemName: "minus.circle")
+                    .frame(width: 30, height: 26).contentShape(Rectangle())
+            }
+            .buttonStyle(.plain).foregroundStyle(Theme.textSecondary)
+            .help("Remove from favorites")
+            .accessibilityLabel("Remove \(folder.lastPathComponent) from favorites")
         }
         .padding(.horizontal, 14)
         .frame(height: height)          // grows with the window, filling the column
@@ -511,6 +532,8 @@ struct FolderBrowser: View {
                 .buttonStyle(.plain)
                 .disabled(stack.count <= 1)
                 .foregroundStyle(stack.count > 1 ? Theme.textPrimary : Theme.textFaint)
+                .help("Back to the enclosing folder")
+                .accessibilityLabel("Back to the enclosing folder")
 
                 Image(systemName: "folder.fill").foregroundStyle(Theme.accentInk)
                 Text(current.lastPathComponent)

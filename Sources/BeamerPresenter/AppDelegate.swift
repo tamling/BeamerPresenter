@@ -5,7 +5,11 @@ import CoreGraphics
 import UniformTypeIdentifiers
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDelegate {
+// NSMenuItemValidation is required, not decorative: none of the other protocols
+// declares validateMenuItem(_:), so without it the method is not @objc, AppKit's
+// respondsToSelector: probe fails, and every gate and checkmark in it is inert.
+final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDelegate,
+                         NSMenuItemValidation {
     let state = PresentationState()
     private var presenterWindow: NSWindow?
     private var audienceWindow: NSWindow?

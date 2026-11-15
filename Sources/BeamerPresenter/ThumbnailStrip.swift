@@ -53,13 +53,7 @@ struct ThumbnailStrip: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(spacing: 8) {
                         ForEach(0..<state.pageCount, id: \.self) { i in
-                            thumb(i)
-                                .contentShape(Rectangle())
-                                .onTapGesture(count: doubleClick ? 2 : 1) { state.go(to: i) }
-                                .accessibilityAddTraits(.isButton)
-                                .accessibilityLabel("Slide \(i + 1)")
-                                .accessibilityAction { state.go(to: i) }
-                                .id(i)
+                            cell(i).id(i)
                         }
                     }
                     .padding(.horizontal, 8)
@@ -75,6 +69,32 @@ struct ThumbnailStrip: View {
             .frame(height: thumbHeight + 28)
             .background(Theme.raised)
             .overlay(alignment: .top) { Rectangle().fill(Theme.hairline).frame(height: 1) }
+        }
+    }
+
+    /// One clickable cell. In single-click mode it is a real `Button`, so Full
+    /// Keyboard Access can tab to it and Return opens that slide; double-click
+    /// mode keeps the gesture, since a Button would also fire on one click.
+    @ViewBuilder
+    private func cell(_ i: Int) -> some View {
+        let selected: AccessibilityTraits = i == state.index ? .isSelected : []
+        if doubleClick {
+            thumb(i)
+                .contentShape(Rectangle())
+                .onTapGesture(count: 2) { state.go(to: i) }
+                // One element per cell: the modifiers would otherwise land on
+                // both the bitmap and the slide number inside `thumb`.
+                .accessibilityElement(children: .ignore)
+                .accessibilityAddTraits(selected.union(.isButton))
+                .accessibilityLabel("Slide \(i + 1)")
+                .accessibilityAction { state.go(to: i) }
+        } else {
+            Button { state.go(to: i) } label: {
+                thumb(i).contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityAddTraits(selected)
+            .accessibilityLabel("Slide \(i + 1)")
         }
     }
 

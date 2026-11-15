@@ -8,28 +8,13 @@ import Foundation
 /// (exact and overlay-aware); otherwise each frame is assumed to be a single
 /// page, in document order.
 enum TexNotes {
-    /// Returns a page-index → note map for the PDF. It prefers a `.tex` with the
-    /// same base name next to the PDF; if that is missing or carries no notes, it
-    /// falls back to any other `.tex` in the same folder, using the first that has
-    /// `\note{}` content. Returns an empty map when nothing usable is found.
+    /// Returns a page-index → note map for the PDF, read from the `.tex` with the
+    /// same base name next to it. Only that file is used: an unrelated `.tex`
+    /// sitting in the same folder must not supply another deck's notes. Returns
+    /// an empty map when nothing usable is found.
     static func load(forPDF pdfURL: URL, pageCount: Int) -> [Int: String] {
-        for texURL in candidateTexURLs(for: pdfURL) {
-            let notes = notes(fromTex: texURL, pageCount: pageCount)
-            if !notes.isEmpty { return notes }
-        }
-        return [:]
-    }
-
-    /// `.tex` files worth trying, same-name first, then the rest of the folder
-    /// in a stable alphabetical order.
-    private static func candidateTexURLs(for pdfURL: URL) -> [URL] {
-        let sameName = pdfURL.deletingPathExtension().appendingPathExtension("tex")
-        let dir = pdfURL.deletingLastPathComponent()
-        let others = (try? FileManager.default.contentsOfDirectory(
-            at: dir, includingPropertiesForKeys: nil))?
-            .filter { $0.pathExtension.lowercased() == "tex" && $0 != sameName }
-            .sorted { $0.lastPathComponent < $1.lastPathComponent } ?? []
-        return [sameName] + others
+        let texURL = pdfURL.deletingPathExtension().appendingPathExtension("tex")
+        return notes(fromTex: texURL, pageCount: pageCount)
     }
 
     /// Parses one `.tex` file into a page-index → note map, using the sibling
@@ -53,7 +38,12 @@ enum TexNotes {
             } else {
                 continue                           // nav present but frame unknown
             }
-            for p in pages where p >= 0 && p < pageCount {
+            // Clamp before iterating: a crafted `.nav` range is otherwise walked
+            // one page at a time, with the filter bounding the body, not the loop.
+            let lo = max(0, pages.lowerBound)
+            let hi = min(pages.upperBound, pageCount - 1)
+            guard lo <= hi else { continue }
+            for p in lo...hi {
                 byPage[p] = byPage[p].map { $0 + "\n\n" + note } ?? note
             }
         }
@@ -62,7 +52,14 @@ enum TexNotes {
 
     // MARK: - File reading
 
+    /// A `.tex`/`.nav` beside a deck is a few hundred KB at most in practice.
+    /// Anything far larger is refused, so a padded sibling file cannot stall the
+    /// open path or exhaust memory (the parse costs ~16 bytes per source byte).
+    private static let maxTextBytes = 4 << 20
+
     private static func readText(_ url: URL) -> String? {
+        guard let size = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize,
+              size <= maxTextBytes else { return nil }
         guard let data = try? Data(contentsOf: url) else { return nil }
         return String(data: data, encoding: .utf8) ?? String(data: data, encoding: .isoLatin1)
     }
@@ -97,6 +94,10 @@ enum TexNotes {
         var notes: [Int: String] = [:]
         var frame = -1            // index of the most recently opened frame
         var i = 0
+        // An unterminated `{` makes `bracedGroup` walk to the end of the source,
+        // so a file full of `\note{` would cost O(n²). Group scanning draws on a
+        // budget a well-formed source never comes close to exhausting.
+        var scanBudget = 8 * n + (1 << 20)
 
         while i < n {
             guard chars[i] == "\\" else { i += 1; continue }
@@ -112,7 +113,7 @@ enum TexNotes {
                 frame += 1
                 i = j
             case "begin":
-                if let (env, after) = bracedGroup(chars, skipSpaces(chars, j)), env == "frame" {
+                if let (env, after) = bracedGroup(chars, skipSpaces(chars, j), &scanBudget), env == "frame" {
                     frame += 1
                     i = after
                 } else {
@@ -124,7 +125,7 @@ enum TexNotes {
                 k = skipSpaces(chars, k)
                 k = skipOptional(chars, k, open: "[", close: "]")   // \note[item]{…}
                 k = skipSpaces(chars, k)
-                if let (body, after) = bracedGroup(chars, k) {
+                if let (body, after) = bracedGroup(chars, k, &scanBudget) {
                     let text = cleanup(body)
                     if frame >= 0, !text.isEmpty {
                         notes[frame] = notes[frame].map { $0 + "\n\n" + text } ?? text
@@ -146,32 +147,40 @@ enum TexNotes {
         return i
     }
 
+    /// Overlay specs and `\note[item]` labels are short, so a longer "optional
+    /// group" is malformed and not worth scanning for.
+    private static let maxOptionalGroup = 1024
+
     /// If `c[i]` opens an optional group, returns the index just past its close;
-    /// otherwise returns `i` unchanged.
+    /// otherwise returns `i` unchanged. The scan is bounded, so an unterminated
+    /// group costs a constant rather than a pass over the rest of the source.
     private static func skipOptional(_ c: [Character], _ i: Int, open: Character, close: Character) -> Int {
         guard i < c.count, c[i] == open else { return i }
         var j = i + 1
-        while j < c.count, c[j] != close { j += 1 }
-        return j < c.count ? j + 1 : i
+        let limit = min(c.count, i + 1 + maxOptionalGroup)
+        while j < limit, c[j] != close { j += 1 }
+        return j < limit ? j + 1 : i
     }
 
     /// Reads a balanced `{ … }` group starting at `c[i] == "{"`, honouring nested
     /// braces and `\{` / `\}` escapes. Returns the inner text and the index past
-    /// the closing brace.
-    private static func bracedGroup(_ c: [Character], _ i: Int) -> (String, Int)? {
+    /// the closing brace. Scanning is charged to `budget`, so unterminated groups
+    /// cannot add up to a quadratic walk of the source.
+    private static func bracedGroup(_ c: [Character], _ i: Int, _ budget: inout Int) -> (String, Int)? {
         guard i < c.count, c[i] == "{" else { return nil }
         var depth = 0
         var j = i
         let start = i + 1
-        while j < c.count {
+        while j < c.count, budget > 0 {
             let ch = c[j]
-            if ch == "\\" { j += 2; continue }            // skip escaped char
+            if ch == "\\" { j += 2; budget -= 2; continue }  // skip escaped char
             if ch == "{" { depth += 1 }
             else if ch == "}" {
                 depth -= 1
                 if depth == 0 { return (String(c[start..<j]), j + 1) }
             }
             j += 1
+            budget -= 1
         }
         return nil
     }
@@ -212,9 +221,12 @@ enum TexNotes {
         }
 
         // Unwrap simple `\cmd[..]{text}` to its argument (a few passes for nesting),
-        // then drop any remaining bare commands and stray braces.
+        // then drop any remaining bare commands and stray braces. The optional
+        // argument is tied to its own `[` and bounded in length, so the two
+        // whitespace runs cannot trade characters and `[^\]]` cannot swallow the
+        // rest of the body — either would make a pass quadratic.
         for _ in 0..<3 {
-            s = regexReplace(s, #"\\[a-zA-Z@]+\*?\s*(\[[^\]]*\])?\s*\{([^{}]*)\}"#, "$2")
+            s = regexReplace(s, #"\\[a-zA-Z@]+\*?\s*(?:(\[[^\]]{0,200}\])\s*)?\{([^{}]*)\}"#, "$2")
         }
         s = regexReplace(s, #"\\[a-zA-Z@]+\*?"#, "")
         s = s.replacingOccurrences(of: "{", with: "")

@@ -197,10 +197,14 @@
     state.path = null;
     state.blackout = false;
     state.boards = [];
+    stroke = null;      // a stroke still in progress belongs to no board now
     if (boardActive()) { state.boardIndex = null; setBoardVisible(false); }
     pushBoard();
     invoke("hide_audience");
+    stripThumbs.clear();
+    overviewThumbs.clear();
     el("strip").innerHTML = "";
+    el("ov-grid").innerHTML = "";
     el("console").classList.remove("active");
     el("overview").classList.remove("active");
     el("home").classList.remove("hidden");
@@ -234,14 +238,22 @@
     canvas.style.transform = scale > 0 ? `scale(${scale})` : "";
   }
 
+  let renderToken = 0;
+
   async function renderAll() {
     if (!state.path) return;
+    const token = ++renderToken;
     const deck = consoleDeck();
     const deckHalf = deck.isSplit() ? "left" : "full";
     const pane = document.querySelector(".current-pane");
-    await deck.render(el("current"), state.page,
-      pane.clientWidth - 36, pane.clientHeight - 36, deckHalf);
-    el("current").style.transform = "";
+    // The pane is display:none while the whiteboard is up, so its size is 0;
+    // rendering then would leave #current an empty box nothing repaints.
+    const maxW = pane.clientWidth - 36, maxH = pane.clientHeight - 36;
+    if (maxW > 0 && maxH > 0) {
+      await deck.render(el("current"), state.page, maxW, maxH, deckHalf);
+      if (token !== renderToken) return;   // superseded by a newer pass
+      el("current").style.transform = "";
+    }
 
     const nextWrap = document.querySelector(".next-frame");
     const nw = nextWrap.clientWidth - 16;
@@ -249,6 +261,7 @@
       el("next").style.visibility = "visible";
       await deck.render(el("next"), state.page + 1, nw, nw / deck.slideAspect(),
         deckHalf);
+      if (token !== renderToken) return;
     } else {
       el("next").style.visibility = "hidden";
     }
@@ -260,6 +273,7 @@
       wrap.style.display = "flex";
       await Slides.render(el("notes-canvas"), state.page,
         wrap.clientWidth - 24, 1e6, "right");
+      if (token !== renderToken) return;
     } else {
       el("notes-canvas-wrap").style.display = "none";
       const notes = el("notes");
@@ -309,7 +323,9 @@
     if (!state.path) return;
     if (boardActive()) {
       state.boardIndex = null;
+      stroke = null;        // a stroke still in progress is abandoned
       setBoardVisible(false);
+      renderAll();          // the slide pane had no size while the board was up
     } else {
       if (state.boards.length === 0) state.boards.push({ strokes: [] });
       state.boardIndex = state.boards.length - 1;
@@ -321,6 +337,7 @@
 
   function switchBoard(delta) {
     if (!boardActive()) return;
+    stroke = null;         // never commit it to the board we are leaving
     const n = state.boards.length;
     state.boardIndex = (state.boardIndex + delta + n) % n;
     renderBoard();
@@ -337,6 +354,7 @@
 
   function deleteBoard() {
     if (!boardActive()) return;
+    stroke = null;         // it belonged to the board being removed
     state.boards.splice(state.boardIndex, 1);
     if (state.boards.length === 0) state.boards.push({ strokes: [] });
     state.boardIndex = Math.min(state.boardIndex, state.boards.length - 1);
@@ -394,7 +412,9 @@
   });
   const endStroke = () => {
     if (!stroke) return;
-    if (stroke.points.length > 1) activeBoard().strokes.push(stroke);
+    // The board may have been closed mid-stroke, in which case there is no
+    // board left to commit to — but the stroke still has to be dropped.
+    if (boardActive() && stroke.points.length > 1) activeBoard().strokes.push(stroke);
     stroke = null;
     renderBoard();
     pushBoard();                      // full state; also clears the live stroke
@@ -486,6 +506,76 @@
   /// The deck the console panes render from (audience/strip stay primary).
   const consoleDeck = () => (state.showRef && state.hasRef ? RefSlides : Slides);
 
+  // ---- Lazy thumbnails -----------------------------------------------------
+
+  /// Paints a cell grid's canvases on demand: a cell is rendered while it is in
+  /// (or near) `root`'s viewport and its bitmap is released once it scrolls out
+  /// again, so a long deck costs a window of thumbnails instead of one per page
+  /// (the macOS strip and overview are lazy the same way). `key()` is the
+  /// current render size — a cell painted at an older key is repainted;
+  /// `paint(cell, page)` resolves false if it could not render.
+  function makeLazyThumbs(root, cellsHost, margin, key, paint) {
+    const visible = new Set();
+    let observer = null;
+    let painting = null;
+    let generation = 1;   // bumped when the cells are replaced
+    let pumping = 0;      // generation being drained, 0 while idle
+
+    function staleCell() {
+      const want = key();
+      for (const cell of visible) if (cell.dataset.thumb !== want) return cell;
+      return null;
+    }
+
+    function release(cell) {
+      const canvas = cell.querySelector("canvas");
+      canvas.width = canvas.height = 0;   // both grids size their cells in CSS
+      delete cell.dataset.thumb;
+    }
+
+    async function pump() {
+      const gen = generation;
+      if (pumping === gen) return;        // already draining this generation
+      pumping = gen;
+      try {
+        for (let cell = staleCell(); cell && gen === generation; cell = staleCell()) {
+          cell.dataset.thumb = key();     // claimed before awaiting
+          painting = cell;
+          const ok = await paint(cell, Number(cell.dataset.page));
+          if (painting === cell) painting = null;
+          if (ok && !visible.has(cell)) release(cell);   // scrolled out meanwhile
+        }
+      } finally {
+        if (pumping === gen) pumping = 0;
+      }
+    }
+
+    function clear() {
+      observer?.disconnect();
+      observer = null;
+      visible.clear();
+      generation++;   // a pass still awaiting a paint stops at its next step
+    }
+
+    /// (Re)starts watching the cells currently in `cellsHost`. Called with the
+    /// grid on screen, so the first callback paints what the user can see.
+    function watch() {
+      clear();
+      observer = new IntersectionObserver((entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) visible.add(entry.target);
+          else if (visible.delete(entry.target) && entry.target !== painting) {
+            release(entry.target);
+          }
+        }
+        pump();
+      }, { root, rootMargin: margin });
+      for (const cell of cellsHost.children) observer.observe(cell);
+    }
+
+    return { watch, clear, refresh: pump };
+  }
+
   // ---- Thumbnail strip (zoomable, mirrors the macOS strip) -----------------
 
   let stripHeight = (() => {
@@ -495,16 +585,23 @@
   // Thumbnails render at 64px buckets and are *displayed* scaled to the live
   // height, so dragging the zoom handle never re-renders per pixel.
   const stripBucket = () => Math.max(64, Math.ceil(stripHeight / 64) * 64);
-  let renderedBucket = 0;
-  let stripRenderToken = 0;
+  let stripCurrent = -1;   // cell marked `current`, so navigation is not O(n)
+
+  const stripThumbs = makeLazyThumbs(el("strip"), el("strip"), "0px 400px",
+    () => String(stripBucket()),
+    (cell, page) => Slides.render(cell.querySelector("canvas"), page,
+      stripBucket() * Slides.slideAspect(), stripBucket(),
+      state.split ? "left" : "full"));
 
   function buildStrip() {
     const strip = el("strip");
+    stripThumbs.clear();
     strip.innerHTML = "";
     strip.style.setProperty("--thumb-aspect", String(Slides.slideAspect()));
     for (let i = 0; i < state.count; i++) {
       const cell = document.createElement("div");
       cell.className = "strip-cell";
+      cell.dataset.page = String(i);
       const canvas = document.createElement("canvas");
       const num = document.createElement("div");
       num.className = "strip-num";
@@ -513,35 +610,27 @@
       cell.addEventListener("click", () => goTo(i));
       strip.appendChild(cell);
     }
-    renderedBucket = 0;
-    renderStrip();
+    stripCurrent = -1;
+    applyStripScale();
+    stripThumbs.watch();
   }
 
   function applyStripScale() {
     el("strip").style.setProperty("--thumb-h", `${stripHeight}px`);
   }
 
-  async function renderStrip() {
-    const bucket = stripBucket();
+  /// Rescales the strip to the live height and repaints the thumbnails on
+  /// screen if the render bucket changed; the rest follow as they scroll in.
+  function renderStrip() {
     applyStripScale();
-    if (bucket === renderedBucket) return;
-    renderedBucket = bucket;
-    const token = ++stripRenderToken;
-    const cells = el("strip").children;
-    for (let i = 0; i < cells.length; i++) {
-      if (token !== stripRenderToken) return;   // superseded by a newer pass
-      const canvas = cells[i].querySelector("canvas");
-      await Slides.render(canvas, i, bucket * Slides.slideAspect(), bucket,
-        state.split ? "left" : "full");
-    }
-    applyStripScale();   // Slides.render set per-canvas sizes; rescale to live height
+    stripThumbs.refresh();
   }
 
   function highlightStrip() {
     const cells = el("strip").children;
-    for (let i = 0; i < cells.length; i++) {
-      cells[i].classList.toggle("current", i === state.page);
-    }
+    cells[stripCurrent]?.classList.remove("current");
+    stripCurrent = state.page;
+    cells[state.page]?.classList.add("current");
     cells[state.page]?.scrollIntoView({ inline: "center", block: "nearest", behavior: "smooth" });
   }
 
@@ -604,47 +693,66 @@
 
   // ---- Overview grid -------------------------------------------------------
 
+  let overviewCurrent = -1;   // see stripCurrent
+
+  // #overview is the scroller; the cells live in #ov-grid inside it.
+  const overviewThumbs = makeLazyThumbs(el("overview"), el("ov-grid"), "400px 0px",
+    () => "220",
+    async (cell, page) => {
+      const canvas = cell.querySelector("canvas");
+      const ok = await Slides.render(canvas, page, 220,
+        220 / Slides.slideAspect(), state.split ? "left" : "full");
+      sizeOverviewCanvas(canvas);   // the grid cell drives the size, not the bitmap
+      return ok;
+    });
+
+  /// An overview canvas fills its grid cell at the slide's aspect, so its box
+  /// stays the same whether or not it currently holds a bitmap.
+  function sizeOverviewCanvas(canvas) {
+    canvas.style.width = "100%";
+    canvas.style.height = "auto";
+    canvas.style.aspectRatio = String(Slides.slideAspect());
+  }
+
   function buildOverview() {
     const grid = el("ov-grid");
+    overviewThumbs.clear();
     grid.innerHTML = "";
     for (let i = 0; i < state.count; i++) {
       const cell = document.createElement("div");
       cell.className = "ov-cell";
+      cell.dataset.page = String(i);
       const canvas = document.createElement("canvas");
+      sizeOverviewCanvas(canvas);
       const num = document.createElement("div");
       num.className = "ov-num";
       num.textContent = String(i + 1);
       cell.append(canvas, num);
       cell.addEventListener("click", () => {
         el("overview").classList.remove("active");
+        overviewThumbs.clear();
         goTo(i);
       });
       grid.appendChild(cell);
     }
+    overviewCurrent = -1;
   }
 
-  let overviewRendered = false;
-  async function toggleOverview() {
+  function toggleOverview() {
     const ov = el("overview");
     const showing = ov.classList.toggle("active");
-    if (showing && !overviewRendered) {
-      overviewRendered = true;
-      const cells = el("ov-grid").children;
-      for (let i = 0; i < cells.length; i++) {
-        await Slides.render(cells[i].querySelector("canvas"), i, 220,
-          220 / Slides.slideAspect(), state.split ? "left" : "full");
-        cells[i].querySelector("canvas").style.width = "100%";
-        cells[i].querySelector("canvas").style.height = "auto";
-      }
-    }
+    // Thumbnails are painted lazily: start watching now the overlay has a box,
+    // so the cells on screen render and the rest follow as the user scrolls.
+    if (showing) overviewThumbs.watch();
+    else overviewThumbs.clear();
     highlightOverview();
   }
 
   function highlightOverview() {
     const cells = el("ov-grid").children;
-    for (let i = 0; i < cells.length; i++) {
-      cells[i].classList.toggle("current", i === state.page);
-    }
+    cells[overviewCurrent]?.classList.remove("current");
+    overviewCurrent = state.page;
+    cells[state.page]?.classList.add("current");
   }
 
   // ---- Clock & timer -------------------------------------------------------
@@ -691,6 +799,19 @@
 
   document.addEventListener("keydown", (e) => {
     if (!state.path || e.ctrlKey || e.metaKey || e.altKey) return;
+    // While the exit dialog or the HUD covers the console that overlay owns the
+    // keyboard: Escape dismisses it and the presentation shortcuts are
+    // swallowed, so a stray Right arrow cannot advance the live projector
+    // behind a modal. Tab and Enter stay with the dialog's own buttons.
+    if (el("exit-dialog").style.display !== "none" || el("hud").classList.contains("active")) {
+      if (e.key === "Tab" || e.key === "Enter") return;
+      if (e.key === "Escape") {
+        if (el("exit-dialog").style.display !== "none") el("exit-dialog").style.display = "none";
+        else if (el("hud-close").style.display !== "none") hideHud();  // not a progress HUD
+      }
+      e.preventDefault();
+      return;
+    }
     switch (e.key) {
       case "ArrowRight": case " ": case "PageDown": next(); break;
       case "ArrowLeft": case "PageUp": previous(); break;
@@ -770,6 +891,6 @@
   el("theme-btn").addEventListener("click", toggleTheme);
   el("theme-btn-console").addEventListener("click", toggleTheme);
 
-  el("version").textContent = "BeamerPresenter 6.3 · Linux";
+  el("version").textContent = "BeamerPresenter 7.0 · Linux";
   renderRecents();
 })();

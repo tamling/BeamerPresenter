@@ -111,13 +111,19 @@ enum Dependencies {
         let pipe = Pipe()
         process.standardOutput = pipe
         process.standardError = pipe
+        let pdf = dir.appendingPathComponent(input.deletingPathExtension().lastPathComponent + ".pdf")
+        // See compile(): an older sibling PDF must not pass as this run's output.
+        let pdfWasModified = modificationDate(of: pdf)
+
         do { try process.run() } catch {
             return .failure("Could not start LibreOffice: \(error.localizedDescription)")
         }
         let log = waitForOutput(process, draining: pipe, name: "LibreOffice")
 
-        let pdf = dir.appendingPathComponent(input.deletingPathExtension().lastPathComponent + ".pdf")
-        if FileManager.default.fileExists(atPath: pdf.path) { return .success(pdf) }
+        if FileManager.default.fileExists(atPath: pdf.path),
+           modificationDate(of: pdf) != pdfWasModified || process.terminationStatus == 0 {
+            return .success(pdf)
+        }
         // soffice can exit silently (a running instance took the request, a stale
         // profile lock), so never hand back an empty log.
         if log.isEmpty {
@@ -125,6 +131,12 @@ enum Dependencies {
                             + "and produced no PDF.")
         }
         return .failure(log)
+    }
+
+    /// A file's last-modified date, or nil when it does not exist yet. Used to tell
+    /// a PDF this run produced from one an earlier build left behind.
+    private static func modificationDate(of url: URL) -> Date? {
+        try? url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
     }
 
     /// Where the headless conversions keep their LibreOffice profile. Stable, so
@@ -202,15 +214,23 @@ enum Dependencies {
         process.standardOutput = pipe
         process.standardError = pipe
 
+        let pdf = texURL.deletingPathExtension().appendingPathExtension("pdf")
+        // Remembered before the run: an existing PDF from an earlier build is
+        // exactly what a failed compile would otherwise be mistaken for.
+        let pdfWasModified = modificationDate(of: pdf)
+
         do { try process.run() } catch {
             return .failure("Could not start \(engine.name): \(error.localizedDescription)")
         }
         let log = waitForOutput(process, draining: pipe, name: engine.name)
 
-        let pdf = texURL.deletingPathExtension().appendingPathExtension("pdf")
-        // Beamer can exit non-zero yet still produce a usable PDF, so accept the
-        // PDF whenever it exists.
-        if FileManager.default.fileExists(atPath: pdf.path) { return .success(pdf) }
+        // Beamer can exit non-zero yet still produce a usable PDF, so the exit
+        // status alone does not decide — but the PDF has to be one this run wrote.
+        // A stale sibling left over from an older build is a failure, not a result.
+        if FileManager.default.fileExists(atPath: pdf.path),
+           modificationDate(of: pdf) != pdfWasModified || process.terminationStatus == 0 {
+            return .success(pdf)
+        }
 
         // A deck that carries its own latexmkrc (a legitimate pattern for $pdf_mode
         // or custom dependencies) now builds without it, because running it would be

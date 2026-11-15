@@ -165,7 +165,7 @@ struct StartView: View {
     }
 
     static var version: String {
-        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "6.3"
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "7.0"
     }
 }
 
@@ -192,7 +192,8 @@ struct PresenterView: View {
     @State private var customTargetText = ""
     @State private var showCloseConfirm = false
     @State private var showMenti = false
-    @AppStorage("doNotDisturb") private var doNotDisturb = false
+    // On by default: a deck is presented, so the iPad must not auto-lock mid-talk.
+    @AppStorage("doNotDisturb") private var doNotDisturb = true
     @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var landscape = false
     let openPicker: () -> Void
@@ -222,7 +223,7 @@ struct PresenterView: View {
                                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                             if showNotes {
                                 NotesPanel()
-                                    .frame(width: 340)
+                                    .frame(width: min(340, geo.size.width * 0.45))
                                     .transition(.move(edge: .trailing))
                             }
                         }
@@ -289,16 +290,31 @@ struct PresenterView: View {
         .fullScreenCover(isPresented: $showMenti) { MentimeterView() }
     }
 
-    /// Bake ink + boards into a new PDF in the temp dir and present the share sheet.
+    /// Bake ink + boards into a new PDF and present the share sheet. The PDF goes
+    /// into Documents (visible in Files), not the temp dir, so cancelling the
+    /// share sheet no longer loses the annotations it reports as saved.
     private func exportAndShare() {
-        let name = (model.title.isEmpty ? "Presentation" : model.title) + " (annotated).pdf"
-        let dest = FileManager.default.temporaryDirectory.appendingPathComponent(name)
-        try? FileManager.default.removeItem(at: dest)
+        let base = (model.title.isEmpty ? "Presentation" : model.title) + " (annotated)"
+        guard let dest = freeExportURL(base: base) else { return }
         if DeckExporter.export(model: model, to: dest) != nil {
             exportURL = dest
             showShare = true
-            model.markSaved()   // the ink + whiteboards are now in a shareable PDF
+            model.markSaved()   // the ink + whiteboards are now in a durable PDF
         }
+    }
+
+    /// An unused name in Documents, so an export the presenter kept is never
+    /// silently overwritten by the next one.
+    private func freeExportURL(base: String) -> URL? {
+        let fm = FileManager.default
+        guard let dir = fm.urls(for: .documentDirectory, in: .userDomainMask).first else { return nil }
+        var dest = dir.appendingPathComponent(base + ".pdf")
+        var n = 2
+        while fm.fileExists(atPath: dest.path) {
+            dest = dir.appendingPathComponent("\(base) \(n).pdf")
+            n += 1
+        }
+        return dest
     }
 
     /// Closing would discard unexported ink/whiteboards — ask first.
@@ -326,7 +342,9 @@ struct PresenterView: View {
 
             Button { showOverview = true } label: { Image(systemName: "square.grid.2x2") }
 
-            if !landscape {
+            // Only the full console has notes of its own; everywhere else the
+            // panel needs a button, whatever the orientation.
+            if !useConsole {
                 Button { withAnimation(.easeInOut(duration: 0.2)) { showNotes.toggle() } } label: {
                     Image(systemName: showNotes ? "note.text.badge.plus" : "note.text")
                 }
@@ -341,6 +359,7 @@ struct PresenterView: View {
                 Image(systemName: doNotDisturb ? "moon.fill" : "moon")
             }
             .foregroundStyle(doNotDisturb ? Color.accentColor : .primary)
+            .accessibilityLabel("Keep screen awake")
 
             if external.isConnected {
                 Image(systemName: "tv.fill").foregroundStyle(.green)
@@ -412,6 +431,12 @@ struct PresenterView: View {
 
                 group {
                     captionedButton("Grid", "square.grid.2x2") { showOverview = true }
+                    if !useConsole {
+                        captionedButton("Notes", showNotes ? "note.text.badge.plus" : "note.text",
+                                        active: showNotes) {
+                            withAnimation(.easeInOut(duration: 0.2)) { showNotes.toggle() }
+                        }
+                    }
                     captioned("Black") {
                         Menu { blackoutMenuContent } label: {
                             keyGlyph(model.blackout ? "eye.slash.fill" : "eye.slash", active: model.blackout)

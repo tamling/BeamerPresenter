@@ -30,6 +30,11 @@ final class MentiBrowser: NSObject, ObservableObject {
 
     private var observations: [NSKeyValueObservation] = []
     private var downloadDestinations: [ObjectIdentifier: URL] = [:]
+    /// Legitimate use exports a handful of files; a page that loops downloads is
+    /// cut off at this cap, since WebKit picks the destination without asking.
+    private static let maxDownloads = 20
+    private var downloadCount = 0
+    private var clearedDownloadDir = false
 
     override init() {
         webView = WKWebView(frame: .zero, configuration: MentiSession.configuration())
@@ -59,12 +64,27 @@ final class MentiBrowser: NSObject, ObservableObject {
         if isLoading { webView.stopLoading() } else { webView.reload() }
     }
     var currentURL: URL? { webView.url }
+
+    /// Label-boundary-safe host test, so `mentimeter.com.example` is not matched.
+    fileprivate static func isMentimeterHost(_ host: String?) -> Bool {
+        guard let host = host?.lowercased() else { return false }
+        return host == "mentimeter.com" || host.hasSuffix(".mentimeter.com")
+    }
 }
 
 // Route result exports to a download, save to a temp file, then share it.
 extension MentiBrowser: WKNavigationDelegate {
     func webView(_ webView: WKWebView, decidePolicyFor navigationResponse: WKNavigationResponse,
                  decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void) {
+        // A download is written to a temp file without asking, so only the main
+        // frame or Mentimeter itself may start one — a subframe on a page the
+        // presenter browsed to must not be able to drop files on the device.
+        // Menti's own exports still download, iframe or not.
+        guard navigationResponse.isForMainFrame
+                || Self.isMentimeterHost(navigationResponse.response.url?.host) else {
+            decisionHandler(.allow)
+            return
+        }
         if let http = navigationResponse.response as? HTTPURLResponse,
            let disposition = http.value(forHTTPHeaderField: "Content-Disposition"),
            disposition.lowercased().contains("attachment") {
@@ -86,13 +106,30 @@ extension MentiBrowser: WKNavigationDelegate {
 extension MentiBrowser: WKDownloadDelegate {
     func download(_ download: WKDownload, decideDestinationUsing response: URLResponse,
                   suggestedFilename: String, completionHandler: @escaping (URL?) -> Void) {
+        guard downloadCount < Self.maxDownloads else {
+            completionHandler(nil)      // nil cancels the download
+            return
+        }
+        downloadCount += 1
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("Menti", isDirectory: true)
+        if !clearedDownloadDir {
+            // Start each browser session with an empty directory, so exports (and
+            // anything a stray download left at that path) don't pile up.
+            try? FileManager.default.removeItem(at: dir)
+            clearedDownloadDir = true
+        }
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         // Reduce the server-supplied name to a single safe path component (defense
         // in depth on top of WebKit's own sanitisation) so it can't escape `dir`.
+        // A bare "/" survives `lastPathComponent` and would resolve back to `dir`
+        // itself, whose removal below would take the session's exports with it.
         var name = (suggestedFilename as NSString).lastPathComponent
-        if name.isEmpty || name == "." || name == ".." { name = "mentimeter-results" }
+        if name.isEmpty || name.hasPrefix(".") || name.contains("/") { name = "mentimeter-results" }
         let dest = dir.appendingPathComponent(name)
+        guard dest.standardizedFileURL.path != dir.standardizedFileURL.path else {
+            completionHandler(nil)
+            return
+        }
         try? FileManager.default.removeItem(at: dest)      // WKDownload won't overwrite
         downloadDestinations[ObjectIdentifier(download)] = dest
         completionHandler(dest)

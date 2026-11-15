@@ -241,6 +241,9 @@ struct WhiteboardPane: View {
 private struct BoardInteractionLayer: View {
     @EnvironmentObject var state: PresentationState
 
+    /// The item's width when the current resize drag started.
+    @State private var resizeStart: CGFloat?
+
     var body: some View {
         GeometryReader { geo in
             let size = geo.size
@@ -300,9 +303,16 @@ private struct BoardInteractionLayer: View {
             .gesture(
                 DragGesture(minimumDistance: 0)
                     .onChanged { value in
-                        let dx = abs(value.location.x - item.center.x * size.width)
-                        state.setItemWidth(item.id, (dx * 2) / max(size.width, 1))
+                        // Resize by the drag's delta: the handle sits outside
+                        // the item's edge, so mapping the pointer's absolute x
+                        // to a width would snap the edge out to the handle the
+                        // moment it is grabbed.
+                        let base = resizeStart ?? item.width
+                        resizeStart = base
+                        state.setItemWidth(item.id,
+                                           base + 2 * value.translation.width / max(size.width, 1))
                     }
+                    .onEnded { _ in resizeStart = nil }
             )
             .help("Drag to resize")
     }
@@ -416,6 +426,7 @@ struct BoardBar: View {
     let onInsert: @MainActor () -> Void
 
     @State private var showingTablePicker = false
+    @State private var confirmingDelete = false
 
     private var boardIndex: Int { state.activeBoardIndex ?? 0 }
 
@@ -429,7 +440,17 @@ struct BoardBar: View {
                     .font(.mono(13, bold: true)).foregroundStyle(Theme.textPrimary)
                     .frame(minWidth: 42)
                 barButton("chevron.right", disabled: boardIndex + 1 >= state.boards.count) { state.nextBoard() }
-                barButton("trash", disabled: state.boards.isEmpty) { state.deleteActiveBoard() }
+                // One click from the ‹ › chevrons, and nothing restores a
+                // deleted board — so ask first unless it is still blank.
+                barButton("trash", disabled: state.boards.isEmpty) {
+                    if state.activeBoardIsEmpty {
+                        state.deleteActiveBoard()
+                    } else {
+                        confirmingDelete = true
+                    }
+                }
+                .help("Delete this board")
+                .accessibilityLabel("Delete this board")
             }
 
             group {
@@ -479,6 +500,12 @@ struct BoardBar: View {
         .background(Theme.raised, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Theme.hairline, lineWidth: 1))
         .padding(.horizontal, 8)
+        .confirmationDialog("Delete this whiteboard?", isPresented: $confirmingDelete) {
+            Button("Delete Board", role: .destructive) { state.deleteActiveBoard() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Its ink and items can't be brought back.")
+        }
     }
 
     /// A segmented cluster with an inset rounded background.
@@ -586,22 +613,53 @@ enum BoardExporter {
 
     /// Loads the original deck, inserts the board as a new page right after
     /// `afterIndex`, and writes the result to `dest` — leaving the original file
-    /// untouched (it works on an in-memory copy). The inserted page matches the
-    /// deck's page height at the slide's aspect ratio.
+    /// untouched (it really works on an in-memory copy, and refuses to write
+    /// back onto the deck it just read). The inserted page matches the deck's
+    /// page height at the slide's aspect ratio; on a `split` deck ("show notes
+    /// on second screen"), whose pages are twice that wide, the board fills the
+    /// slide half and the notes half stays blank.
     @discardableResult
     static func insertIntoCopy(of sourceURL: URL, board: Whiteboard,
-                               afterIndex: Int, aspect: CGFloat, to dest: URL) -> Bool {
-        guard let doc = PDFDocument(url: sourceURL), doc.pageCount > 0 else { return false }
+                               afterIndex: Int, aspect: CGFloat, split: Bool = false,
+                               to dest: URL) -> Bool {
+        guard !isSameFile(sourceURL, dest),
+              let sourceData = try? Data(contentsOf: sourceURL),
+              let doc = PDFDocument(data: sourceData), doc.pageCount > 0 else { return false }
         let refIndex = min(max(afterIndex, 0), doc.pageCount - 1)
         let pageHeight = doc.page(at: refIndex)?.bounds(for: .mediaBox).height ?? 540
         let size = CGSize(width: max(1, pageHeight * aspect), height: pageHeight)
 
         guard let data = renderPDFData(board: board, size: size),
               let boardDoc = PDFDocument(data: data),
-              let boardPage = boardDoc.page(at: 0)?.copy() as? PDFPage else { return false }
+              let rendered = boardDoc.page(at: 0) else { return false }
+
+        // A half-width page would be cropped in half again when the split deck
+        // is reopened, so widen the media box instead of the board.
+        let padded = split ? CGSize(width: size.width * 2, height: size.height) : size
+        guard let boardPage = page(rendered, onMediaBox: padded) else { return false }
 
         doc.insert(boardPage, at: min(afterIndex + 1, doc.pageCount))
         return doc.write(to: dest)
+    }
+
+    /// Copies a rendered board page onto a media box of `size`, drawn at its
+    /// left edge (the rest stays blank).
+    private static func page(_ board: PDFPage, onMediaBox size: CGSize) -> PDFPage? {
+        let box = board.bounds(for: .mediaBox)
+        if box.size == size { return board.copy() as? PDFPage }
+
+        let data = NSMutableData()
+        var mediaBox = CGRect(origin: .zero, size: size)
+        guard let consumer = CGDataConsumer(data: data as CFMutableData),
+              let ctx = CGContext(consumer: consumer, mediaBox: &mediaBox, nil) else { return nil }
+        ctx.beginPDFPage(nil)
+        ctx.saveGState()
+        ctx.translateBy(x: -box.minX, y: -box.minY)
+        board.draw(with: .mediaBox, to: ctx)
+        ctx.restoreGState()
+        ctx.endPDFPage()
+        ctx.closePDF()
+        return PDFDocument(data: data as Data)?.page(at: 0)?.copy() as? PDFPage
     }
 
     /// Result of a full-presentation export.
@@ -617,7 +675,10 @@ enum BoardExporter {
     static func exportPresentation(sourceURL: URL, split: Bool, aspect: CGFloat,
                                    strokes: [Int: [Stroke]], boards: [Whiteboard],
                                    to dest: URL) -> ExportSummary? {
-        guard let slides = PDFModel.croppedDocument(url: sourceURL, half: split ? .left : .full),
+        // The deck is read page by page while the export is written, so the
+        // export must never be the deck itself.
+        guard !isSameFile(sourceURL, dest),
+              let slides = PDFModel.croppedDocument(url: sourceURL, half: split ? .left : .full),
               let first = slides.page(at: 0) else { return nil }
 
         let pageSize = first.bounds(for: .cropBox).size
@@ -681,6 +742,18 @@ enum BoardExporter {
 }
 
 // MARK: - Shared helpers
+
+/// True when two URLs name the same file — hard links and case-insensitive
+/// volumes included — so an export is never written over the deck it reads.
+private func isSameFile(_ a: URL, _ b: URL) -> Bool {
+    if a.resolvingSymlinksInPath().standardizedFileURL == b.resolvingSymlinksInPath().standardizedFileURL {
+        return true
+    }
+    let keys: Set<URLResourceKey> = [.fileResourceIdentifierKey]
+    guard let ia = try? a.resourceValues(forKeys: keys).fileResourceIdentifier,
+          let ib = try? b.resourceValues(forKeys: keys).fileResourceIdentifier else { return false }
+    return ia.isEqual(ib)
+}
 
 private func boardPath(_ points: [CGPoint], in size: CGSize) -> Path {
     var p = Path()

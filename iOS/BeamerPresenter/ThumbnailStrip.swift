@@ -9,7 +9,7 @@ struct ThumbnailStrip: View {
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
+                LazyHStack(spacing: 8) {
                     ForEach(0..<model.pageCount, id: \.self) { i in
                         Button { model.go(to: i) } label: { thumb(i) }
                             .buttonStyle(.plain)
@@ -19,6 +19,9 @@ struct ThumbnailStrip: View {
                 .padding(.horizontal, 10)
                 .padding(.vertical, 6)
             }
+            // The initial index isn't a *change* (a resumed deck opens at its old
+            // slide), so scroll there once on appearance too.
+            .onAppear { proxy.scrollTo(model.index, anchor: .center) }
             .onChange(of: model.index) { newValue in
                 withAnimation { proxy.scrollTo(newValue, anchor: .center) }
             }
