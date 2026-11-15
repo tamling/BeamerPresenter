@@ -34,12 +34,7 @@
     <div id="black-clock">00:00</div>
   </div>
 
-  <script type="module">
-    import * as pdfjs from "./vendor/pdfjs/pdf.min.mjs";
-    pdfjs.GlobalWorkerOptions.workerSrc = "vendor/pdfjs/pdf.worker.min.mjs";
-    window.pdfjsLib = pdfjs;
-    window.dispatchEvent(new Event("pdfjs-ready"));
-  </script>
+  <script type="module" src="js/pdfjs-boot.js"></script>
   <script src="js/slides.js" defer></script>
   <script src="js/whiteboard.js" defer></script>
   <script src="js/audience.js" defer></script>
