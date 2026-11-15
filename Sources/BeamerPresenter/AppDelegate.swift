@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 import Combine
+import CoreGraphics
 import UniformTypeIdentifiers
 
 @MainActor
@@ -19,6 +20,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     /// One-shot observer used to finish an audience rebuild after the window
     /// has left native full screen.
     private var fullScreenExitObserver: NSObjectProtocol?
+    /// The same, for hiding the presenter window to the menu bar (kept separate
+    /// so a hide and a rebuild can't cancel each other out).
+    private var hideExitObserver: NSObjectProtocol?
+    /// Set when hiding to the menu bar took a visible audience window with it,
+    /// so coming back re-shows the projector and not just the console.
+    private var hidAudienceWindow = false
+    /// The frames `positionWindows` last applied, so a window the user has since
+    /// moved or resized is left where they put it.
+    private var appliedPresenterFrame: NSRect?
+    private var appliedAudienceFrame: NSRect?
     private var keyMonitor: Any?
     private var cancellables = Set<AnyCancellable>()
     /// Files handed over by Finder/Dock before the UI exists (macOS can call
@@ -156,6 +167,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         menu.addItem(.separator())
         add(to: menu, "Open…", #selector(openDocument(_:)))
         add(to: menu, "Show Presenter Window", #selector(showPresenter(_:)))
+        add(to: menu, "Show Audience Window", #selector(showAudience(_:)))
         menu.addItem(.separator())
         add(to: menu, "Next Slide", #selector(nextSlide(_:)))
         add(to: menu, "Previous Slide", #selector(previousSlide(_:)))
@@ -177,8 +189,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     }
 
     @objc private func showPresenter(_ sender: Any?) {
+        if hidAudienceWindow {   // came back from "Hide" — the projector comes too
+            hidAudienceWindow = false
+            showAudience(nil)
+        }
         presenterWindow?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+    }
+
+    /// Brings the projector window back. Hiding to the menu bar (and the
+    /// audience window's own red button) orders it out, and nothing else
+    /// re-shows it without reloading the deck.
+    @objc private func showAudience(_ sender: Any?) {
+        guard state.isLoaded || state.mentiActive else { return }
+        buildAudienceWindowIfNeeded()
+        positionWindows()
+        audienceWindow?.orderFront(nil)
     }
 
     // MARK: - Launch splash
@@ -195,6 +221,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
                 .flatMap(NSImage.init(contentsOf:))
             : nil
         NSApp.applicationIconImage = light ?? bundleIcon
+        // The window background follows too, or a Paper console flashes the dark
+        // Night base along its edges on every live resize.
+        presenterWindow?.backgroundColor = NSColor(Theme.base)
     }
 
     /// Shows a brief launch splash with the icon and version, then fades it out
@@ -208,6 +237,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         window.hasShadow = true
         window.level = .floating
         window.isMovableByWindowBackground = true
+        window.isExcludedFromWindowsMenu = true
         window.contentView = NSHostingView(rootView: splash.themed())
         window.center()
         window.orderFrontRegardless()
@@ -255,6 +285,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     /// The red button confirms, optionally saves, and hides to the menu bar
     /// instead of closing — the app keeps running there.
     func windowShouldClose(_ sender: NSWindow) -> Bool {
+        if sender === audienceWindow {
+            // Hide the projector rather than close it: the window object is
+            // reused (`buildAudienceWindowIfNeeded` keeps an existing one), and
+            // "Show Audience Window" brings it back.
+            sender.orderOut(nil)
+            return false
+        }
         guard sender === presenterWindow else { return true }
 
         let alert = NSAlert()
@@ -285,9 +322,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     }
 
     private func hideToMenuBar() {
+        hidAudienceWindow = audienceWindow?.isVisible ?? false
         audienceWindow?.orderOut(nil)
-        presenterWindow?.orderOut(nil)
         installStatusItem()   // ensure there's a way back even if the icon is off
+        if let presenter = presenterWindow, presenter.styleMask.contains(.fullScreen) {
+            // Ordering a window out while it is in native full screen leaves an
+            // empty Space behind — leave full screen first, hide once it's done.
+            guard hideExitObserver == nil else { return }
+            hideExitObserver = NotificationCenter.default.addObserver(
+                forName: NSWindow.didExitFullScreenNotification, object: presenter, queue: .main
+            ) { [weak self] _ in
+                Task { @MainActor in
+                    guard let self else { return }
+                    if let token = self.hideExitObserver {
+                        NotificationCenter.default.removeObserver(token)
+                        self.hideExitObserver = nil
+                    }
+                    self.presenterWindow?.orderOut(nil)
+                }
+            }
+            // Asynchronously, so `windowShouldClose` has returned before the
+            // transition starts.
+            Task { @MainActor in presenter.toggleFullScreen(nil) }
+            return
+        }
+        presenterWindow?.orderOut(nil)
     }
 
     /// Clicking the Dock icon (when no window is visible) brings the presenter back.
@@ -325,6 +384,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         add(to: fileMenu, "Save Notes…", #selector(saveNotes(_:)))
         add(to: fileMenu, "Close Presentation", #selector(closePresentation(_:)), "w")
 
+        // Edit menu — the standard clipboard and undo commands. On macOS these
+        // only reach an editing text field through the main menu's key
+        // equivalents, so without them ⌘X/⌘C/⌘V/⌘A/⌘Z do nothing anywhere.
+        let editMenu = addSubmenu(to: mainMenu, "Edit")
+        // `undo:`/`redo:` are implemented by NSWindow and have no Swift API.
+        addResponderItem(to: editMenu, "Undo", Selector(("undo:")), "z")
+        addResponderItem(to: editMenu, "Redo", Selector(("redo:")), "Z")
+        editMenu.addItem(.separator())
+        addResponderItem(to: editMenu, "Cut", #selector(NSText.cut(_:)), "x")
+        addResponderItem(to: editMenu, "Copy", #selector(NSText.copy(_:)), "c")
+        addResponderItem(to: editMenu, "Paste", #selector(NSText.paste(_:)), "v")
+        editMenu.addItem(.separator())
+        addResponderItem(to: editMenu, "Select All", #selector(NSText.selectAll(_:)), "a")
+
         // Presentation menu — navigation + audience controls.
         let presoMenu = addSubmenu(to: mainMenu, "Presentation")
         let presoItem = mainMenu.items.last!
@@ -339,6 +412,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         add(to: presoMenu, "Open Translated Deck…", #selector(openReferenceDeck(_:)))
         audienceFSItem = add(to: presoMenu, "Audience Full Screen", #selector(toggleAudienceFullscreen(_:)))
         updateAudienceMenuTitle()
+        add(to: presoMenu, "Show Audience Window", #selector(showAudience(_:)))
 
         let blackMenu = addSubmenu(to: presoMenu, "Black Screen")
         for preset in BlackScreen.presets {
@@ -366,8 +440,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             item.representedObject = color
         }
         toolsMenu.addItem(.separator())
-        add(to: toolsMenu, "Undo Stroke", #selector(undoInk(_:)), "z")
-        add(to: toolsMenu, "Clear Ink", #selector(clearInk(_:)))
+        // ⌥⌘Z, not ⌘Z: that one undoes typing in whatever field is editing.
+        let undoStroke = add(to: toolsMenu, "Undo Stroke", #selector(undoInk(_:)), "z")
+        undoStroke.keyEquivalentModifierMask = [.command, .option]
+        // Clearing the ink can't be undone, so advertise it with a shortcut of
+        // its own rather than leaving the bare "C" key as its only mention.
+        add(to: toolsMenu, "Clear Ink", #selector(clearInk(_:)), "K")
 
         // Whiteboard menu — boards, items, and export.
         let boardMenu = addSubmenu(to: mainMenu, "Whiteboard")
@@ -384,6 +462,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         boardMenu.addItem(.separator())
         add(to: boardMenu, "Save Whiteboard as PDF…", #selector(saveWhiteboard(_:)), "s")
         add(to: boardMenu, "Insert into PDF (Copy)…", #selector(insertWhiteboard(_:)), "i")
+
+        // Window menu — AppKit fills it with the open windows and it carries the
+        // standard window commands, none of which exist without one (the
+        // audience window's own traffic lights are hidden on the projector).
+        let windowMenu = addSubmenu(to: mainMenu, "Window")
+        addResponderItem(to: windowMenu, "Minimize", #selector(NSWindow.performMiniaturize(_:)), "m")
+        addResponderItem(to: windowMenu, "Zoom", #selector(NSWindow.performZoom(_:)))
+        let fullScreen = addResponderItem(to: windowMenu, "Enter Full Screen",
+                                          #selector(NSWindow.toggleFullScreen(_:)), "f")
+        fullScreen.keyEquivalentModifierMask = [.control, .command]
+        windowMenu.addItem(.separator())
+        addResponderItem(to: windowMenu, "Bring All to Front",
+                         #selector(NSApplication.arrangeInFront(_:)))
+        NSApp.windowsMenu = windowMenu
 
         // These deck-specific menus are hidden on the home screen.
         deckMenuItems = [presoItem, toolsItem, boardItem]
@@ -417,6 +509,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         return item
     }
 
+    /// Adds an item with no target, so AppKit walks the responder chain to
+    /// whatever handles it (the editing text field, the key window). Targeting
+    /// this delegate would disable it — it implements none of these actions.
+    @discardableResult
+    private func addResponderItem(to menu: NSMenu, _ title: String, _ action: Selector,
+                                  _ key: String = "") -> NSMenuItem {
+        menu.addItem(withTitle: title, action: action, keyEquivalent: key)
+    }
+
     /// Enables/disables deck- and board-dependent commands and shows checkmarks
     /// for the current tool, colour, and toggles.
     func validateMenuItem(_ item: NSMenuItem) -> Bool {
@@ -446,6 +547,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         case #selector(toggleAudienceFullscreen(_:)):
             updateAudienceMenuTitle()
             return state.isLoaded && NSScreen.screens.count > 1
+        case #selector(showAudience(_:)):
+            return state.isLoaded || state.mentiActive
         case #selector(togglePen(_:)):
             item.state = state.tool == .pen ? .on : .off
             return state.isLoaded
@@ -579,6 +682,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         runPresentationExport(showSummary: true)
     }
 
+    /// The exporters read the open deck lazily *while* they write the
+    /// destination, so writing over the deck itself truncates it mid-read and
+    /// destroys it. Returns true when `dest` is safe to write.
+    private func destinationIsSafe(_ dest: URL, source: URL) -> Bool {
+        guard isSameFile(dest, source) else { return true }
+        let alert = NSAlert()
+        alert.messageText = "Choose a different name"
+        alert.informativeText = "\(source.lastPathComponent) is the deck that's open, and the "
+            + "export is drawn from it while it's being written — it can't replace itself. "
+            + "Save the annotated copy under another name."
+        alert.runModal()
+        return false
+    }
+
+    /// Whether two URLs name the same file on disk — paths alone are unreliable
+    /// with symlinks, hard links, and case-insensitive volumes.
+    private func isSameFile(_ a: URL, _ b: URL) -> Bool {
+        if a.resolvingSymlinksInPath().standardizedFileURL
+            == b.resolvingSymlinksInPath().standardizedFileURL { return true }
+        guard let idA = (try? a.resourceValues(forKeys: [.fileResourceIdentifierKey]))?
+                .fileResourceIdentifier,
+              let idB = (try? b.resourceValues(forKeys: [.fileResourceIdentifierKey]))?
+                .fileResourceIdentifier
+        else { return false }
+        return idA.isEqual(idB)
+    }
+
     @discardableResult
     private func runPresentationExport(showSummary: Bool) -> Bool {
         guard state.isLoaded, let source = state.sourceURL else { return false }
@@ -588,6 +718,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         panel.directoryURL = source.deletingLastPathComponent()
         panel.canCreateDirectories = true
         guard panel.runModal() == .OK, let dest = panel.url else { return false }
+        guard destinationIsSafe(dest, source: source) else { return false }
 
         guard let summary = BoardExporter.exportPresentation(
                 sourceURL: source, split: state.notesDoc != nil, aspect: state.slideAspect,
@@ -748,6 +879,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         panel.nameFieldStringValue = "\(state.title) + \(board.name).pdf"
         panel.canCreateDirectories = true
         guard panel.runModal() == .OK, let dest = panel.url else { return }
+        guard destinationIsSafe(dest, source: source) else { return }
         if !BoardExporter.insertIntoCopy(of: source, board: board, afterIndex: state.index,
                                          aspect: state.slideAspect, to: dest) {
             let alert = NSAlert()
@@ -783,14 +915,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         }
     }
 
-    /// Uses a sibling PDF if present, else runs `maker` to produce one.
+    /// Uses a sibling PDF if present, else runs `maker` to produce one. A sibling
+    /// older than the source is last build's slides (the makers write exactly
+    /// this path), so ask instead of silently presenting it.
     private func loadOrMake(_ source: URL, with maker: (URL) -> Void) {
         let sibling = source.deletingPathExtension().appendingPathExtension("pdf")
-        if FileManager.default.fileExists(atPath: sibling.path) {
-            loadPDF(sibling)
-        } else {
+        guard FileManager.default.fileExists(atPath: sibling.path) else {
             maker(source)
+            return
         }
+        guard let built = modified(sibling), let edited = modified(source), built < edited else {
+            loadPDF(sibling)
+            return
+        }
+        let alert = NSAlert()
+        alert.messageText = "\(sibling.lastPathComponent) is older than \(source.lastPathComponent)"
+        alert.informativeText = "The PDF next to it was built before the last edit. Rebuild it, "
+            + "or present the existing PDF as it is."
+        alert.addButton(withTitle: "Rebuild")
+        alert.addButton(withTitle: "Present Existing PDF")
+        alert.addButton(withTitle: "Cancel")
+        switch alert.runModal() {
+        case .alertFirstButtonReturn:   maker(source)
+        case .alertSecondButtonReturn:  loadPDF(sibling)
+        default:                        break
+        }
+    }
+
+    /// A file's modification date, or nil when it can't be read.
+    private func modified(_ url: URL) -> Date? {
+        (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
     }
 
     private func latexMaker(_ texURL: URL) {
@@ -867,6 +1021,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         window.backgroundColor = .clear
         window.level = .floating
         window.hasShadow = true
+        window.isExcludedFromWindowsMenu = true
         window.contentView = NSHostingView(rootView: CompileHUD(title: title, detail: detail).themed())
         window.center()
         window.orderFrontRegardless()
@@ -919,8 +1074,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         // window's top edge and the traffic lights float over it. The matching
         // background keeps resizes from flashing the system grey.
         WindowChrome.unify(presenter)
-        presenter.backgroundColor = NSColor(red: 0x15 / 255.0, green: 0x17 / 255.0,
-                                            blue: 0x1C / 255.0, alpha: 1)   // Theme.base
+        presenter.backgroundColor = NSColor(Theme.base)   // follows Night/Paper
         // The AppKit drop catcher wraps the SwiftUI content so files can be
         // dropped anywhere on the window (SwiftUI's own drop zone still
         // highlights; this catches everything that would fall through).
@@ -965,15 +1119,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             audience.level = NSWindow.Level(rawValue: NSWindow.Level.mainMenu.rawValue + 1)
             audience.collectionBehavior = [.fullScreenAuxiliary, .canJoinAllSpaces]
         } else {
-            // A normal, resizable window whose green button enters real macOS
-            // full screen (not just zoom/maximise). No title bar strip, so the
-            // slide reaches the window's top edge on the projector too.
+            // A normal, resizable window. No title bar strip, so the slide
+            // reaches the window's top edge on the projector too — which is also
+            // why the traffic lights are hidden: with nothing reserving room for
+            // them they would be projected over the slide's top-left corner.
+            // The window is driven from the app's menus instead (Window ▸ Enter
+            // Full Screen, Presentation ▸ Show Audience Window).
             WindowChrome.unify(audience)
             audience.backgroundColor = .black
+            for button: NSWindow.ButtonType in [.closeButton, .miniaturizeButton, .zoomButton] {
+                audience.standardWindowButton(button)?.isHidden = true
+            }
             audience.collectionBehavior = [.fullScreenPrimary]
             audience.center()   // sensible spot on a single screen (positionWindows handles two)
         }
+        audience.delegate = self   // a close request hides the projector, never closes it
         audienceWindow = audience
+        appliedAudienceFrame = nil   // a fresh window is the app's to place
     }
 
     /// Recreates the audience window after its full-screen/windowed mode was
@@ -1050,28 +1212,52 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     }
 
     /// Positions the windows: a full-screen audience fills the external display; a
-    /// windowed audience opens large on it; the presenter stays on the main one.
+    /// windowed audience opens large on it; the presenter stays on the other one.
+    /// Placements the user has since changed by hand are left alone.
     private func positionWindows() {
         let screens = NSScreen.screens
         guard screens.count > 1 else { return }   // single screen: leave windows put
+        // `NSScreen.screens` only promises that index 0 is the primary display,
+        // and `NSScreen.main` merely follows the key window — so find the
+        // projector by elimination and give the console whatever is left. Both
+        // come from the displays themselves, never from where a window sits, or
+        // a console dragged onto the projector would keep itself there.
+        guard let audienceScreen = screens.first(where: { !$0.isBuiltIn })
+                ?? screens.dropFirst().first else { return }
+        let presenterScreen = screens.first { $0 !== audienceScreen } ?? screens[0]
 
         if audienceFillsExternal {
-            audienceWindow?.setFrame(screens[1].frame, display: true)
-        } else if let audience = audienceWindow, !audience.styleMask.contains(.fullScreen) {
+            // Not a frame the user can choose, so always re-applied.
+            audienceWindow?.setFrame(audienceScreen.frame, display: true)
+            appliedAudienceFrame = audienceWindow?.frame
+        } else if let audience = audienceWindow, !audience.styleMask.contains(.fullScreen),
+                  mayPlace(audience, applied: appliedAudienceFrame, on: audienceScreen) {
             // (Skip reframing while the user has it in native full screen.)
-            let visible = screens[1].visibleFrame
+            let visible = audienceScreen.visibleFrame
             let size = NSSize(width: visible.width * 0.85, height: visible.height * 0.85)
             audience.setFrame(NSRect(x: visible.midX - size.width / 2,
                                      y: visible.midY - size.height / 2,
                                      width: size.width, height: size.height), display: true)
+            appliedAudienceFrame = audience.frame
         }
-        if let presenter = presenterWindow, !presenter.styleMask.contains(.fullScreen) {
+        if let presenter = presenterWindow, !presenter.styleMask.contains(.fullScreen),
+           mayPlace(presenter, applied: appliedPresenterFrame, on: presenterScreen) {
             // (Skip repositioning while the user has it in native full screen.)
-            let visible = (NSScreen.main ?? screens[0]).visibleFrame
+            let visible = presenterScreen.visibleFrame
             let size = presenter.frame.size
             presenter.setFrameOrigin(NSPoint(x: visible.midX - size.width / 2,
                                              y: visible.midY - size.height / 2))
+            appliedPresenterFrame = presenter.frame
         }
+    }
+
+    /// Whether the app may (re)place `window` on `screen`: it hasn't placed the
+    /// window yet, the window still sits exactly where it put it, or the window
+    /// isn't on the display it belongs on — a reconnected projector, or a screen
+    /// that disappeared from under it, still moves a hand-placed window.
+    private func mayPlace(_ window: NSWindow, applied: NSRect?, on screen: NSScreen) -> Bool {
+        guard let applied, applied != window.frame else { return true }
+        return window.screen !== screen
     }
 
     // MARK: - Keyboard
@@ -1083,21 +1269,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         }
     }
 
-    /// Returns true if the key was consumed. Only active once a deck is loaded.
-    /// Modifier combos (⌘…) are left for the menu bar's key equivalents, and keys
-    /// are ignored while a text field (e.g. a whiteboard item editor) is editing.
+    /// Returns true if the key was consumed. Only active once a deck is loaded,
+    /// and only for the console and the projector — Settings, the Mentimeter
+    /// browser and modal sheets keep their own keystrokes. Modifier combos (⌘…)
+    /// are left for the menu bar's key equivalents, and keys are ignored while a
+    /// text field (e.g. a whiteboard item editor) is editing.
     private func handleKey(_ event: NSEvent) -> Bool {
         guard state.isLoaded else { return false }
-        let modifiers: NSEvent.ModifierFlags = [.command, .control, .option]
+        guard let window = event.window,
+              window === presenterWindow || window === audienceWindow else { return false }
+        let modifiers: NSEvent.ModifierFlags = [.command, .control, .option, .shift]
         guard event.modifierFlags.isDisjoint(with: modifiers) else { return false }
 
-        // While typing in a text field (e.g. the scratch notes), still let the
-        // arrow / page keys drive the slides; everything else edits the text.
-        if NSApp.keyWindow?.firstResponder is NSTextView {
+        // While typing in a text field (e.g. the scratch notes), the arrows are
+        // the text system's — moving the caret must not move the slide. Only the
+        // page keys a presentation clicker sends still drive the deck, and esc
+        // leaves the field so the plain keys work again.
+        if window.firstResponder is NSTextView {
             switch event.keyCode {
-            case 124, 121: state.next()       // → / page down
-            case 123, 116: state.previous()   // ← / page up
-            default:       return false
+            case 121: state.next()                        // page down
+            case 116: state.previous()                    // page up
+            case 53:  _ = window.makeFirstResponder(nil)  // esc
+            default:  return false
             }
             return true
         }
@@ -1125,6 +1318,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         default:           return false
         }
         return true
+    }
+}
+
+private extension NSScreen {
+    /// True for the Mac's own panel. There is no AppKit property for this, and
+    /// the screen list's order says nothing about which display is the projector.
+    var isBuiltIn: Bool {
+        guard let number = deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber
+        else { return false }
+        return CGDisplayIsBuiltin(number.uint32Value) != 0
     }
 }
 

@@ -9,6 +9,11 @@ enum Half {
 }
 
 enum PDFModel {
+    /// Upper bound on the pages a deck may have. A crafted PDF can declare
+    /// millions of pages in a few megabytes; cropping and listing them all
+    /// would wedge the app before a slide is ever shown.
+    static let maxPageCount = 10_000
+
     /// A Beamer page compiled with
     /// `\setbeameroption{show notes on second screen=right}` is ~2x wider than a
     /// normal slide: slide on the left half, notes on the right half. We load a
@@ -17,6 +22,10 @@ enum PDFModel {
     /// the three crops never fight over a shared cropBox.
     static func croppedDocument(url: URL, half: Half) -> PDFDocument? {
         guard let doc = PDFDocument(url: url) else { return nil }
+        // A plain PDF needs no override at all: `bounds(for: .cropBox)` already
+        // falls back to the mediaBox, while rewriting every page would walk the
+        // whole document and throw away a smaller cropBox the author did set.
+        guard half != .full else { return doc }
         for i in 0..<doc.pageCount {
             guard let page = doc.page(at: i) else { continue }
             let box = page.bounds(for: .mediaBox)

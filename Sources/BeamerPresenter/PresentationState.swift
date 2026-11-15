@@ -126,6 +126,9 @@ final class PresentationState: ObservableObject {
     // deck is showing; a non-nil index overlays that board on both screens.
     @Published var boards: [Whiteboard] = [] { didSet { hasUnsavedChanges = true } }
     @Published var activeBoardIndex: Int?
+    /// The board that was showing when it was last dismissed, so reopening
+    /// returns to it (by id — deleting a board shifts the indices).
+    private var lastBoardID: UUID?
     @Published var selectedItemID: UUID?
     @Published var boardStroke: [CGPoint] = []   // in-progress ink on the board
 
@@ -138,10 +141,12 @@ final class PresentationState: ObservableObject {
     func markSaved() { hasUnsavedChanges = false }
 
     /// Bounded thumbnail cache (pages × size buckets would otherwise pile up
-    /// across zoom levels for the whole session).
+    /// across zoom levels for the whole session). Bounded by bitmap bytes as
+    /// well as by count, since a count alone says nothing about memory.
     private let thumbCache: NSCache<NSString, NSImage> = {
         let cache = NSCache<NSString, NSImage>()
         cache.countLimit = 600
+        cache.totalCostLimit = 256 << 20   // ~256 MB of thumbnails
         return cache
     }()
 
@@ -152,7 +157,8 @@ final class PresentationState: ObservableObject {
         // Validate everything *before* touching any state, so a failed load of
         // a second deck can't leave half-mutated state behind (wrong sourceURL
         // would also mis-key the saved slide positions).
-        guard let probe = PDFDocument(url: url), probe.pageCount > 0 else { return false }
+        guard let probe = PDFDocument(url: url), probe.pageCount > 0,
+              probe.pageCount <= PDFModel.maxPageCount else { return false }
         let split = PDFModel.isNotesLayout(probe)
         guard let doc = PDFModel.croppedDocument(url: url, half: split ? .left : .full),
               let first = doc.page(at: 0) else { return false }
@@ -164,7 +170,10 @@ final class PresentationState: ObservableObject {
         notesDoc = notes
 
         let box = first.bounds(for: .cropBox)
-        slideAspect = box.width / max(box.height, 1)
+        let aspect = box.width / max(box.height, 1)
+        // A degenerate page box (zero width) would otherwise lay every slide
+        // out at zero width on both screens; fall back to 16:9 instead.
+        slideAspect = (aspect.isFinite && aspect > 0) ? aspect : 16.0 / 9.0
         pageCount = doc.pageCount
         // A split deck already carries its notes in the right half; for a plain
         // PDF, fall back to `\note{}` text from a sibling `.tex`, then to
@@ -184,6 +193,7 @@ final class PresentationState: ObservableObject {
         tool = .none
         boards.removeAll()
         activeBoardIndex = nil
+        lastBoardID = nil
         selectedItemID = nil
         boardStroke = []
         // Resume where this deck was left last time (first slide for new decks).
@@ -195,11 +205,10 @@ final class PresentationState: ObservableObject {
         if let twin = ReferenceDeck.autoDetect(for: url, pageCount: doc.pageCount) {
             loadReference(url: twin)
         }
-        // Start blacked out (per Settings) only when starting fresh — when the
-        // deck resumes mid-presentation, jump straight to the slide instead of
-        // the clock screen.
-        blackout = index == 0
-            && (UserDefaults.standard.object(forKey: "startBlackedOut") as? Bool ?? true)
+        // Start blacked out per Settings, resumed deck or not — a deck opened
+        // again mid-presentation must not put its slide on the projector before
+        // the presenter is ready. Turn the setting off to resume live.
+        blackout = UserDefaults.standard.object(forKey: Prefs.startBlackedOut) as? Bool ?? true
         showOverview = false
         accumulated = 0
         timerRunning = true
@@ -213,6 +222,7 @@ final class PresentationState: ObservableObject {
         recordCurrentSession()
         saveScratch()
         scratch = ""
+        scratchLoaded = false
         sourceURL = nil
         slideDoc = nil
         notesDoc = nil
@@ -228,6 +238,7 @@ final class PresentationState: ObservableObject {
         tool = .none
         boards.removeAll()
         activeBoardIndex = nil
+        lastBoardID = nil
         selectedItemID = nil
         boardStroke = []
         index = 0
@@ -242,14 +253,20 @@ final class PresentationState: ObservableObject {
     // MARK: - Reference (translated twin) deck
 
     /// Loads a translated twin deck shown in the console while `showReference`
-    /// is on. Split-notes twins contribute their slide half only.
+    /// is on. Split-notes twins contribute their slide half only. The twin must
+    /// have the same page count as the deck — like the auto-detected one — or
+    /// the console would silently show a stale slide past its last page.
+    /// Validated before anything is assigned, so a rejected pick leaves an
+    /// already-loaded twin in place.
     @discardableResult
     func loadReference(url: URL) -> Bool {
-        guard let probe = PDFDocument(url: url), probe.pageCount > 0 else { return false }
+        guard let probe = PDFDocument(url: url), probe.pageCount > 0,
+              probe.pageCount == pageCount else { return false }
         let split = PDFModel.isNotesLayout(probe)
-        referenceDoc = PDFModel.croppedDocument(url: url, half: split ? .left : .full)
-        showReference = referenceDoc != nil
-        return showReference
+        guard let doc = PDFModel.croppedDocument(url: url, half: split ? .left : .full) else { return false }
+        referenceDoc = doc
+        showReference = true
+        return true
     }
 
     func clearReference() {
@@ -269,21 +286,53 @@ final class PresentationState: ObservableObject {
         sourceURL?.deletingPathExtension().appendingPathExtension("notes").appendingPathExtension("txt")
     }
 
+    /// True once `loadScratch` either read the notes file or found none — i.e.
+    /// the file at `scratchURL` is the app's own to rewrite or remove. It stays
+    /// false for a file that is there but couldn't be read (a foreign encoding,
+    /// a directory, no permission), so hand-written notes the app can't decode
+    /// are never silently destroyed.
+    private var scratchLoaded = false
+
     private func loadScratch() {
         if let url = scratchURL, let text = try? String(contentsOf: url, encoding: .utf8) {
             scratch = text
+            scratchLoaded = true
         } else {
             scratch = ""
+            scratchLoaded = scratchURL.map { !FileManager.default.fileExists(atPath: $0.path) } ?? false
         }
     }
 
     func saveScratch() {
         guard let url = scratchURL else { return }
+        let fm = FileManager.default
         if scratch.isEmpty {
-            try? FileManager.default.removeItem(at: url)
+            // Clean up only a regular notes file the app itself read or wrote.
+            guard scratchLoaded,
+                  (try? url.resourceValues(forKeys: [.isRegularFileKey]))?.isRegularFile == true
+            else { return }
+            do { try fm.trashItem(at: url, resultingItemURL: nil) }
+            catch { try? fm.removeItem(at: url) }   // volumes without a Trash
         } else {
+            if !scratchLoaded, fm.fileExists(atPath: url.path),
+               !moveScratchAside(url) { return }
             try? scratch.write(to: url, atomically: true, encoding: .utf8)
         }
+    }
+
+    /// Moves an unreadable `<pdf-name>.notes.txt` to a free `.bak` name so the
+    /// app's own notes can take the path without overwriting the user's file.
+    /// False means nothing could be moved — then the file is left alone.
+    private func moveScratchAside(_ url: URL) -> Bool {
+        let fm = FileManager.default
+        for n in 1...20 {
+            let backup = url.appendingPathExtension(n == 1 ? "bak" : "bak\(n)")
+            if fm.fileExists(atPath: backup.path) { continue }
+            guard (try? fm.moveItem(at: url, to: backup)) != nil else { return false }
+            scratchLoaded = true   // the path is the app's from here on
+            return true
+        }
+        return false
     }
 
     /// Records the elapsed time of the current deck into the usage stats.
@@ -296,8 +345,19 @@ final class PresentationState: ObservableObject {
 
     // MARK: - Navigation
 
-    func next()      { go(to: index + 1) }
-    func previous()  { go(to: index - 1) }
+    /// While a board is showing, a clicker press (or arrow key) only dismisses
+    /// it — one press shouldn't both drop the board and move the deck on. The
+    /// next press navigates as usual.
+    func next() {
+        if isBoardActive { hideBoard(); return }
+        go(to: index + 1)
+    }
+
+    func previous() {
+        if isBoardActive { hideBoard(); return }
+        go(to: index - 1)
+    }
+
     func goToFirst() { go(to: 0) }
     func goToLast()  { go(to: pageCount - 1) }
 
@@ -397,16 +457,19 @@ final class PresentationState: ObservableObject {
 
     func toggleBoard() { isBoardActive ? hideBoard() : showBoards() }
 
-    /// Shows a board, creating the first one on demand.
+    /// Shows a board, creating the first one on demand — and returns to the
+    /// board that was showing last, not to the final one in the list.
     func showBoards() {
         if boards.isEmpty {
             addBoard()
         } else {
-            activeBoardIndex = min(activeBoardIndex ?? boards.count - 1, boards.count - 1)
+            let remembered = lastBoardID.flatMap { id in boards.firstIndex { $0.id == id } }
+            activeBoardIndex = remembered ?? boards.count - 1
         }
     }
 
     func hideBoard() {
+        lastBoardID = activeBoard?.id   // so W / Board reopens this board
         activeBoardIndex = nil
         selectedItemID = nil
         boardStroke = []
@@ -549,9 +612,16 @@ final class PresentationState: ObservableObject {
         if let cached = thumbCache.object(forKey: key) { return cached }
         let box = page.bounds(for: .cropBox)
         let aspect = box.width / max(box.height, 1)
-        let size = NSSize(width: height * aspect, height: height)
+        let safe = (aspect.isFinite && aspect > 0) ? aspect : 16.0 / 9.0
+        // Cap the bitmap's pixel count (keeping the aspect ratio, so wide decks
+        // aren't distorted): an extremely wide page would otherwise rasterise
+        // to hundreds of megabytes per thumbnail.
+        let maxPixels: CGFloat = 500_000
+        let area = height * height * safe
+        let shrink = area > maxPixels ? (maxPixels / area).squareRoot() : 1
+        let size = NSSize(width: max(1, height * safe * shrink), height: max(1, height * shrink))
         let image = page.thumbnail(of: size, for: .cropBox)
-        thumbCache.setObject(image, forKey: key)
+        thumbCache.setObject(image, forKey: key, cost: Int(size.width * size.height) * 4)
         return image
     }
 }
