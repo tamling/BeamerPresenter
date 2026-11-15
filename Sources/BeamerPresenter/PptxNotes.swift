@@ -14,14 +14,17 @@ enum PptxNotes {
     static func load(forPDF pdfURL: URL, pageCount: Int) -> [Int: String] {
         let pptx = pdfURL.deletingPathExtension().appendingPathExtension("pptx")
         guard FileManager.default.fileExists(atPath: pptx.path) else { return [:] }
-        guard let dir = unzip(pptx) else { return [:] }
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("pptx-notes-\(UUID().uuidString)")
+        // Registered before extracting, so a run that fails part-way still cleans up.
         defer { try? FileManager.default.removeItem(at: dir) }
+        guard unzip(pptx, to: dir) else { return [:] }
 
         // Slide order: r:id list in presentation.xml, resolved via its rels.
         guard let presentation = read(dir, "ppt/presentation.xml"),
               let presRels = read(dir, "ppt/_rels/presentation.xml.rels") else { return [:] }
         let relTargets = relationships(in: presRels)
-        let slideFiles = matches(#"<p:sldId\b[^>]*r:id="([^"]+)""#, in: presentation)
+        let slideFiles = matches(#"<p:sldId\b[^<>]*r:id="([^"]+)""#, in: presentation)
             .compactMap { relTargets[$0] }                       // e.g. "slides/slide1.xml"
 
         var byPage: [Int: String] = [:]
@@ -40,33 +43,57 @@ enum PptxNotes {
 
     // MARK: - Unzip
 
-    /// Extracts the `ppt/` tree to a fresh temp folder using the system unzip.
-    private static func unzip(_ url: URL) -> URL? {
-        let dir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("pptx-notes-\(UUID().uuidString)")
+    /// Caps on an untrusted archive: `ulimit -f` blocks per extracted file (512 or
+    /// 1024 bytes a block, depending on the shell) and bytes we will parse. Real
+    /// notes parts are a few KB.
+    private static let maxEntryBlocks = 8192
+    private static let maxEntryBytes = 4 << 20
+
+    /// Extracts the parts `load` reads to `dir` using the system unzip.
+    private static func unzip(_ url: URL, to dir: URL) -> Bool {
         let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/unzip")
-        process.arguments = ["-qq", "-o", url.path, "ppt/*", "-d", dir.path]
-        process.standardOutput = Pipe()
-        process.standardError = Pipe()
+        // `ulimit -f` bounds what a bomb can inflate onto the temp volume. The
+        // arguments reach unzip positionally, so the shell expands none of them.
+        process.executableURL = URL(fileURLWithPath: "/bin/sh")
+        process.arguments = ["-c", "ulimit -f \"$1\" || exit 1; shift; exec /usr/bin/unzip \"$@\"",
+                             "sh", String(maxEntryBlocks),
+                             "-qq", "-o", url.path,
+                             // Only what we read: never `ppt/media/*`.
+                             "ppt/presentation.xml", "ppt/_rels/presentation.xml.rels",
+                             "ppt/slides/_rels/*.rels", "ppt/notesSlides/*",
+                             "-d", dir.path]
+        // Nothing reads these, and a pipe the child fills would block it (and us)
+        // forever; stdin would otherwise prompt for an encrypted archive's password.
+        process.standardInput = FileHandle.nullDevice
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
         do {
             try process.run()
             process.waitUntilExit()
-        } catch { return nil }
-        // unzip exits 11 when no entry matched; anything but 0 means no notes.
-        return process.terminationStatus == 0 ? dir : nil
+        } catch { return false }
+        // unzip exits 11 when one of the patterns matched nothing — normal for a deck
+        // without notes — so the reads below decide, not the exit status.
+        return true
     }
 
     private static func read(_ dir: URL, _ relative: String) -> String? {
-        try? String(contentsOf: dir.appendingPathComponent(relative), encoding: .utf8)
+        let url = dir.appendingPathComponent(relative)
+        // Don't pull a hostile part into memory, and from there into the regexes.
+        guard let size = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize,
+              size <= maxEntryBytes else { return nil }
+        return try? String(contentsOf: url, encoding: .utf8)
     }
 
     // MARK: - OOXML parsing (regex-based, like the TexNotes reader)
+    //
+    // The scans stop at the next `<` or opening tag rather than running `.*?` or
+    // `[^>]*` to the end of the part, so an archive full of unclosed tags cannot
+    // make the matcher retry from every opening position.
 
     /// `Id → Target` for every `<Relationship …/>`, attribute order independent.
     private static func relationships(in xml: String) -> [String: String] {
         var map: [String: String] = [:]
-        for element in matches(#"<Relationship\b[^>]*>"#, in: xml, group: 0) {
+        for element in matches(#"<Relationship\b[^<>]*>"#, in: xml, group: 0) {
             guard let id = matches(#"\bId="([^"]+)""#, in: element).first,
                   let target = matches(#"\bTarget="([^"]+)""#, in: element).first else { continue }
             map[id] = target
@@ -78,10 +105,10 @@ enum PptxNotes {
     /// `type="body"`, paragraphs (`<a:p>`) joined by newlines, runs (`<a:t>`)
     /// concatenated, entities unescaped.
     private static func notesText(in xml: String) -> String {
-        for shape in matches(#"<p:sp>.*?</p:sp>"#, in: xml, group: 0) {
+        for shape in matches(#"<p:sp>(?:(?!<p:sp>).)*?</p:sp>"#, in: xml, group: 0) {
             guard shape.contains(#"type="body""#) else { continue }
-            let paragraphs = matches(#"<a:p>.*?</a:p>"#, in: shape, group: 0).map { p in
-                matches(#"<a:t>(.*?)</a:t>"#, in: p).map(unescape).joined()
+            let paragraphs = matches(#"<a:p>(?:(?!<a:p>).)*?</a:p>"#, in: shape, group: 0).map { p in
+                matches(#"<a:t>([^<]*)</a:t>"#, in: p).map(unescape).joined()
             }
             return paragraphs.joined(separator: "\n")
                 .replacingOccurrences(of: "\u{2028}", with: "\n")
