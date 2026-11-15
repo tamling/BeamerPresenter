@@ -14,19 +14,34 @@ enum TexNotes {
     /// an empty map when nothing usable is found.
     static func load(forPDF pdfURL: URL, pageCount: Int) -> [Int: String] {
         let texURL = pdfURL.deletingPathExtension().appendingPathExtension("tex")
-        return notes(fromTex: texURL, pageCount: pageCount)
+        return notes(fromTex: texURL, navURL: nil, pageCount: pageCount).notes
     }
 
-    /// Parses one `.tex` file into a page-index → note map, using the sibling
-    /// `.nav` (same base name) for exact page ranges when available.
-    private static func notes(fromTex texURL: URL, pageCount: Int) -> [Int: String] {
-        guard let source = readText(texURL) else { return [:] }
+    /// Parses a `.tex` the user picked themselves, with the `.nav` passed in
+    /// separately. iOS needs that: its file picker grants access one file at a
+    /// time, so the sibling `.nav` cannot be read unless it was picked too.
+    ///
+    /// `exact` is false when no usable `.nav` was available and every frame fell
+    /// back to a single page. That is right for a deck without overlays and
+    /// wrong for one with them — where a frame spans several pages, the notes
+    /// then sit on the first page of each frame instead of all of them — so the
+    /// caller should say so rather than present the result as authoritative.
+    static func load(fromTex texURL: URL, navURL: URL? = nil,
+                     pageCount: Int) -> (notes: [Int: String], exact: Bool) {
+        notes(fromTex: texURL, navURL: navURL, pageCount: pageCount)
+    }
+
+    /// Parses one `.tex` file into a page-index → note map, using a `.nav` for
+    /// exact page ranges when one is available.
+    private static func notes(fromTex texURL: URL, navURL: URL?,
+                              pageCount: Int) -> (notes: [Int: String], exact: Bool) {
+        guard let source = readText(texURL) else { return ([:], false) }
 
         let notes = framesWithNotes(in: source)        // frameIndex → cleaned note
-        guard !notes.isEmpty else { return [:] }
+        guard !notes.isEmpty else { return ([:], false) }
 
-        let navURL = texURL.deletingPathExtension().appendingPathExtension("nav")
-        let ranges = readText(navURL).map(framePages) ?? []
+        let nav = navURL ?? texURL.deletingPathExtension().appendingPathExtension("nav")
+        let ranges = readText(nav).map(framePages) ?? []
 
         var byPage: [Int: String] = [:]
         for (frame, note) in notes {
@@ -47,7 +62,7 @@ enum TexNotes {
                 byPage[p] = byPage[p].map { $0 + "\n\n" + note } ?? note
             }
         }
-        return byPage
+        return (byPage, !ranges.isEmpty)
     }
 
     // MARK: - File reading

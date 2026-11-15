@@ -16,17 +16,49 @@
 // starting the next render there.
 const inFlight = new WeakMap();   // canvas -> pdf.js RenderTask
 
+// pdf.js reports /Root/Pages/Count verbatim, and nothing checks it against the
+// page tree: a one-kilobyte file can claim five million pages. Everything
+// downstream — the strip, the overview, the resume map — builds per-page state
+// from that number, so it has to be the count of pages that actually resolve.
+// One probe settles an honest deck; a lying one costs a binary search, about
+// twenty probes even for a claimed five million.
+async function resolves(doc, oneBased) {
+  try { await doc.getPage(oneBased); return true; } catch { return false; }
+}
+
+async function truePageCount(doc) {
+  const declared = doc.numPages;
+  if (!Number.isInteger(declared) || declared < 1) return 0;
+  if (declared === 1 || await resolves(doc, declared)) return declared;
+  let lo = 1, hi = declared;          // lo resolves (page 1 was already read), hi does not
+  while (hi - lo > 1) {
+    const mid = Math.floor((lo + hi) / 2);
+    if (await resolves(doc, mid)) lo = mid; else hi = mid;
+  }
+  console.warn(`PDF declares ${declared} pages but only ${lo} resolve; using ${lo}.`);
+  return lo;
+}
+
 function makeSlides() {
   let pdf = null;        // pdf.js document
+  let task = null;       // its loading task — what owns the worker (see close())
+  let count = 0;         // pages that really resolve, not the declared /Count
   let split = false;     // double-width notes layout?
   let aspect = 16 / 9;   // aspect of the slide half (for layout)
 
   async function open(path) {
     close();             // one document per instance; the old one goes away
+    // The asset protocol's configured scope is empty, so this deck has to be
+    // granted before its URL resolves. Doing it here covers every open: the
+    // presenter and the audience window both load through this function.
+    if (!(await window.__TAURI__.core.invoke("allow_deck", { path }))) {
+      throw new Error("Could not open this file: " + path);
+    }
     const url = window.__TAURI__.core.convertFileSrc(path);
     // isEvalSupported: false — type-4 (PostScript calculator) functions are
     // then interpreted instead of compiled with `new Function` in the worker.
-    pdf = await pdfjsLib.getDocument({ url, isEvalSupported: false }).promise;
+    task = pdfjsLib.getDocument({ url, isEvalSupported: false });
+    pdf = await task.promise;
     const first = await pdf.getPage(1);
     const vp = first.getViewport({ scale: 1 });
     split = vp.width / Math.max(vp.height, 1) > 2.4;
@@ -35,19 +67,27 @@ function makeSlides() {
     // aspect 0 or NaN and collapse every layout that divides by it.
     const a = w / Math.max(vp.height, 1);
     aspect = Number.isFinite(a) && a > 0 ? a : 16 / 9;
-    return { pageCount: pdf.numPages, split, aspect };
+    count = await truePageCount(pdf);
+    return { pageCount: count, split, aspect };
   }
 
-  // destroy() is what tears down pdf.js's worker thread and the document's
+  // Tearing down is what releases pdf.js's worker thread and the document's
   // font, image and operator-list caches — dropping the reference leaks them.
+  // The loading task is the owner: PDFDocumentProxy.destroy() was removed in
+  // pdf.js 6, while PDFDocumentLoadingTask.destroy() works in both 4 and 6.
   function close() {
     const doc = pdf;
+    const loading = task;
     pdf = null;          // before awaiting anything: callers see it closed
+    task = null;
+    count = 0;
     split = false;
     aspect = 16 / 9;
-    doc?.destroy().catch(() => {});   // also rejects any pending render
+    // Also rejects any pending render.
+    const stop = loading?.destroy?.() ?? doc?.destroy?.();
+    stop?.catch?.(() => {});
   }
-  function pageCount() { return pdf ? pdf.numPages : 0; }
+  function pageCount() { return pdf ? count : 0; }
   function isSplit() { return split; }
   function slideAspect() { return aspect; }
 

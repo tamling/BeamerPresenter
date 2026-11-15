@@ -44,6 +44,9 @@ final class PresentationModel: ObservableObject {
     @Published private(set) var notesByPage: [Int: String] = [:]
     @Published private(set) var splitNotes = false   // double-wide "notes on second screen" deck
     @Published private(set) var notesSourceName: String?
+    /// False when notes were placed without a `.nav`, so every frame got a single
+    /// page. Correct for a deck without overlays, wrong for one with them.
+    @Published private(set) var notesExact = true
 
     // Whiteboard (scratch boards)
     @Published var boards: [Whiteboard] = [] { didSet { hasUnsavedChanges = true } }
@@ -261,6 +264,7 @@ final class PresentationModel: ObservableObject {
         thumbCache.removeAllObjects()
         notesByPage = [:]
         notesSourceName = nil
+        notesExact = true
 
         detectSplitNotes(doc)
         if !splitNotes {
@@ -314,13 +318,33 @@ final class PresentationModel: ObservableObject {
 
     /// Attach speaker notes from a `.tex` the user picks explicitly (handles the
     /// sandbox case where the sibling file isn't reachable automatically).
-    func loadTexNotes(url: URL) {
+    /// Loads notes from a `.tex` the user picked. `navURL` is the matching `.nav`
+    /// when they picked that too — the file picker grants access one file at a
+    /// time, so without it the `.nav` beside the `.tex` cannot be read and a deck
+    /// built with overlays gets its notes on the wrong slides. `notesExact` says
+    /// which of the two happened. Returns false when the file held no `\note{}`,
+    /// so the caller can tell the user rather than appear to do nothing.
+    @discardableResult
+    func loadTexNotes(url: URL, navURL: URL? = nil) -> Bool {
         let scoped = url.startAccessingSecurityScopedResource()
         defer { if scoped { url.stopAccessingSecurityScopedResource() } }
-        let parsed = TexNotes.load(forPDF: url, pageCount: max(pageCount, 1))
-        guard !parsed.isEmpty else { return }
-        notesByPage = parsed
+        let navScoped = navURL?.startAccessingSecurityScopedResource() ?? false
+        defer { if navScoped, let navURL { navURL.stopAccessingSecurityScopedResource() } }
+
+        let result = TexNotes.load(fromTex: url, navURL: navURL, pageCount: max(pageCount, 1))
+        guard !result.notes.isEmpty else { return false }
+        notesByPage = result.notes
+        notesExact = result.exact
         notesSourceName = url.lastPathComponent
+        return true
+    }
+
+    /// Drops notes loaded by hand, leaving the pane empty until another file is
+    /// picked or the deck is reopened.
+    func clearNotes() {
+        notesByPage = [:]
+        notesExact = true
+        notesSourceName = nil
     }
 
     func close() {

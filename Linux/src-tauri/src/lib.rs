@@ -40,6 +40,28 @@ fn file_exists(path: String) -> bool {
     Path::new(&path).is_file()
 }
 
+/// Grants the WebViews read access to one PDF through the asset protocol.
+///
+/// The protocol's configured scope is empty, so `convertFileSrc` resolves to
+/// nothing until a deck is allowed here: a script that got into the page cannot
+/// turn `asset://` into a read of the whole disk, it can only re-request files
+/// the user already opened. Called from slides.js before each document is
+/// loaded, which is the one place every deck passes through — the presenter and
+/// the audience window both go through it.
+#[tauri::command]
+fn allow_deck(app: tauri::AppHandle, path: String) -> bool {
+    use tauri::Manager;
+    let file = PathBuf::from(&path);
+    // Only an existing PDF, and only by its real path: the asset protocol has no
+    // business serving anything else, and a symlink would widen the grant to
+    // wherever it points.
+    let Ok(real) = file.canonicalize() else { return false };
+    if !real.is_file() || !real.extension().is_some_and(|e| e.eq_ignore_ascii_case("pdf")) {
+        return false;
+    }
+    app.asset_protocol_scope().allow_file(&real).is_ok()
+}
+
 /// Text of a file (for .tex / .nav parsing in the frontend); None if unreadable
 /// or not one of those two note sources — the only ones the frontend asks for,
 /// so the command is not a read of anything else on the machine.
@@ -602,6 +624,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             pick_file,
             file_exists,
+            allow_deck,
             read_text,
             tex_candidates,
             compile_tex,

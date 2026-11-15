@@ -1,5 +1,52 @@
 # Changelog
 
+## v7.1 — 2026-11-15
+
+Closes the findings 7.0 left open, so the audit is fully worked through.
+
+### Security
+
+- **The Tauri asset protocol no longer has the run of the disk.** Its configured
+  scope was `**`, which meant any file was fetchable from the page. The scope is
+  now empty and `slides.js` asks Rust to grant exactly the deck it is about to
+  load — the one place both the presenter and the audience window pass through.
+  The grant takes the canonical path and only an existing `.pdf`, so a symlink
+  cannot widen it. Checked in the running app: a file that was never opened
+  answers 403, as does `/etc/hostname`, while the open deck answers 200 and
+  renders.
+- **Vendored pdf.js moves from 4.10.38 to 6.5.438.** It is the component that
+  parses untrusted PDFs, so a two-major-version lag is worth closing. pdf.js 6
+  removed `PDFDocumentProxy.destroy()`; the document is now torn down through
+  its loading task, which works on both. Verified before the swap: every pdf.js
+  call the app makes works on 6.5.438, and all six pages of a test deck render
+  to identical pixel checksums on both versions.
+- The page count is taken from the pages that actually resolve rather than the
+  `/Count` a file declares — one probe for an honest deck, a short binary search
+  for a dishonest one. Note that the reported attack did not reproduce: with
+  hand-crafted files declaring five million pages, flat and nested, both pdf.js
+  versions already reported the real count. The check is kept as cheap
+  defence-in-depth that does not depend on pdf.js's behaviour here.
+
+### iPad
+
+- Speaker notes picked by hand landed on the wrong slides in a deck built with
+  overlays. The file picker grants access one file at a time, so the `.nav`
+  beside the chosen `.tex` could not be read and every frame collapsed onto a
+  single page. The picker now takes both files at once, each scoped separately,
+  and the pane says which file the notes came from — with a warning when they
+  were placed without a `.nav`. Notes can also be replaced or cleared without
+  reopening the deck, and picking a `.tex` that holds no `\note{…}` now says so
+  instead of appearing to do nothing.
+
+### Build and CI
+
+- `.github/dependabot.yml` keeps the action SHA pins and the Cargo dependencies
+  under monthly review, so pinning does not turn into rot.
+- `Linux/ui/vendor/pdfjs/VERSION` records the package, version, build flavour,
+  tarball URL and both SHA-256 sums machine-readably, and
+  `Tools/update-pdfjs.sh` either verifies the working tree against it or fetches
+  another release and rewrites it.
+
 ## v7.0 — 2026-11-15
 
 A security and robustness release. An audit of all three platforms produced 117
