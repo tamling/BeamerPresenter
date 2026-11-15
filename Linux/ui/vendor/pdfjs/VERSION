@@ -1,0 +1,9 @@
+# What is vendored in this directory, in a form a tool can read.
+# Refresh and verify with Tools/update-pdfjs.sh; the same facts are explained in
+# prose in Linux/README.md.
+package=pdfjs-dist
+version=6.5.438
+flavour=legacy/build
+tarball=https://registry.npmjs.org/pdfjs-dist/-/pdfjs-dist-6.5.438.tgz
+sha256_pdf=522ad2c83bc8a0010e7f0cc60d0892b77c8d2bf2c9702dc12288311d94270f42
+sha256_worker=b4c8353ded0d88d2e2009574a29eb4e0c3ff7e942ecdf51ef5f71566a9667f31

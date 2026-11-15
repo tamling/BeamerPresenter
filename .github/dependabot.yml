@@ -1,0 +1,28 @@
+# The workflow pins every third-party action to a full commit SHA, which is what
+# stops a moving tag from changing what runs in a job that holds contents: write.
+# A pin only stays trustworthy if someone moves it on purpose, so Dependabot opens
+# that pull request monthly instead of leaving the SHAs to rot.
+#
+# The vendored pdf.js is not covered here (there is no manifest to read) — see
+# Linux/ui/vendor/pdfjs/VERSION and Tools/update-pdfjs.sh for that one.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: "ci"
+    labels:
+      - dependencies
+
+  - package-ecosystem: cargo
+    directory: "/Linux/src-tauri"
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: "deps"
+    labels:
+      - dependencies
+    # The .deb build uses --locked, so a bump has to bring the lockfile with it.
+    versioning-strategy: increase
