@@ -82,10 +82,22 @@ def fill_circle(buf, W, H, cx, cy, rad, color, alpha=1.0):
 
 # ---------------------------------------------------------------- the icon
 
+# The brand red. This is one of four places the value is written down — the
+# others are Theme.swift and night.css (twice) — and nothing in the build
+# compares them, so Tools/check_colors.py does. It reads the line below by
+# pattern, which is why the literal stays on its own line as a plain string.
+BRAND = "#E30613"
+
+
+def _hex(s):
+    v = int(s.lstrip("#"), 16)
+    return ((v >> 16) & 255, (v >> 8) & 255, v & 255)
+
+
 # Mina: black with a white bib, a white fleck under the nose set off to the
 # viewer's right, amber eyes and big ears. NIGHT is the shipped icon; PAPER is
 # swapped into the Dock at runtime for the light appearance.
-NIGHT = dict(GROUND=(238, 124, 48), FUR=(30, 27, 31), WHITE=(249, 246, 240),
+NIGHT = dict(GROUND=_hex(BRAND), FUR=(30, 27, 31), WHITE=(249, 246, 240),
              EYE=(232, 190, 80), NOSE=(224, 150, 152), SNOUT=(54, 48, 52))
 PAPER = dict(GROUND=(243, 237, 226), FUR=(32, 29, 32), WHITE=(252, 250, 246),
              EYE=(206, 160, 52), NOSE=(214, 138, 140), SNOUT=(58, 52, 56))

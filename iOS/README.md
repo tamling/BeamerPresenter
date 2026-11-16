@@ -22,8 +22,11 @@ cd iOS
 xcodegen generate            # creates BeamerPresenter.xcodeproj from project.yml
 open BeamerPresenter.xcodeproj
 ```
-The app icon (`Assets.xcassets/AppIcon.appiconset`) is committed; regenerate it
-any time with `python3 Tools/make_app_icon.py` (pure standard library).
+The app icon (`Assets.xcassets/AppIcon.appiconset`) is committed. It is drawn by
+the same renderer as the macOS and Linux icons — run `./make-icon.sh` from the
+repository root, which writes all three. There is deliberately no separate iOS
+generator: the one that used to live here kept its own copy of the palette and
+had drifted two accent colours behind by the time it was removed.
 Then in Xcode: select the **BeamerPresenter** target ▸ **Signing & Capabilities**
 ▸ pick your **Team**, choose your iPad (or an iPad Simulator), and **Run**.
 The Info.plist (PDF document type, Files access, orientations) is generated from
