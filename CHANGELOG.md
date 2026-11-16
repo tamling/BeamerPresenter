@@ -1,5 +1,20 @@
 # Changelog
 
+## v7.6 — 2026-11-16
+
+The interface now matches the icon.
+
+- **The accent is no longer lime.** Fills — the primary button, the LIVE badge,
+  the active tool, the ring on the current thumbnail — take the icon's orange.
+- **Text keeps a gold, not the orange.** Against the dark ground the orange only
+  reaches about 5:1, which would have undone part of the contrast work in 7.0;
+  the gold reaches about 11:1. It is also deliberately lighter than the
+  "dependency missing" amber, so a tagline cannot be read as a warning.
+- **The home screen leads with the app icon**, centred above the name, tagline
+  and pitch. On macOS the icon comes from the running app, so it follows the
+  Night/Paper swap rather than pinning one variant into the window.
+- Screenshots and the README banner retaken in the new palette.
+
 ## v7.5 — 2026-11-16
 
 Presentation only — the app is byte-for-byte 7.4.

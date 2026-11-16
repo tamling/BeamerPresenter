@@ -35,8 +35,8 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.beamerpresenter.ios
         TARGETED_DEVICE_FAMILY: "1,2"      # iPhone (remote) + iPad (presenter)
-        MARKETING_VERSION: "7.5"
-        CURRENT_PROJECT_VERSION: "40"
+        MARKETING_VERSION: "7.6"
+        CURRENT_PROJECT_VERSION: "41"
         GENERATE_INFOPLIST_FILE: NO
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
@@ -47,8 +47,8 @@ targets:
       path: BeamerPresenter/Info.plist
       properties:
         CFBundleDisplayName: BeamerPresenter
-        CFBundleShortVersionString: "7.5"
-        CFBundleVersion: "40"
+        CFBundleShortVersionString: "7.6"
+        CFBundleVersion: "41"
         UIAppFonts:
           - SpaceGrotesk-Bold.ttf
           - IBMPlexSans-Regular.ttf

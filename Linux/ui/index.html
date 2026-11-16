@@ -15,10 +15,14 @@
       width: 380px; padding: 30px; display: flex; flex-direction: column; gap: 20px;
       border-right: 1px solid var(--hairline);
     }
+    .brand-head { display: flex; flex-direction: column; align-items: center; gap: 12px;
+                  text-align: center; }
+    .brand-mark { width: 76px; height: 76px; border-radius: 17px; flex: none; }
     .brand-name { font-family: var(--font-display); font-size: 30px; letter-spacing: -0.3px; }
     .tagline { font-family: var(--font-mono); font-size: 10px; text-transform: uppercase;
                letter-spacing: 1.6px; color: var(--accent-ink); }
-    .blurb { font-size: 15px; color: var(--text-secondary); line-height: 1.45; }
+    .blurb { font-size: 15px; color: var(--text-secondary); line-height: 1.45;
+             text-align: center; }
     .status-row { display: flex; align-items: center; gap: 8px; font-size: 12px;
                   color: var(--text-secondary); }
     .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
@@ -197,9 +201,12 @@
   <div id="home">
     <div class="home-main">
       <div class="branding">
-        <div>
-          <div class="brand-name">BeamerPresenter</div>
-          <div class="tagline">Present · Notes · Two screens</div>
+        <div class="brand-head">
+          <img class="brand-mark" src="brand-icon.png" alt="" />
+          <div>
+            <div class="brand-name">BeamerPresenter</div>
+            <div class="tagline">Present · Notes · Two screens</div>
+          </div>
         </div>
         <div class="blurb">Present LaTeX Beamer PDFs with speaker notes — your
           console on one screen, clean slides on the other.</div>
