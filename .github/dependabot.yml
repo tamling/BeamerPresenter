@@ -24,5 +24,7 @@ updates:
       prefix: "deps"
     labels:
       - dependencies
-    # The .deb build uses --locked, so a bump has to bring the lockfile with it.
-    versioning-strategy: increase
+    # The .deb build uses --locked, so a bump has to land in Cargo.lock; the
+    # version ranges in Cargo.toml stay as they are. (Cargo only accepts "auto"
+    # and "lockfile-only" here — "increase" made Dependabot reject the file.)
+    versioning-strategy: lockfile-only
