@@ -1,5 +1,20 @@
 # Changelog
 
+## v7.3 — 2026-11-16
+
+- **The release now carries a macOS app, not just a Linux `.deb`.** A macOS
+  runner builds `BeamerPresenter.app` universal (Apple Silicon and Intel) from
+  `build-app.sh` and attaches it as `BeamerPresenter-<version>-macOS.zip`.
+- That runner is also the first thing ever to type-check the macOS target.
+  AppKit, SwiftUI and PDFKit exist nowhere else, so until now every macOS change
+  shipped compiled only on whatever machine happened to build it. It now
+  compiles on every push that touches `Sources/`, `Package.swift`, `Resources/`
+  or `build-app.sh`.
+- The app is **ad-hoc signed**: the runner holds no Developer ID. macOS will
+  refuse the first launch from Finder — right-click the app and choose *Open*,
+  or run `xattr -dr com.apple.quarantine BeamerPresenter.app` once. Build it
+  yourself with `./build-app.sh` for a locally signed copy.
+
 ## v7.2 — 2026-11-16
 
 Documentation only — the app is byte-for-byte 7.1.
