@@ -426,6 +426,22 @@ private struct ControlBar: View {
     private let tick = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var body: some View {
+        // The bar is wider than a small window can show. Rather than clipping
+        // whichever end loses — the state before this, where "Exit" was cut off
+        // on the left while the captions wrapped on the right — it scrolls, and
+        // `minWidth` keeps it looking exactly as before whenever it does fit.
+        GeometryReader { geo in
+            ScrollView(.horizontal, showsIndicators: false) {
+                bar.frame(minWidth: geo.size.width, alignment: .leading)
+            }
+        }
+        .frame(height: 66)
+        .background(Theme.raised)
+        .overlay(alignment: .bottom) { Rectangle().fill(Theme.hairline).frame(height: 1) }
+        .onReceive(tick) { now = $0 }
+    }
+
+    private var bar: some View {
         HStack(alignment: .center, spacing: 14) {
             tool("Exit", "rectangle.portrait.and.arrow.right") {
                 // The AppDelegate runs the leave flow (save check, then
@@ -525,9 +541,6 @@ private struct ControlBar: View {
         // screen when the pointer reaches the top edge).
         .padding(.leading, chrome.trafficLightInset)
         .frame(height: 66)
-        .background(Theme.raised)
-        .overlay(alignment: .bottom) { Rectangle().fill(Theme.hairline).frame(height: 1) }
-        .onReceive(tick) { now = $0 }
     }
 
     private var groupDivider: some View {
@@ -666,6 +679,9 @@ private struct ControlBar: View {
                     .shadow(color: active ? Theme.accent.opacity(0.5) : .clear, radius: 6)
                 Text(caption).font(.mono(9)).textCase(.uppercase).tracking(0.6)
                     .foregroundStyle(active ? Theme.accentInk : Theme.textMuted)
+                    // One line, always: squeezed for width SwiftUI would
+                    // otherwise break "CURSOR" across two rows.
+                    .lineLimit(1).fixedSize(horizontal: true, vertical: false)
             }
             .opacity(disabled ? 0.4 : 1)
             .contentShape(Rectangle())
@@ -690,6 +706,7 @@ private struct ControlBar: View {
             content().frame(height: 34)
             Text(caption).font(.mono(9)).textCase(.uppercase).tracking(0.6)
                 .foregroundStyle(Theme.textMuted)
+                .lineLimit(1).fixedSize(horizontal: true, vertical: false)
         }
     }
 

@@ -1,5 +1,28 @@
 # Changelog
 
+## v7.8 — 2026-11-16
+
+**The control bar no longer breaks apart when the window is made narrow.**
+
+- **Captions were wrapping.** The labels under each tool — `CURSOR`, `TARGET`,
+  `RESET`, `ELAPSED` — had no line limit, so the moment the window got too
+  narrow to lay the bar out at its natural width, SwiftUI's first move was to
+  squeeze them and break them mid-word: `CURSO` over `R`. They now carry
+  `lineLimit(1)` and refuse to be compressed horizontally, so they stay one
+  line whatever the window does.
+- **The bar scrolls instead of clipping.** With the captions held at their full
+  width the bar is simply wider than a small window, so it is now a horizontal
+  scroll view with `minWidth` pinned to the window — identical at full size,
+  scrollable below it. Before, the overflow was taken out of whichever end
+  lost: `Exit` disappeared off the left while the right-hand captions wrapped.
+- **The Linux bar had the same bug**, in CSS rather than SwiftUI: at 700&nbsp;px
+  the page counter `1 / 6` broke into three lines and the deck title was pushed
+  out of the bar. Its children now refuse to shrink or wrap, the title
+  ellipsises rather than collapsing, and the bar scrolls.
+
+Found on macOS from a screenshot, then reproduced on Linux by driving the real
+app at 700×620 — not by reading the stylesheet.
+
 ## v7.7 — 2026-11-16
 
 - **The iPad text colours were still the pre-7.0 ones.** macOS had its contrast
