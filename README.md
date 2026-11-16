@@ -226,6 +226,19 @@ Bluetooth presenter remotes emit Page Up / Page Down, so they work out of the bo
 | `OverviewGrid.swift` | Full-window slide overview overlay |
 | `AudienceView.swift` | Full-bleed slide for the projector |
 
+## Download
+
+Each release carries both platforms:
+
+- **macOS** — `BeamerPresenter-<version>-macOS.zip`, built universal for Apple
+  Silicon and Intel. It is ad-hoc signed, because the build runner holds no
+  Developer ID, so the first launch needs a right-click → *Open* (or
+  `xattr -dr com.apple.quarantine BeamerPresenter.app` once). Building it
+  yourself with `./build-app.sh` avoids that.
+- **Linux** — `BeamerPresenter_<version>_amd64.deb`.
+
+[Latest release](https://github.com/tamling/BeamerPresenter/releases/latest)
+
 ## Build a real `.app`
 
 `swift run` is for iterating. To get a double-clickable bundle, run the included
