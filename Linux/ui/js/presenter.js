@@ -891,6 +891,6 @@
   el("theme-btn").addEventListener("click", toggleTheme);
   el("theme-btn-console").addEventListener("click", toggleTheme);
 
-  el("version").textContent = "BeamerPresenter 7.8 · Linux";
+  el("version").textContent = "BeamerPresenter 8.0 · Linux";
   renderRecents();
 })();

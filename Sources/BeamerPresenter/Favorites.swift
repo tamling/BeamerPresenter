@@ -64,10 +64,10 @@ enum AppInfo {
     static let name = "BeamerPresenter"
 
     static var version: String {
-        (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "7.8"
+        (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "8.0"
     }
 
-    /// e.g. "Version 7.8"
+    /// e.g. "Version 8.0"
     static var versionLine: String { "Version \(version)" }
 
     /// e.g. "Build 260621-1901175" — stamped at build time (see BuildInfo).

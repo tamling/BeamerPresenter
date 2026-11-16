@@ -251,6 +251,11 @@ BRANDED_ICONS = [
     "Linux/src-tauri/icons/icon.png",
     "Linux/ui/brand-icon.png",
     "iOS/BeamerPresenter/Assets.xcassets/AppIcon.appiconset/icon-1024.png",
+    # Not an icon, but the same trap: the strip at the top of the README was a
+    # hand-made PNG that nothing regenerated, and it kept the previous accent
+    # through a rebrand. Tools/make_banner.sh rebuilds it; this notices when
+    # nobody has.
+    "docs/banner.png",
 ]
 
 
