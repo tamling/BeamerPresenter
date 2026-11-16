@@ -7,7 +7,12 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "BeamerPresenter",
-            path: "Sources/BeamerPresenter"
+            // Shared/ holds what the macOS and iPad targets both compile. It is
+            // listed as sources rather than split into its own module so the
+            // types stay internal — making them public to cross a module
+            // boundary would be a wide change for no gain here.
+            path: "Sources",
+            sources: ["BeamerPresenter", "Shared"]
         )
     ]
 )

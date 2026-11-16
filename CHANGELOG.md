@@ -1,5 +1,24 @@
 # Changelog
 
+## v7.7 — 2026-11-16
+
+- **The iPad text colours were still the pre-7.0 ones.** macOS had its contrast
+  ladder corrected to clear WCAG AA in 7.0; the iPad target kept its own copy of
+  `Theme.swift` and never got the fix. Secondary, muted and faint text on iPad
+  were all darker than they should have been. Fixed by removing the second copy.
+- **Six files no longer exist twice.** `Theme.swift`, `NotesMarkup.swift`,
+  `TexNotes.swift`, `NightComponents.swift`, `MentiLinks.swift` and the
+  UserDefaults keys now live once, in `Sources/Shared/`, compiled by the macOS
+  target through `Package.swift` and by the iPad target through `project.yml`.
+  They stay one module rather than a separate library, so nothing had to become
+  `public` for the sake of a boundary that buys nothing here.
+- The UserDefaults key list is shared too. Those are strings: a key that drifts
+  between copies does not fail to build, it silently reads a setting nobody
+  wrote.
+
+Files that genuinely differ per platform — the views, the whiteboard, the
+Mentimeter browser — are untouched and stay per-target.
+
 ## v7.6 — 2026-11-16
 
 The interface now matches the icon.

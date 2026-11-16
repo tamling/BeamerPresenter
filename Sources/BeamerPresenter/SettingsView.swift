@@ -124,23 +124,6 @@ struct SettingsView: View {
     }
 }
 
-/// UserDefaults keys shared across the app.
-enum Prefs {
-    static let startBlackedOut = "startBlackedOut"
-    static let blackScreenMessage = "blackScreenMessage"
-    static let blackScreenImage = "blackScreenImage"
-    static let showStatusItem = "showStatusItem"
-    static let backgroundMode = "backgroundMode"
-    static let audienceFullscreen = "audienceFullscreen"
-    /// Open a slide from the thumbnail strip / overview with a double click
-    /// instead of a single click.
-    static let doubleClickSlides = "doubleClickSlides"
-    /// Thumbnail height of the bottom slide strip (shared by the strip and the
-    /// drag handle in the presenter view).
-    static let thumbStripHeight = "thumbStripHeight"
-    /// Console appearance: "night" (dark, default) or "paper" (light).
-    static let appearance = "appearance"
-}
 
 /// Predefined "be right back" messages for the black screen.
 enum BlackScreen {
