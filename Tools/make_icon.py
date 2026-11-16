@@ -82,61 +82,13 @@ def fill_circle(buf, W, H, cx, cy, rad, color, alpha=1.0):
 
 # ---------------------------------------------------------------- the icon
 
-# The brand red. This is one of four places the value is written down — the
-# others are Theme.swift and night.css (twice) — and nothing in the build
-# compares them, so Tools/check_colors.py does. It reads the line below by
-# pattern, which is why the literal stays on its own line as a plain string.
-BRAND = "#E30613"
-
-
-def _hex(s):
-    v = int(s.lstrip("#"), 16)
-    return ((v >> 16) & 255, (v >> 8) & 255, v & 255)
-
-
-# Border thickness, given at 1024 and scaled from there. 8 is the value that
-# survives being made small: 12 and 18 both close up by 32px, until the mark is
-# a red blob with a white hole in it. The floor of one pixel is what keeps the
-# ring from disappearing instead — 8/1024 of a 32px icon is a quarter of a
-# pixel, which anti-aliases away to nothing.
-BORDER_AT_1024 = 8.0
-
-# The chest bib, as a fraction of the head radius (width) and of the shoulder
-# height (how far it drops). On the black-furred icon this could be large: it
-# was a light shape inside a dark mass. In red on white it is a gap in her, so
-# it is sized to stay well inside the shoulders and read as a marking.
-# 0.34/-0.26, chosen by rendering 0.52/-0.12 (what the black-furred icon used),
-# 0.34/-0.26, 0.26/-0.34 and no bib at all, at 128, 48 and 32px, and looking.
-# The old width splits the shoulders into two lumps with a white wedge between
-# them — at 48px it reads as a bow tie. Dropping the bib entirely gives the
-# cleanest silhouette but takes away a marking that is hers. This keeps the
-# shoulders a single red mass with the bib sitting inside it.
-BIB_HALF_WIDTH = 0.34
-BIB_DROP = -0.26
-
-
-def border_width(S):
-    return max(1.0, S * BORDER_AT_1024 / 1024.0)
-
-
-# Mina on a white field inside a brand-red ring, drawn in the brand red. Her
-# white markings — the bib, the chin, the fleck under her nose — are the field
-# showing through rather than a colour of their own, which is also why they
-# hold together when the icon is small: they are the largest shapes in it.
-#
-# The eyes are the field too. Amber arcs on black fur needed a third colour to
-# read; white arcs punched out of the red do not, and two colours survive being
-# shrunk in a way that five never did.
-#
-# NIGHT is the shipped icon; PAPER is swapped into the Dock at runtime for the
-# light appearance, and differs only in that its field is warmed very slightly
-# so it does not glare against a pale desktop.
-NIGHT = dict(GROUND=(255, 255, 255), RING=_hex(BRAND), FUR=_hex(BRAND),
-             WHITE=(255, 255, 255), EYE=(255, 255, 255),
-             NOSE=(255, 255, 255), SNOUT=(154, 4, 13))
-PAPER = dict(GROUND=(252, 250, 248), RING=_hex(BRAND), FUR=_hex(BRAND),
-             WHITE=(252, 250, 248), EYE=(252, 250, 248),
-             NOSE=(252, 250, 248), SNOUT=(154, 4, 13))
+# Mina: black with a white bib, a white fleck under the nose set off to the
+# viewer's right, amber eyes and big ears. NIGHT is the shipped icon; PAPER is
+# swapped into the Dock at runtime for the light appearance.
+NIGHT = dict(GROUND=(238, 124, 48), FUR=(30, 27, 31), WHITE=(249, 246, 240),
+             EYE=(232, 190, 80), NOSE=(224, 150, 152), SNOUT=(54, 48, 52))
+PAPER = dict(GROUND=(243, 237, 226), FUR=(32, 29, 32), WHITE=(252, 250, 246),
+             EYE=(206, 160, 52), NOSE=(214, 138, 140), SNOUT=(58, 52, 56))
 
 
 def seg_dist(px, py, ax, ay, bx, by):
@@ -175,30 +127,9 @@ def fill_tri(buf, S, a, b, c, round_r, color=None, alpha=1.0, grad=None):
                 blend(buf, (row + x) * 4, cr, cg, cb, cov * alpha)
 
 
-def clip_to_squircle(buf, S, inset=0.0, radius=None, margin=None):
-    """Clears everything outside the squircle inset by `inset`.
-
-    The drawing below runs past the icon's edge on purpose — the crop is what
-    makes her look like she is sitting in the frame rather than floating in it
-    — but nothing was actually doing the cropping. On the old icon the ground
-    was dark and so was her fur, so the overspill was invisible; against a
-    white field her shoulders broke straight through the bottom of the ring.
-    """
-    m = S * 0.035 + inset if margin is None else margin
-    r = (max(0.0, S * 0.2237 - inset) if radius is None else radius)
-    for y in range(S):
-        row = y * S
-        for x in range(S):
-            idx = (row + x) * 4
-            if buf[idx + 3] and rr_dist(x + 0.5, y + 0.5, S / 2, S / 2,
-                                        S - 2 * m, S - 2 * m, r) > 0.5:
-                buf[idx + 3] = 0
-
-
-def squircle(buf, S, color, inset=0.0):
-    m = S * 0.035 + inset
-    fill_rr(buf, S, S, S / 2, S / 2, S - 2 * m, S - 2 * m,
-            max(0.0, S * 0.2237 - inset), color=color)
+def squircle(buf, S, color):
+    m = S * 0.035
+    fill_rr(buf, S, S, S / 2, S / 2, S - 2 * m, S - 2 * m, S * 0.2237, color=color)
 
 
 def smile(buf, S, cx, cy, rx, ry, thick, color):
@@ -220,94 +151,55 @@ def render(S, pal=NIGHT, bleed=False):
     buf = bytearray(S * S * 4)                 # transparent RGBA
     fur, white = pal["FUR"], pal["WHITE"]
     cx = S / 2
-    bw = border_width(S)
 
-    # The ring first, as a solid shape; the field and the motif go on top of it
-    # clipped to the inside, so what is left of the ring is an even band and
-    # nothing she is drawn with can cross it.
-    if bleed:
-        # iOS wants an opaque square and applies its own mask, so the ring is
-        # the whole square with the field inset into it: whatever the mask
-        # trims off the corners, an even band of red is left around the edge.
-        r = pal["RING"]
-        for i in range(0, S * S * 4, 4):
-            buf[i], buf[i + 1], buf[i + 2], buf[i + 3] = r[0], r[1], r[2], 255
-        field_inset = bw - S * 0.035
-    else:
-        squircle(buf, S, pal["RING"])
-        field_inset = bw
-
-    motif = bytearray(S * S * 4)
     if bleed:
         g = pal["GROUND"]
         for i in range(0, S * S * 4, 4):
-            motif[i], motif[i + 1], motif[i + 2], motif[i + 3] = g[0], g[1], g[2], 255
+            buf[i], buf[i + 1], buf[i + 2], buf[i + 3] = g[0], g[1], g[2], 255
     else:
-        # Not squircle(): that helper ties the corner radius to the margin,
-        # and here they must differ. The field has to sit `bw` in from the
-        # square edge while keeping the mask's own radius less `bw`, or its
-        # corners are rounder than the mask and the ring swells into four red
-        # wedges — which is what this did at first.
-        fill_rr(motif, S, S, S / 2, S / 2, S - 2 * bw, S - 2 * bw,
-                max(0.0, S * 0.2237 - bw), color=pal["GROUND"])
+        squircle(buf, S, pal["GROUND"])
 
     # Shoulders. The squircle crops them, which is what keeps her looking like
     # she is sitting in the icon rather than floating in it.
     chy, chw, chh = S * 0.880, S * 0.58, S * 0.30
-    fill_rr(motif, S, S, cx, chy, chw, chh, S * 0.20, color=fur)
+    fill_rr(buf, S, S, cx, chy, chw, chh, S * 0.20, color=fur)
 
     hy, hr = S * 0.470, S * 0.250
     for sx in (-1, 1):
-        fill_tri(motif, S,
+        fill_tri(buf, S,
                  (cx + sx * hr * 0.26, hy - hr * 0.72),
                  (cx + sx * hr * 1.04, hy - hr * 0.44),
                  (cx + sx * hr * 0.84, hy - hr * 1.44),
                  S * 0.028, color=fur)
     # Wider than tall: a round head reads as soft, a rounded square does not.
-    fill_rr(motif, S, S, cx, hy, hr * 2.14, hr * 1.86, hr * 0.92, color=fur)
+    fill_rr(buf, S, S, cx, hy, hr * 2.14, hr * 1.86, hr * 0.92, color=fur)
 
     # Chin from two overlapping circles rather than a rounded rect, so her
     # marking can lift one side of it without leaving a visible step.
     jaw = hy + hr * 0.74
-    fill_circle(motif, S, S, cx - hr * 0.11, jaw + hr * 0.04, hr * 0.225, white)
-    fill_circle(motif, S, S, cx + hr * 0.12, jaw + hr * 0.02, hr * 0.225, white)
-    # The bib stops short of the shoulders' lower edge. On the old black-furred
-    # icon it could run to the bottom of the squircle, because black surrounded
-    # it; now that the markings and the field are the same white, anything that
-    # reaches the silhouette's edge stops being a marking and becomes a bite
-    # taken out of her. There has to be red left underneath it.
-    if BIB_HALF_WIDTH > 0:
-        fill_tri(motif, S, (cx - hr * BIB_HALF_WIDTH, jaw + hr * 0.04),
-                 (cx + hr * BIB_HALF_WIDTH, jaw + hr * 0.04),
-                 (cx, chy + chh * BIB_DROP), S * 0.040, color=white)
+    fill_circle(buf, S, S, cx - hr * 0.11, jaw + hr * 0.04, hr * 0.225, white)
+    fill_circle(buf, S, S, cx + hr * 0.12, jaw + hr * 0.02, hr * 0.225, white)
+    fill_tri(buf, S, (cx - hr * 0.52, jaw + hr * 0.04),
+             (cx + hr * 0.52, jaw + hr * 0.04),
+             (cx, chy + chh * 0.20), S * 0.040, color=white)
 
     # Eyes low and close together — the single thing that decides whether the
     # face looks friendly or vacant.
     ex, ey = hr * 0.46, hy + hr * 0.16
     for sx in (-1, 1):
-        smile(motif, S, cx + sx * ex, ey + S * 0.012, S * 0.060, S * 0.044,
+        smile(buf, S, cx + sx * ex, ey + S * 0.012, S * 0.060, S * 0.044,
               S * 0.0165, pal["EYE"])
 
     # Her own fleck: it rises out of the chin under the nose, set off to the
     # viewer's right. A separate dot beside the nose is not what she has.
     chin_top = jaw - hr * 0.17
-    fill_circle(motif, S, S, cx + hr * 0.17, chin_top + hr * 0.02, hr * 0.135, white)
+    fill_circle(buf, S, S, cx + hr * 0.17, chin_top + hr * 0.02, hr * 0.135, white)
 
     # Dark nose, pink only at the tip.
     nb = chin_top - hr * 0.26
-    fill_tri(motif, S, (cx - S * 0.040, nb), (cx + S * 0.040, nb),
+    fill_tri(buf, S, (cx - S * 0.040, nb), (cx + S * 0.040, nb),
              (cx, nb + S * 0.054), S * 0.010, color=pal["SNOUT"])
-    fill_circle(motif, S, S, cx, nb + S * 0.046, S * 0.013, pal["NOSE"])
-
-    # Crop her to the field, then lay the result over the ring. In bleed mode
-    # the field is a plain rounded rect, so clip to that instead.
-    clip_to_squircle(motif, S, inset=field_inset,
-                     radius=max(0.0, S * 0.2237 - bw) if bleed else None,
-                     margin=bw if bleed else None)
-    for i in range(0, S * S * 4, 4):
-        a = motif[i + 3] / 255.0
-        if a:
-            blend(buf, i, motif[i], motif[i + 1], motif[i + 2], a)
+    fill_circle(buf, S, S, cx, nb + S * 0.046, S * 0.013, pal["NOSE"])
 
     return buf
 

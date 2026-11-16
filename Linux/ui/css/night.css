@@ -19,24 +19,15 @@
   --hairline:        rgba(255, 255, 255, 0.06);
   --hairline-strong: rgba(255, 255, 255, 0.08);
 
-  --accent:     #E30613;   /* the brand red: LIVE, active tool, primary btn,
-                              the console window's border. Fill only — as text
-                              on this ground it reaches 3.67:1 and fails AA. */
-  --accent-dim: rgba(227, 6, 19, 0.16);
-  --on-accent:  #FFFFFF;   /* white 4.88:1, black 4.30:1 by the real WCAG
-                              formula; the gamma-less shortcut inverts this */
+  --accent:     #EE7C30;   /* LIVE, active tool, primary btn — the icon's orange */
+  --accent-dim: rgba(238, 124, 48, 0.16);
+  --on-accent:  #15171C;
   --status-ok:  #5BD08A;
   --status-warn:#E0B341;
-  /* "The timer is running" — a state, not the brand. It used to borrow the
-     accent, which only worked while the accent was an orange. It keeps exactly
-     the colour it has always had, so it stays apart from the overrun red
-     whatever the brand becomes. The console draws the running timer as text,
-     not as a filled chip the way macOS does, so only the ink is needed here. */
-  --status-running-ink: #F0CC5A;
-  --accent-ink:  #FFA0A8;   /* the brand as text: a light rose, 9.26:1 here,
-                               and dE 42.8 from the overrun red #FF5A4D */
-  --accent-ring: #E30613;   /* brand — Tools/check_colors.py reads this line */
-  --accent-glow: rgba(227, 6, 19, 0.42);
+  --accent-ink:  #F0CC5A;   /* gold as text / glyph: orange only reaches ~5:1 here,
+                               and this stays clear of --status-warn */
+  --accent-ring: #EE7C30;   /* orange as outline */
+  --accent-glow: rgba(238, 124, 48, 0.42);
   --scrim:       rgba(12, 13, 16, 0.96);
   --scrim-soft:  rgba(12, 13, 16, 0.7);
 
@@ -66,14 +57,12 @@
   --hairline:        rgba(0, 0, 0, 0.12);
   --hairline-strong: rgba(0, 0, 0, 0.18);
 
-  --accent-dim:  rgba(227, 6, 19, 0.32);
-  --accent-ink:  #A8040D;   /* the brand itself is too light on silver (4.44:1);
-                               this reaches 7.10:1 on #F4F4F4 */
-  --accent-ring: #A8040D;
-  --accent-glow: rgba(168, 4, 13, 0.3);
+  --accent-dim:  rgba(238, 124, 48, 0.32);
+  --accent-ink:  #8A5E0C;   /* gold text is unreadable on silver */
+  --accent-ring: #C06A14;
+  --accent-glow: rgba(192, 106, 20, 0.3);
   --status-ok:   #2F9E5B;
   --status-warn: #C98A12;
-  --status-running-ink: #8A5E0C;
   --scrim:       rgba(222, 222, 222, 0.96);
   --scrim-soft:  rgba(60, 60, 60, 0.35);
 

@@ -20,11 +20,3 @@ for name, px in [("icon.png", 512), ("32x32.png", 32),
     print(f"  rendering {name} ({px}px)")
     write_png(os.path.join(icons, name), px, px, render(px))
 print(f"✓ wrote {icons}")
-
-# The mark on the home screen. It used to be a committed PNG that no script
-# wrote, which made it a copy of the brand colour that neither grep nor sed
-# could reach — it was still the previous accent long after the rest had moved.
-ui_mark = os.path.join(HERE, "ui", "brand-icon.png")
-print("  rendering ui/brand-icon.png (256px)")
-write_png(ui_mark, 256, 256, render(256))
-print(f"✓ wrote {ui_mark}")

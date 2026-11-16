@@ -17,16 +17,11 @@ final class WindowChrome: ObservableObject {
     @Published private(set) var titlebarHeight: CGFloat = 28
     /// Horizontal room the traffic lights need at the top-left.
     @Published private(set) var trafficLightInset: CGFloat = WindowChrome.lightsWidth
-    /// Whether the presenter window is in macOS full screen. The brand border
-    /// reads this: a window has rounded corners to follow, a full screen has
-    /// square ones, and a rounded border on a square screen leaves four gaps.
-    @Published private(set) var isFullScreen = false
 
     private static let barHeight: CGFloat = 28
     private static let lightsWidth: CGFloat = 76
 
     func setFullScreen(_ fullScreen: Bool) {
-        isFullScreen = fullScreen
         // Only the height collapses — the content legitimately extends to the
         // top edge there. `trafficLightInset` stays, so the revealed title bar
         // can't drop the lights onto the control bar's first key.

@@ -165,7 +165,7 @@ struct StartView: View {
     }
 
     static var version: String {
-        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "8.0"
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "7.8"
     }
 }
 
@@ -523,16 +523,15 @@ struct PresenterView: View {
             .shadow(color: active ? Theme.accent.opacity(0.5) : .clear, radius: 6)
     }
 
-    /// The running timer: the one solid fill in the chrome. It takes
-    /// `statusRunning`, not the brand accent — see that token for why.
+    /// The running timer — the only solid-lime fill in the chrome.
     @ViewBuilder private var elapsedChip: some View {
         if model.timerRunning {
             Text(TimerControls.elapsedString(model.elapsed))
-                .font(.mono(15, bold: true)).foregroundStyle(Theme.onStatusRunning)
+                .font(.mono(15, bold: true)).foregroundStyle(Theme.onAccent)
                 .lineLimit(1).fixedSize()
                 .padding(.horizontal, 11).frame(height: 36)
-                .background(Theme.statusRunning, in: RoundedRectangle(cornerRadius: 9))
-                .shadow(color: Theme.statusRunning.opacity(0.5), radius: 8)
+                .background(Theme.accent, in: RoundedRectangle(cornerRadius: 9))
+                .shadow(color: Theme.accent.opacity(0.5), radius: 8)
         } else {
             Text(TimerControls.elapsedString(model.elapsed))
                 .font(.mono(15, bold: true)).foregroundStyle(Theme.textPrimary)

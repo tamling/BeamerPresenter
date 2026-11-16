@@ -7,40 +7,10 @@ import UniformTypeIdentifiers
 /// is loaded, then the full presenter console.
 struct RootPresenterView: View {
     @EnvironmentObject var state: PresentationState
-    @ObservedObject private var chrome = WindowChrome.shared
     let onOpen: () -> Void
     let onOpenURL: (URL) -> Void
 
     var body: some View {
-        content
-            // The console's identity: a 3pt brand frame, so the window is
-            // recognisable as this app among others — the same red as the
-            // accent and the icon, from the same token.
-            //
-            // This is the root of the *presenter* window only. The audience
-            // window has its own root (AudienceView) and deliberately gets
-            // nothing: it goes to the projector and shows the slide.
-            //
-            // An overlay rather than .border() or padding, which is what keeps
-            // it from changing any size calculation: overlays are laid out
-            // against their content and never shrink it, so the control bar
-            // and the thumbnail strip keep every point they had. It draws over
-            // 3pt of the window's own background at the edges, where no
-            // control reaches.
-            //
-            // strokeBorder, not stroke: stroke centres the line on the path
-            // and would spend half its width outside the view, where the
-            // window mask eats it, leaving a 1.5pt frame.
-            .overlay {
-                RoundedRectangle(cornerRadius: chrome.isFullScreen ? 0 : 10,
-                                 style: .continuous)
-                    .strokeBorder(Theme.accent, lineWidth: 3)
-                    .ignoresSafeArea()
-                    .allowsHitTesting(false)
-            }
-    }
-
-    @ViewBuilder private var content: some View {
         if state.isLoaded {
             PresenterView()
         } else {
@@ -577,14 +547,13 @@ private struct ControlBar: View {
         Rectangle().fill(Theme.hairline).frame(width: 1, height: 38)
     }
 
-    /// The running timer: the one solid fill in the chrome. It takes
-    /// `statusRunning`, not the brand accent — see that token for why.
+    /// The running timer is the only solid-lime fill in the chrome.
     @ViewBuilder private var elapsedChip: some View {
         if state.timerRunning {
-            Text(elapsed).font(.mono(15, bold: true)).foregroundStyle(Theme.onStatusRunning)
+            Text(elapsed).font(.mono(15, bold: true)).foregroundStyle(Theme.onAccent)
                 .padding(.horizontal, 11).frame(height: 34)
-                .background(Theme.statusRunning, in: RoundedRectangle(cornerRadius: 9))
-                .shadow(color: Theme.statusRunning.opacity(0.5), radius: 8)
+                .background(Theme.accent, in: RoundedRectangle(cornerRadius: 9))
+                .shadow(color: Theme.accent.opacity(0.5), radius: 8)
         } else {
             Text(elapsed).font(.mono(15, bold: true)).foregroundStyle(Theme.textPrimary)
                 .padding(.horizontal, 11).frame(height: 34)

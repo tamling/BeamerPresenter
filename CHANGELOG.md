@@ -1,57 +1,5 @@
 # Changelog
 
-## v8.0 — 2026-11-16
-
-**New colour.** The accent is `#E30613`, a signal red, and it is the same red
-in the interface, around the console window, and in the icon.
-
-- **White on the red, not black.** By the real WCAG formula — sRGB gamma
-  expansion, then 0.2126/0.7152/0.0722 — white reaches 4.88:1 on this red and
-  black 4.30:1. White is both the better label and the only one that clears AA.
-  Worth stating because the shortcut inverts it: a luminance that skips the
-  gamma step reports black at 5.23 against white's 4.02.
-- **The red is a fill, never text.** On the dark ground it manages 3.67:1, so
-  anything set as type takes a light rose at 9.26:1 instead (a dark red at
-  7.10:1 on Paper).
-- **"The timer is running" is no longer the accent.** It was, and its chip sits
-  immediately beside the one that turns red when the lecture runs over — two
-  adjacent chips 7.9 degrees apart in hue, one meaning "running" and one
-  meaning "you are over". Separated first, in its own commit, with the running
-  timer keeping exactly the colour it had.
-- **A 3px brand frame around the console window**, and only that window. The
-  audience window goes to the projector and gets nothing. It is an overlay on
-  macOS and `position: fixed` on Linux, so it takes no part in the layout.
-- **The icon is redrawn**: white field, red ring, Mina in the brand red, with
-  her markings punched out of the field. Five colours down to two, which is
-  most of why it still reads at 32px.
-
-**One brand colour, enforced.** It is written down in four source files and
-five committed PNGs that nothing in the build compares, so
-`Tools/check_colors.py` does, from CI on every push. It checks parity,
-contrast, perceptual distance from the colours that carry meaning, and that
-the shipped PNGs actually contain the brand. It was watched failing on each of
-those before being trusted.
-
-Three pieces of drift it turned up, all the same bug:
-
-- `iOS/Tools/make_app_icon.py` still rendered the pre-7.6 lime, and
-  `iOS/README.md` pointed at it. Following the README would have replaced Mina
-  with the old play mark.
-- `Linux/ui/brand-icon.png` — the mark on the home screen — was a committed PNG
-  that no script wrote, still on the previous accent. Neither grep nor sed
-  could have found it: the colour was in the pixels.
-- `docs/banner.png` was the same, and is now built by `Tools/make_banner.sh`.
-
-Also fixed, found only by looking at renders: the icon's shoulders were never
-actually cropped by the squircle the way the code claimed, which against a
-white field meant they broke out through the bottom of the ring; the iOS icon's
-ring swelled into four corner wedges because the field's corner radius was tied
-to its margin; and the thumbnail strip needed 14px of padding rather than 8,
-because the current slide's ring and the window frame are both the brand red
-and at 8px they read as one shape.
-
-Screenshots and banner retaken.
-
 ## v7.8 — 2026-11-16
 
 **The control bar no longer breaks apart when the window is made narrow.**
