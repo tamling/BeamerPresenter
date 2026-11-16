@@ -277,6 +277,18 @@ preview), then, on macOS, compiles `Resources/BeamerPresenter.icns` with the
 built-in `iconutil`. `build-app.sh` does this automatically when assembling the
 bundle.
 
+## Security
+
+BeamerPresenter opens files other people send you — PDFs, LaTeX sources,
+PowerPoint decks — so the code that reads them is treated as handling untrusted
+input. A full audit of all three platforms was carried out in November 2026 and
+is published in [`docs/AUDIT-2026-11.md`](docs/AUDIT-2026-11.md): every
+confirmed finding with its evidence and fix, and the ones verification refuted.
+
+All of it is closed as of **7.1**. Builds up to and including 6.3 are affected
+by several of the findings — one of which let a downloaded talk run code when
+its `.tex` was opened — and are not patched, so upgrade rather than stay.
+
 ## Roadmap ideas
 
 - Embedded links and videos in the PDF

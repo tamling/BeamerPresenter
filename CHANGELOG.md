@@ -1,5 +1,15 @@
 # Changelog
 
+## v7.2 — 2026-11-16
+
+Documentation only — the app is byte-for-byte 7.1.
+
+- `docs/AUDIT-2026-11.md` publishes the November audit in full: all 117 confirmed
+  findings with evidence and fixes, the 9 that verification refuted, the blind
+  spots the completeness critic named, and what each dimension actually read.
+  Every finding in it is closed (110 in 7.0, 7 in 7.1); builds up to and
+  including 6.3 remain affected and are not patched.
+
 ## v7.1 — 2026-11-15
 
 Closes the findings 7.0 left open, so the audit is fully worked through.
