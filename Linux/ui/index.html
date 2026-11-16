@@ -83,6 +83,20 @@
     #console { display: none; flex-direction: column; height: 100%; }
     #console.active { display: flex; }
 
+    /* The console's identity: a 3px brand frame, the same red as the accent
+       and the icon, from the same token.
+       Fixed and out of the flow on purpose. A border on <body> or on a
+       wrapper would have joined the layout: with the default box model it
+       adds 6px to the page's width and height and pushes a scrollbar onto a
+       window that had none, and with border-box it steals 6px from the deck
+       pane. This takes part in nothing — it is painted over the window's own
+       background at the edges, where no control reaches — and
+       pointer-events:none keeps it from swallowing a click on the edge.
+       index.html only: audience.html goes to the projector. */
+    #brand-frame { position: fixed; inset: 0; z-index: 9000;
+                   border: 3px solid var(--accent); border-radius: 8px;
+                   pointer-events: none; }
+
     /* The bar holds more than a small window can show. It scrolls rather than
        squeezing its children, which is what broke "1 / 6" into three lines. */
     .bar { display: flex; align-items: center; gap: 18px; height: 54px; padding: 0 18px;
@@ -162,8 +176,13 @@
     #strip-handle::after { content: ""; width: 40px; height: 4px; border-radius: 2px;
                            background: var(--hairline-strong); }
     #strip-handle:hover::after { background: var(--accent-ring); }
+    /* 14px, not 8: the current cell's outline is the brand red and so is the
+       window frame, and at 8px the dark gap between them was about 5px — thin
+       enough that the two read as one red shape wrapped around the first
+       thumbnail. Found by looking at a screenshot; the stylesheet gave no
+       hint. Keep this comfortably clear of #brand-frame's 3px. */
     #strip { display: flex; gap: 8px; overflow-x: auto; overflow-y: hidden;
-             padding: 6px 8px; background: var(--raised); scrollbar-width: thin; }
+             padding: 6px 14px; background: var(--raised); scrollbar-width: thin; }
     .strip-cell { flex: none; text-align: center; cursor: pointer; }
     /* One custom property drives every thumbnail's height; the width follows
        from the canvas's own aspect ratio. While the zoom handle is dragged the
@@ -208,6 +227,7 @@
   </style>
 </head>
 <body>
+  <div id="brand-frame"></div>
   <!-- Home screen -->
   <div id="home">
     <div class="home-main">

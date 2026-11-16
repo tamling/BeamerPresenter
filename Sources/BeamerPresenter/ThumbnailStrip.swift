@@ -56,7 +56,13 @@ struct ThumbnailStrip: View {
                             cell(i).id(i)
                         }
                     }
-                    .padding(.horizontal, 8)
+                    // 14, not 8: the current thumbnail's ring is the brand
+                    // red and so is the window frame. At 8 the gap between
+                    // them is a few points of dark, and the two read as one
+                    // red shape around the first thumbnail — which is what the
+                    // Linux port, which has the same layout and the same two
+                    // reds, showed on screen.
+                    .padding(.horizontal, 14)
                     .padding(.vertical, 6)
                 }
                 // The initial index isn't a *change* (e.g. a resumed deck opens
