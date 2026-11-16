@@ -1,5 +1,16 @@
 # Changelog
 
+## v7.4 — 2026-11-16
+
+- **New app icon: Mina.** Flat and friendly, drawn from a photo — black fur, the
+  white bib, her white fleck set off to one side under the nose, amber eyes and
+  big ears. Orange ground, with a cream variant for the light appearance.
+- `Tools/make_icon.py` now renders every platform from one description: the
+  macOS `.iconset`, the Linux bundle icons and the iOS app icon. They had been
+  three separate sets, free to drift apart.
+- The iOS icon is rendered full-bleed and opaque. It previously had transparent
+  corners, which iOS treats as a defect — the system supplies its own mask.
+
 ## v7.3 — 2026-11-16
 
 - **The release now carries a macOS app, not just a Linux `.deb`.** A macOS

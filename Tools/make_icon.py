@@ -1,11 +1,15 @@
 #!/usr/bin/env python3
 """Dependency-free renderer for the BeamerPresenter app icon.
 
-Draws the icon analytically (signed-distance rounded rects + circles with 1px
-anti-aliasing) at every size macOS needs and writes a `.iconset` folder plus a
-1024px master PNG. No third-party libraries — just the standard library — so it
-runs anywhere. On macOS, `iconutil` turns the `.iconset` into `BeamerPresenter.icns`
-(see make-icon.sh / build-app.sh).
+The icon is Mina, drawn analytically (signed-distance rounded rects, circles and
+triangles with 1px anti-aliasing) at every size macOS needs. It writes a
+`.iconset` folder plus a 1024px master PNG. No third-party libraries — just the
+standard library — so it runs anywhere. On macOS, `iconutil` turns the
+`.iconset` into `BeamerPresenter.icns` (see make-icon.sh / build-app.sh).
+
+Everything is laid out relative to the head radius, so the proportions that make
+a face read as friendly rather than blank — big eyes set low and close together,
+a round head, short ears — hold at 16px as well as at 1024.
 """
 
 import math
@@ -76,35 +80,15 @@ def fill_circle(buf, W, H, cx, cy, rad, color, alpha=1.0):
     fill_rr(buf, W, H, cx, cy, rad * 2, rad * 2, rad, color=color, alpha=alpha)
 
 
-def lerp(a, b, t):
-    return tuple(a[i] + (b[i] - a[i]) * t for i in range(3))
-
 # ---------------------------------------------------------------- the icon
 
-# Night Console palette: near-black squircle, a lime-gradient play mark with a
-# soft glow, and a progress bar with a glowing dot — "presenting, live".
-BG_TOP   = (36, 40, 52)
-BG_BOT   = (8, 9, 12)
-LIME_TOP = (214, 248, 110)
-LIME_BOT = (158, 212, 44)
-LIME     = (198, 240, 74)
-DOT      = (236, 255, 170)
-TRACK    = (52, 58, 68)
-
-# Paper (light) variant: a silver squircle; the lime is deepened so the mark
-# keeps its contrast on the light ground. Shown in the Dock while the app runs
-# with Settings → Appearance → Paper.
-PAPER = dict(
-    BG_TOP=(246, 246, 246), BG_BOT=(196, 198, 202),
-    LIME_TOP=(190, 236, 70), LIME_BOT=(112, 156, 22),
-    LIME=(150, 200, 40), DOT=(96, 140, 14), TRACK=(176, 178, 184),
-)
-NIGHT = dict(BG_TOP=BG_TOP, BG_BOT=BG_BOT, LIME_TOP=LIME_TOP, LIME_BOT=LIME_BOT,
-             LIME=LIME, DOT=DOT, TRACK=TRACK)
-
-GLOW_PASSES = 16
-GLOW_MAX = 0.055
-GLOW_ALPHA = 0.05
+# Mina: black with a white bib, a white fleck under the nose set off to the
+# viewer's right, amber eyes and big ears. NIGHT is the shipped icon; PAPER is
+# swapped into the Dock at runtime for the light appearance.
+NIGHT = dict(GROUND=(238, 124, 48), FUR=(30, 27, 31), WHITE=(249, 246, 240),
+             EYE=(232, 190, 80), NOSE=(224, 150, 152), SNOUT=(54, 48, 52))
+PAPER = dict(GROUND=(243, 237, 226), FUR=(32, 29, 32), WHITE=(252, 250, 246),
+             EYE=(206, 160, 52), NOSE=(214, 138, 140), SNOUT=(58, 52, 56))
 
 
 def seg_dist(px, py, ax, ay, bx, by):
@@ -143,59 +127,79 @@ def fill_tri(buf, S, a, b, c, round_r, color=None, alpha=1.0, grad=None):
                 blend(buf, (row + x) * 4, cr, cg, cb, cov * alpha)
 
 
-def glow_rr(buf, S, cx, cy, w, h, r, color):
-    for k in range(GLOW_PASSES, 0, -1):
-        grow = S * GLOW_MAX * (k / GLOW_PASSES)
-        fill_rr(buf, S, S, cx, cy, w + 2 * grow, h + 2 * grow, r + grow,
-                color=color, alpha=GLOW_ALPHA)
-    fill_rr(buf, S, S, cx, cy, w, h, r, color=color)
+def squircle(buf, S, color):
+    m = S * 0.035
+    fill_rr(buf, S, S, S / 2, S / 2, S - 2 * m, S - 2 * m, S * 0.2237, color=color)
 
 
-def glow_circle(buf, S, cx, cy, rad, color):
-    for k in range(GLOW_PASSES, 0, -1):
-        grow = S * GLOW_MAX * (k / GLOW_PASSES)
-        fill_circle(buf, S, S, cx, cy, rad + grow, color, alpha=GLOW_ALPHA)
-    fill_circle(buf, S, S, cx, cy, rad, color)
+def smile(buf, S, cx, cy, rx, ry, thick, color):
+    """A closed, content eye: a shallow arc stroked with overlapping dots.
+
+    Arcs survive being shrunk far better than pupils do — at 32px a drawn eyeball
+    turns to mud, while the curve still reads.
+    """
+    n = 48
+    for i in range(n + 1):
+        t = -1 + 2 * i / n
+        fill_circle(buf, S, S, cx + t * rx, cy - ry * (1 - t * t), thick, color)
 
 
-def render(S, pal=NIGHT):
-    BG_TOP, BG_BOT = pal["BG_TOP"], pal["BG_BOT"]
-    LIME_TOP, LIME_BOT, LIME = pal["LIME_TOP"], pal["LIME_BOT"], pal["LIME"]
-    DOT, TRACK = pal["DOT"], pal["TRACK"]
-    buf = bytearray(S * S * 4)               # transparent RGBA
+def render(S, pal=NIGHT, bleed=False):
+    """`bleed` fills the whole square instead of drawing a squircle — iOS wants an
+    opaque, square icon and applies its own mask, so transparent corners there are
+    a defect rather than a style."""
+    buf = bytearray(S * S * 4)                 # transparent RGBA
+    fur, white = pal["FUR"], pal["WHITE"]
+    cx = S / 2
 
-    m = S * 0.035                            # squircle margin
+    if bleed:
+        g = pal["GROUND"]
+        for i in range(0, S * S * 4, 4):
+            buf[i], buf[i + 1], buf[i + 2], buf[i + 3] = g[0], g[1], g[2], 255
+    else:
+        squircle(buf, S, pal["GROUND"])
 
-    def bg_grad(t):
-        base = lerp(BG_TOP, BG_BOT, min(max(t, 0), 1))
-        hi = max(0.0, 1 - t * 2.4) * 0.10
-        return tuple(min(255, c + (255 - c) * hi) for c in base)
+    # Shoulders. The squircle crops them, which is what keeps her looking like
+    # she is sitting in the icon rather than floating in it.
+    chy, chw, chh = S * 0.880, S * 0.58, S * 0.30
+    fill_rr(buf, S, S, cx, chy, chw, chh, S * 0.20, color=fur)
 
-    # Background squircle (full-bleed with a hair of margin).
-    fill_rr(buf, S, S, S / 2, S / 2, S - 2 * m, S - 2 * m, S * 0.2237, grad=bg_grad)
+    hy, hr = S * 0.470, S * 0.250
+    for sx in (-1, 1):
+        fill_tri(buf, S,
+                 (cx + sx * hr * 0.26, hy - hr * 0.72),
+                 (cx + sx * hr * 1.04, hy - hr * 0.44),
+                 (cx + sx * hr * 0.84, hy - hr * 1.44),
+                 S * 0.028, color=fur)
+    # Wider than tall: a round head reads as soft, a rounded square does not.
+    fill_rr(buf, S, S, cx, hy, hr * 2.14, hr * 1.86, hr * 0.92, color=fur)
 
-    # Play mark: lime gradient, rounded corners, soft glow. Shifted a touch
-    # right so the triangle's visual weight sits centered.
-    tw, th = S * 0.34, S * 0.40
-    tx, ty = S * 0.515, S * 0.455
-    r = S * 0.050
-    a = (tx - tw * 0.48, ty - th / 2)
-    b = (tx - tw * 0.48, ty + th / 2)
-    c = (tx + tw * 0.62, ty)
-    for k in range(GLOW_PASSES, 0, -1):
-        grow = S * GLOW_MAX * (k / GLOW_PASSES)
-        fill_tri(buf, S, a, b, c, r + grow, color=LIME, alpha=GLOW_ALPHA)
-    fill_tri(buf, S, a, b, c, r,
-             grad=lambda t: lerp(LIME_TOP, LIME_BOT, t))
+    # Chin from two overlapping circles rather than a rounded rect, so her
+    # marking can lift one side of it without leaving a visible step.
+    jaw = hy + hr * 0.74
+    fill_circle(buf, S, S, cx - hr * 0.11, jaw + hr * 0.04, hr * 0.225, white)
+    fill_circle(buf, S, S, cx + hr * 0.12, jaw + hr * 0.02, hr * 0.225, white)
+    fill_tri(buf, S, (cx - hr * 0.52, jaw + hr * 0.04),
+             (cx + hr * 0.52, jaw + hr * 0.04),
+             (cx, chy + chh * 0.20), S * 0.040, color=white)
 
-    # Progress bar beneath: dark track, lime fill, glowing playhead dot.
-    bw, bh = S * 0.50, S * 0.038
-    bcx, bcy = S * 0.50, S * 0.760
-    fill_rr(buf, S, S, bcx, bcy, bw, bh, bh / 2, color=TRACK)
-    frac = 0.64
-    fw = bw * frac
-    glow_rr(buf, S, bcx - bw / 2 + fw / 2, bcy, fw, bh, bh / 2, LIME)
-    glow_circle(buf, S, bcx - bw / 2 + fw, bcy, S * 0.030, DOT)
+    # Eyes low and close together — the single thing that decides whether the
+    # face looks friendly or vacant.
+    ex, ey = hr * 0.46, hy + hr * 0.16
+    for sx in (-1, 1):
+        smile(buf, S, cx + sx * ex, ey + S * 0.012, S * 0.060, S * 0.044,
+              S * 0.0165, pal["EYE"])
+
+    # Her own fleck: it rises out of the chin under the nose, set off to the
+    # viewer's right. A separate dot beside the nose is not what she has.
+    chin_top = jaw - hr * 0.17
+    fill_circle(buf, S, S, cx + hr * 0.17, chin_top + hr * 0.02, hr * 0.135, white)
+
+    # Dark nose, pink only at the tip.
+    nb = chin_top - hr * 0.26
+    fill_tri(buf, S, (cx - S * 0.040, nb), (cx + S * 0.040, nb),
+             (cx, nb + S * 0.054), S * 0.010, color=pal["SNOUT"])
+    fill_circle(buf, S, S, cx, nb + S * 0.046, S * 0.013, pal["NOSE"])
 
     return buf
 
@@ -231,6 +235,24 @@ def main():
     print("  rendering 512px (Paper)")
     write_png(os.path.join(res, "AppIconLight.png"), 512, 512, render(512, PAPER))
     print("✓ wrote Resources/AppIconLight.png")
+
+    # One source for all three platforms: three icon sets drifting apart is how
+    # an app ends up wearing a different face per operating system.
+    root = os.path.normpath(os.path.join(here, ".."))
+
+    linux = os.path.join(root, "Linux", "src-tauri", "icons")
+    if os.path.isdir(linux):
+        for name, size in (("32x32.png", 32), ("128x128.png", 128),
+                           ("128x128@2x.png", 256), ("icon.png", 512)):
+            write_png(os.path.join(linux, name), size, size, render(size))
+        print("✓ wrote Linux/src-tauri/icons")
+
+    ios = os.path.join(root, "iOS", "BeamerPresenter", "Assets.xcassets",
+                       "AppIcon.appiconset")
+    if os.path.isdir(ios):
+        write_png(os.path.join(ios, "icon-1024.png"), 1024, 1024,
+                  render(1024, bleed=True))
+        print("✓ wrote iOS AppIcon.appiconset")
 
 
 if __name__ == "__main__":

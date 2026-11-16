@@ -290,6 +290,11 @@ preview), then, on macOS, compiles `Resources/BeamerPresenter.icns` with the
 built-in `iconutil`. `build-app.sh` does this automatically when assembling the
 bundle.
 
+The same script also writes the Linux icons (`Linux/src-tauri/icons/`) and the
+iOS app icon, so all three platforms stay on one face. The iOS one is rendered
+full-bleed and opaque, because iOS supplies its own rounded mask and treats a
+transparent corner as a defect.
+
 ## Security
 
 BeamerPresenter opens files other people send you — PDFs, LaTeX sources,
