@@ -53,14 +53,16 @@ enum Theme {
     static var hairlineStrong: Color { pick(Color.white.opacity(0.08), Color.black.opacity(0.18)) }
 
     // Accent + status
-    /// Lime fill: LIVE, active tool, primary button, timer.
-    static let accent     = Color(hex: 0xC7F24E)
-    static var accentDim: Color { accent.opacity(paper ? 0.35 : 0.14) }
+    /// Orange fill, taken from the app icon: LIVE, active tool, primary button.
+    static let accent     = Color(hex: 0xEE7C30)
+    static var accentDim: Color { accent.opacity(paper ? 0.35 : 0.16) }
     static let onAccent   = Color(hex: 0x15171C)
-    /// Lime used as text, glyph or thin line. On Paper, lime text is unreadable,
-    /// so it turns a dark olive; rings get a mid lime.
-    static var accentInk: Color  { pick(accent, Color(hex: 0x4E6A0C)) }
-    static var accentRing: Color { pick(accent, Color(hex: 0x7FA51A)) }
+    /// The accent as text, glyph or thin line — a gold rather than the orange,
+    /// which only reaches ~5:1 against the dark ground while this reaches ~11:1.
+    /// Deliberately lighter than `statusWarn` so a tagline is not mistaken for a
+    /// warning. On Paper both turn dark enough to read on silver.
+    static var accentInk: Color  { pick(Color(hex: 0xF0CC5A), Color(hex: 0x8A5E0C)) }
+    static var accentRing: Color { pick(accent, Color(hex: 0xC06A14)) }
     static var statusOk: Color   { pick(Color(hex: 0x5BD08A), Color(hex: 0x2F9E5B)) }   // LaTeX ready
     static var statusWarn: Color { pick(Color(hex: 0xE0B341), Color(hex: 0xC98A12)) }   // dependency missing
 
