@@ -547,13 +547,14 @@ private struct ControlBar: View {
         Rectangle().fill(Theme.hairline).frame(width: 1, height: 38)
     }
 
-    /// The running timer is the only solid-lime fill in the chrome.
+    /// The running timer: the one solid fill in the chrome. It takes
+    /// `statusRunning`, not the brand accent — see that token for why.
     @ViewBuilder private var elapsedChip: some View {
         if state.timerRunning {
-            Text(elapsed).font(.mono(15, bold: true)).foregroundStyle(Theme.onAccent)
+            Text(elapsed).font(.mono(15, bold: true)).foregroundStyle(Theme.onStatusRunning)
                 .padding(.horizontal, 11).frame(height: 34)
-                .background(Theme.accent, in: RoundedRectangle(cornerRadius: 9))
-                .shadow(color: Theme.accent.opacity(0.5), radius: 8)
+                .background(Theme.statusRunning, in: RoundedRectangle(cornerRadius: 9))
+                .shadow(color: Theme.statusRunning.opacity(0.5), radius: 8)
         } else {
             Text(elapsed).font(.mono(15, bold: true)).foregroundStyle(Theme.textPrimary)
                 .padding(.horizontal, 11).frame(height: 34)

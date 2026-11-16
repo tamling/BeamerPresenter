@@ -65,6 +65,22 @@ enum Theme {
     static var accentRing: Color { pick(accent, Color(hex: 0xC06A14)) }
     static var statusOk: Color   { pick(Color(hex: 0x5BD08A), Color(hex: 0x2F9E5B)) }   // LaTeX ready
     static var statusWarn: Color { pick(Color(hex: 0xE0B341), Color(hex: 0xC98A12)) }   // dependency missing
+    /// "The timer is running" — a state, not the brand.
+    ///
+    /// This used to be `accent`, which was fine only for as long as the accent
+    /// was an orange. The elapsed chip sits immediately left of the "Left"
+    /// chip, and that one turns `PenInk.red` once the lecture runs over. Two
+    /// adjacent chips, one meaning "running" and one meaning "you are over" —
+    /// they have to stay apart in hue whatever the brand does, so "running"
+    /// gets its own token and keeps the colour it has always had.
+    /// Flat, not appearance-dependent — exactly as `accent` was when the chip
+    /// still borrowed it, so this commit moves the token without moving a pixel.
+    static let statusRunning = Color(hex: 0xEE7C30)
+    /// Label drawn on a `statusRunning` fill. The orange is light, so the
+    /// near-black wins by a wide margin: measured with the real WCAG formula
+    /// (sRGB gamma — Tools/check_colors.py) it reaches 6.46:1 on #EE7C30,
+    /// where white reaches only 2.78:1 and would fail AA.
+    static let onStatusRunning = Color(hex: 0x15171C)
 
     // Speaker-notes markup (Markdown-style highlighting)
     static var noteMarkup: Color { pick(Color(hex: 0xEE7A52), Color(hex: 0xB8452A)) }   // # ** * - > and headings

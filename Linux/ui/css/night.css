@@ -24,6 +24,12 @@
   --on-accent:  #15171C;
   --status-ok:  #5BD08A;
   --status-warn:#E0B341;
+  /* "The timer is running" — a state, not the brand. It used to borrow the
+     accent, which only worked while the accent was an orange. It keeps exactly
+     the colour it has always had, so it stays apart from the overrun red
+     whatever the brand becomes. The console draws the running timer as text,
+     not as a filled chip the way macOS does, so only the ink is needed here. */
+  --status-running-ink: #F0CC5A;
   --accent-ink:  #F0CC5A;   /* gold as text / glyph: orange only reaches ~5:1 here,
                                and this stays clear of --status-warn */
   --accent-ring: #EE7C30;   /* orange as outline */
@@ -63,6 +69,7 @@
   --accent-glow: rgba(192, 106, 20, 0.3);
   --status-ok:   #2F9E5B;
   --status-warn: #C98A12;
+  --status-running-ink: #8A5E0C;
   --scrim:       rgba(222, 222, 222, 0.96);
   --scrim-soft:  rgba(60, 60, 60, 0.35);
 

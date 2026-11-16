@@ -99,7 +99,9 @@
                border: 1px solid var(--hairline); border-radius: 8px; padding: 5px 12px;
                white-space: nowrap; }
     .clock, .timer { font-family: var(--font-mono); font-size: 15px; }
-    .timer { color: var(--accent-ink); }
+    /* Running takes --status-running, not the accent: it sits in the same bar
+       as everything else and must not read as the brand. */
+    .timer { color: var(--status-running-ink); }
     .timer.stopped { color: var(--text-muted); }
     .live { font-family: var(--font-mono); font-size: 10px; letter-spacing: 1.6px;
             padding: 4px 9px; border-radius: 6px; background: var(--accent-dim);
