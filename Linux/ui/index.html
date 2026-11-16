@@ -83,12 +83,21 @@
     #console { display: none; flex-direction: column; height: 100%; }
     #console.active { display: flex; }
 
+    /* The bar holds more than a small window can show. It scrolls rather than
+       squeezing its children, which is what broke "1 / 6" into three lines. */
     .bar { display: flex; align-items: center; gap: 18px; height: 54px; padding: 0 18px;
-           background: var(--raised); border-bottom: 1px solid var(--hairline); }
+           background: var(--raised); border-bottom: 1px solid var(--hairline);
+           overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
+    .bar::-webkit-scrollbar { display: none; }
+    /* Nothing in the bar wraps or shrinks below its own width — only the deck
+       title gives way, and it ellipsises instead of collapsing. */
+    .bar > * { flex: none; white-space: nowrap; }
     .bar .title { font-weight: 600; font-size: 14px; overflow: hidden;
-                  text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
+                  text-overflow: ellipsis; white-space: nowrap; flex: 1 1 auto;
+                  min-width: 60px; }
     .counter { font-family: var(--font-mono); font-size: 15px; background: var(--inset);
-               border: 1px solid var(--hairline); border-radius: 8px; padding: 5px 12px; }
+               border: 1px solid var(--hairline); border-radius: 8px; padding: 5px 12px;
+               white-space: nowrap; }
     .clock, .timer { font-family: var(--font-mono); font-size: 15px; }
     .timer { color: var(--accent-ink); }
     .timer.stopped { color: var(--text-muted); }
