@@ -1,5 +1,21 @@
 # Changelog
 
+## v7.5 — 2026-11-16
+
+Presentation only — the app is byte-for-byte 7.4.
+
+- **Rewritten README.** The old one still announced "Version 5.7" and described
+  the app as macOS-only, which stopped being true several releases ago. It now
+  leads with what the app is for, puts the download first, and names the two
+  things it does that other presenter apps do not: the translated twin deck and
+  the whiteboard on the projector.
+- **New banner** (`docs/banner.png`) built from the app icon and the app's own
+  typefaces, so the repository page and the home screen look like the same
+  product.
+- **All five screenshots retaken** from the current build. The old ones predated
+  7.0 and 7.1 and showed neither the lazy thumbnail strip, nor the Paper toggle,
+  nor the fixed overview — and still carried the old icon.
+
 ## v7.4 — 2026-11-16
 
 - **New app icon: Mina.** Flat and friendly, drawn from a photo — black fur, the

@@ -1,23 +1,46 @@
-# BeamerPresenter
+<p align="center">
+  <img src="docs/banner.png" alt="BeamerPresenter" width="700">
+</p>
 
-A native macOS (Apple Silicon) presenter app for LaTeX **Beamer** decks. The audience
-screen shows the slide; your laptop shows a full presenter console: current
-slide, next slide, speaker notes, a thumbnail strip, a slide overview, and a
-timer.
+Present a LaTeX **Beamer** deck the way it is meant to be presented: the audience
+sees nothing but the slide, while you get a console with the current slide, the
+next one, your speaker notes, a thumbnail strip, an overview and a timer.
 
-It works directly off a compiled PDF; it can also compile a `.tex` (via a local
-LaTeX install) or convert a PowerPoint `.pptx` (via LibreOffice) on the fly, and
-pull speaker notes straight from the `.tex` (`\note{…}`) or from the `.pptx`
-(PowerPoint speaker notes).
+It runs straight off a compiled PDF. It will also compile a `.tex` for you (with
+a local LaTeX install) or convert a `.pptx` (with LibreOffice), and it reads
+speaker notes from wherever they already are — `\note{…}` in the Beamer source,
+or the notes pane of a PowerPoint deck. Nothing to export, nothing to convert by
+hand.
 
-**Version 5.7** — see `CHANGELOG.md`. Also available: an iPad version
-(`iOS/`) and a **Linux port** of the core console (`Linux/`, Tauri 2 +
-WebKitGTK — see `Linux/README.md`; prebuilt `.deb` packages are attached to
-the GitHub Releases, rebuilt by CI on every push to `main`).
+Two things it does that most presenter apps do not:
+
+- **A translated twin deck.** Presenting in a language you read better than you
+  speak? Put `talk-no.pdf` and `talk-en.pdf` side by side. The audience gets the
+  Norwegian slides; your console shows the English ones. Same deck, two heads.
+- **A whiteboard on the projector.** Press `W` and draw — on a blank board or
+  over the slide — without leaving the deck or switching apps.
+
+## Download
+
+Every release carries both platforms:
+
+- **macOS** — `BeamerPresenter-<version>-macOS.zip`, universal (Apple Silicon and
+  Intel). Ad-hoc signed, because the build runner holds no Developer ID, so the
+  first launch needs a right-click → *Open* (or
+  `xattr -dr com.apple.quarantine BeamerPresenter.app` once). Building it
+  yourself with `./build-app.sh` avoids that.
+- **Linux** — `BeamerPresenter_<version>_amd64.deb`.
+
+**[→ Latest release](https://github.com/tamling/BeamerPresenter/releases/latest)**
+
+There is also an iPad version in `iOS/`, and the Linux port in `Linux/` is a
+Tauri 2 + WebKitGTK build of the same console. See `CHANGELOG.md` for what
+changed, and [`docs/AUDIT-2026-11.md`](docs/AUDIT-2026-11.md) for the security
+audit behind 7.0 and 7.1.
 
 ## Screenshots
 
-*(Captured from the Linux build — the macOS app shares the same Night
+*(Captured from the Linux build — all three platforms share the same Night
 Console design.)*
 
 The presenter console with the **translated twin deck** active: the audience
@@ -225,19 +248,6 @@ Bluetooth presenter remotes emit Page Up / Page Down, so they work out of the bo
 | `ThumbnailStrip.swift` | Clickable thumbnail navigation row |
 | `OverviewGrid.swift` | Full-window slide overview overlay |
 | `AudienceView.swift` | Full-bleed slide for the projector |
-
-## Download
-
-Each release carries both platforms:
-
-- **macOS** — `BeamerPresenter-<version>-macOS.zip`, built universal for Apple
-  Silicon and Intel. It is ad-hoc signed, because the build runner holds no
-  Developer ID, so the first launch needs a right-click → *Open* (or
-  `xattr -dr com.apple.quarantine BeamerPresenter.app` once). Building it
-  yourself with `./build-app.sh` avoids that.
-- **Linux** — `BeamerPresenter_<version>_amd64.deb`.
-
-[Latest release](https://github.com/tamling/BeamerPresenter/releases/latest)
 
 ## Build a real `.app`
 
