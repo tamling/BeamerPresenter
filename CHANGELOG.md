@@ -1,15 +1,5 @@
 # Changelog
 
-## v7.3 — 2026-11-16
-
-- **Console toolbar fits small screens** (macOS): on a narrow window the
-  captions no longer wrap ("CURSO / R", "ELAPS / ED") and the slide counter,
-  elapsed/remaining time and clock no longer collapse to "…". The bar first
-  tightens its spacing, then hides the captions (every key keeps its name as a
-  tooltip), and only as a last resort scrolls sideways.
-- Dependabot config fixed: `versioning-strategy: increase` is not valid for
-  Cargo and made Dependabot reject the whole file; it is `lockfile-only` now.
-
 ## v7.2 — 2026-11-16
 
 Documentation only — the app is byte-for-byte 7.1.

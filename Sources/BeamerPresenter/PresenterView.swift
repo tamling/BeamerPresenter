@@ -426,31 +426,7 @@ private struct ControlBar: View {
     private let tick = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var body: some View {
-        // Narrow windows: tighten the spacing first, then drop the captions
-        // (each key keeps its name as a tooltip), and only as a last resort
-        // scroll — values and captions are never truncated or wrapped.
-        ViewThatFits(in: .horizontal) {
-            bar(spacing: 14)
-            bar(spacing: 8)
-            bar(spacing: 8).environment(\.controlBarCompact, true)
-            ScrollView(.horizontal, showsIndicators: false) {
-                bar(spacing: 6).environment(\.controlBarCompact, true)
-            }
-        }
-        .padding(.horizontal, 16)
-        // Start right of the traffic lights, which float over the bar now that
-        // the window has no separate title bar (and slide back over it in full
-        // screen when the pointer reaches the top edge).
-        .padding(.leading, chrome.trafficLightInset)
-        .frame(height: 66)
-        .background(Theme.raised)
-        .overlay(alignment: .bottom) { Rectangle().fill(Theme.hairline).frame(height: 1) }
-        .onReceive(tick) { now = $0 }
-    }
-
-    /// The whole bar at one spacing; captions follow `controlBarCompact`.
-    private func bar(spacing: CGFloat) -> some View {
-        HStack(alignment: .center, spacing: spacing) {
+        HStack(alignment: .center, spacing: 14) {
             tool("Exit", "rectangle.portrait.and.arrow.right") {
                 // The AppDelegate runs the leave flow (save check, then
                 // home screen / quit choice).
@@ -464,7 +440,6 @@ private struct ControlBar: View {
             captioned("Slide") {
                 Text(String(format: "%02d / %02d", state.index + 1, state.pageCount))
                     .font(.mono(14, bold: true)).foregroundStyle(Theme.textPrimary)
-                    .lineLimit(1).fixedSize()
                     .padding(.horizontal, 11).frame(height: 34)
                     .background(Theme.inset, in: RoundedRectangle(cornerRadius: 9))
                     .overlay(RoundedRectangle(cornerRadius: 9).stroke(Theme.hairline, lineWidth: 1))
@@ -541,10 +516,18 @@ private struct ControlBar: View {
             captioned("Time") {
                 Text(now, style: .time)
                     .font(.mono(15, bold: true)).foregroundStyle(Theme.textSecondary)
-                    .lineLimit(1).fixedSize()
                     .frame(height: 34)
             }
         }
+        .padding(.horizontal, 16)
+        // Start right of the traffic lights, which float over the bar now that
+        // the window has no separate title bar (and slide back over it in full
+        // screen when the pointer reaches the top edge).
+        .padding(.leading, chrome.trafficLightInset)
+        .frame(height: 66)
+        .background(Theme.raised)
+        .overlay(alignment: .bottom) { Rectangle().fill(Theme.hairline).frame(height: 1) }
+        .onReceive(tick) { now = $0 }
     }
 
     private var groupDivider: some View {
@@ -555,13 +538,11 @@ private struct ControlBar: View {
     @ViewBuilder private var elapsedChip: some View {
         if state.timerRunning {
             Text(elapsed).font(.mono(15, bold: true)).foregroundStyle(Theme.onAccent)
-                .lineLimit(1).fixedSize()
                 .padding(.horizontal, 11).frame(height: 34)
                 .background(Theme.accent, in: RoundedRectangle(cornerRadius: 9))
                 .shadow(color: Theme.accent.opacity(0.5), radius: 8)
         } else {
             Text(elapsed).font(.mono(15, bold: true)).foregroundStyle(Theme.textPrimary)
-                .lineLimit(1).fixedSize()
                 .padding(.horizontal, 11).frame(height: 34)
                 .background(Theme.inset, in: RoundedRectangle(cornerRadius: 9))
                 .overlay(RoundedRectangle(cornerRadius: 9).stroke(Theme.hairline, lineWidth: 1))
@@ -577,7 +558,6 @@ private struct ControlBar: View {
             let line: Color = over ? PenInk.red.opacity(0.6)
                                    : (warn ? Theme.statusWarn.opacity(0.5) : Theme.hairline)
             Text(remainingText(remaining)).font(.mono(15, bold: true)).foregroundStyle(fg)
-                .lineLimit(1).fixedSize()
                 .padding(.horizontal, 11).frame(height: 34)
                 .background(Theme.inset, in: RoundedRectangle(cornerRadius: 9))
                 .overlay(RoundedRectangle(cornerRadius: 9).stroke(line, lineWidth: 1))
@@ -684,14 +664,14 @@ private struct ControlBar: View {
                         .stroke(active ? Theme.accentRing : Theme.hairline,
                                 lineWidth: active ? 2.5 : 1))
                     .shadow(color: active ? Theme.accent.opacity(0.5) : .clear, radius: 6)
-                ControlBarCaption(text: caption, active: active)
+                Text(caption).font(.mono(9)).textCase(.uppercase).tracking(0.6)
+                    .foregroundStyle(active ? Theme.accentInk : Theme.textMuted)
             }
             .opacity(disabled ? 0.4 : 1)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .disabled(disabled)
-        .help(caption.capitalized)
 
         if let selected {
             // `.isToggle` (which VoiceOver reads as on/off) is macOS 14, so
@@ -708,7 +688,8 @@ private struct ControlBar: View {
                                           @ViewBuilder _ content: () -> Content) -> some View {
         VStack(spacing: 6) {
             content().frame(height: 34)
-            ControlBarCaption(text: caption, active: false)
+            Text(caption).font(.mono(9)).textCase(.uppercase).tracking(0.6)
+                .foregroundStyle(Theme.textMuted)
         }
     }
 
@@ -716,33 +697,5 @@ private struct ControlBar: View {
         _ = now   // re-render every tick
         let secs = max(0, Int(state.elapsedSeconds))
         return String(format: "%02d:%02d", secs / 60, secs % 60)
-    }
-}
-
-/// Whether the console bar is squeezed so far that its captions are hidden.
-private struct ControlBarCompactKey: EnvironmentKey {
-    static let defaultValue = false
-}
-
-private extension EnvironmentValues {
-    var controlBarCompact: Bool {
-        get { self[ControlBarCompactKey.self] }
-        set { self[ControlBarCompactKey.self] = newValue }
-    }
-}
-
-/// The mono uppercase caption under a console key: one line, never wrapped or
-/// truncated, and left out entirely when the bar is compact.
-private struct ControlBarCaption: View {
-    let text: String
-    let active: Bool
-    @Environment(\.controlBarCompact) private var compact
-
-    var body: some View {
-        if !compact {
-            Text(text).font(.mono(9)).textCase(.uppercase).tracking(0.6)
-                .foregroundStyle(active ? Theme.accentInk : Theme.textMuted)
-                .lineLimit(1).fixedSize()
-        }
     }
 }
