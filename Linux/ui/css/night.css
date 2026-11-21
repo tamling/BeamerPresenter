@@ -19,14 +19,15 @@
   --hairline:        rgba(255, 255, 255, 0.06);
   --hairline-strong: rgba(255, 255, 255, 0.08);
 
-  --accent:     #C7F24E;   /* LIVE, active tool, primary btn, timer */
-  --accent-dim: rgba(199, 242, 78, 0.14);
+  --accent:     #EE7C30;   /* LIVE, active tool, primary btn — the icon's orange */
+  --accent-dim: rgba(238, 124, 48, 0.16);
   --on-accent:  #15171C;
   --status-ok:  #5BD08A;
   --status-warn:#E0B341;
-  --accent-ink:  #C7F24E;   /* lime as text / glyph */
-  --accent-ring: #C7F24E;   /* lime as outline */
-  --accent-glow: rgba(199, 242, 78, 0.4);
+  --accent-ink:  #F0CC5A;   /* gold as text / glyph: orange only reaches ~5:1 here,
+                               and this stays clear of --status-warn */
+  --accent-ring: #EE7C30;   /* orange as outline */
+  --accent-glow: rgba(238, 124, 48, 0.42);
   --scrim:       rgba(12, 13, 16, 0.96);
   --scrim-soft:  rgba(12, 13, 16, 0.7);
 
@@ -56,10 +57,10 @@
   --hairline:        rgba(0, 0, 0, 0.12);
   --hairline-strong: rgba(0, 0, 0, 0.18);
 
-  --accent-dim:  rgba(199, 242, 78, 0.35);
-  --accent-ink:  #4E6A0C;   /* lime text is unreadable on silver */
-  --accent-ring: #7FA51A;
-  --accent-glow: rgba(127, 165, 26, 0.3);
+  --accent-dim:  rgba(238, 124, 48, 0.32);
+  --accent-ink:  #8A5E0C;   /* gold text is unreadable on silver */
+  --accent-ring: #C06A14;
+  --accent-glow: rgba(192, 106, 20, 0.3);
   --status-ok:   #2F9E5B;
   --status-warn: #C98A12;
   --scrim:       rgba(222, 222, 222, 0.96);

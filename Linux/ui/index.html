@@ -15,10 +15,14 @@
       width: 380px; padding: 30px; display: flex; flex-direction: column; gap: 20px;
       border-right: 1px solid var(--hairline);
     }
+    .brand-head { display: flex; flex-direction: column; align-items: center; gap: 12px;
+                  text-align: center; }
+    .brand-mark { width: 76px; height: 76px; border-radius: 17px; flex: none; }
     .brand-name { font-family: var(--font-display); font-size: 30px; letter-spacing: -0.3px; }
     .tagline { font-family: var(--font-mono); font-size: 10px; text-transform: uppercase;
                letter-spacing: 1.6px; color: var(--accent-ink); }
-    .blurb { font-size: 15px; color: var(--text-secondary); line-height: 1.45; }
+    .blurb { font-size: 15px; color: var(--text-secondary); line-height: 1.45;
+             text-align: center; }
     .status-row { display: flex; align-items: center; gap: 8px; font-size: 12px;
                   color: var(--text-secondary); }
     .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
@@ -79,12 +83,21 @@
     #console { display: none; flex-direction: column; height: 100%; }
     #console.active { display: flex; }
 
+    /* The bar holds more than a small window can show. It scrolls rather than
+       squeezing its children, which is what broke "1 / 6" into three lines. */
     .bar { display: flex; align-items: center; gap: 18px; height: 54px; padding: 0 18px;
-           background: var(--raised); border-bottom: 1px solid var(--hairline); }
+           background: var(--raised); border-bottom: 1px solid var(--hairline);
+           overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
+    .bar::-webkit-scrollbar { display: none; }
+    /* Nothing in the bar wraps or shrinks below its own width — only the deck
+       title gives way, and it ellipsises instead of collapsing. */
+    .bar > * { flex: none; white-space: nowrap; }
     .bar .title { font-weight: 600; font-size: 14px; overflow: hidden;
-                  text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
+                  text-overflow: ellipsis; white-space: nowrap; flex: 1 1 auto;
+                  min-width: 60px; }
     .counter { font-family: var(--font-mono); font-size: 15px; background: var(--inset);
-               border: 1px solid var(--hairline); border-radius: 8px; padding: 5px 12px; }
+               border: 1px solid var(--hairline); border-radius: 8px; padding: 5px 12px;
+               white-space: nowrap; }
     .clock, .timer { font-family: var(--font-mono); font-size: 15px; }
     .timer { color: var(--accent-ink); }
     .timer.stopped { color: var(--text-muted); }
@@ -197,9 +210,12 @@
   <div id="home">
     <div class="home-main">
       <div class="branding">
-        <div>
-          <div class="brand-name">BeamerPresenter</div>
-          <div class="tagline">Present · Notes · Two screens</div>
+        <div class="brand-head">
+          <img class="brand-mark" src="brand-icon.png" alt="" />
+          <div>
+            <div class="brand-name">BeamerPresenter</div>
+            <div class="tagline">Present · Notes · Two screens</div>
+          </div>
         </div>
         <div class="blurb">Present LaTeX Beamer PDFs with speaker notes — your
           console on one screen, clean slides on the other.</div>

@@ -59,16 +59,27 @@ struct WelcomeView: View {
 
     private var sidebarBranding: some View {
         VStack(alignment: .leading, spacing: 22) {
-            VStack(alignment: .leading, spacing: 10) {
-                Text(AppInfo.name).font(.display(30)).tracking(-0.3)
-                    .foregroundStyle(Theme.textPrimary)
-                Text("Present · Annotate · Two screens")
-                    .font(.mono(10)).textCase(.uppercase).tracking(1.6)
-                    .foregroundStyle(Theme.accentInk)
-                Text("Present LaTeX Beamer PDFs with speaker notes — your console on one screen, clean slides on the other.")
-                    .font(.ui(15)).foregroundStyle(Theme.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
+            // The mark, the name and the pitch read as one centred block — the
+            // icon is taken from the running app, so it follows the Night/Paper
+            // swap instead of pinning one variant into the window.
+            VStack(spacing: 12) {
+                Image(nsImage: NSApp.applicationIconImage)
+                    .resizable().interpolation(.high)
+                    .frame(width: 76, height: 76)
+                    .accessibilityHidden(true)
+                VStack(spacing: 10) {
+                    Text(AppInfo.name).font(.display(30)).tracking(-0.3)
+                        .foregroundStyle(Theme.textPrimary)
+                    Text("Present · Annotate · Two screens")
+                        .font(.mono(10)).textCase(.uppercase).tracking(1.6)
+                        .foregroundStyle(Theme.accentInk)
+                    Text("Present LaTeX Beamer PDFs with speaker notes — your console on one screen, clean slides on the other.")
+                        .font(.ui(15)).foregroundStyle(Theme.textSecondary)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
+            .frame(maxWidth: .infinity)
 
             Button(action: onOpen) {
                 Label("Open PDF · .tex · .pptx", systemImage: "rectangle.on.rectangle")

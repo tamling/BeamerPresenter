@@ -8,7 +8,7 @@ struct MentiLink: Identifiable, Hashable {
 }
 
 /// Remembers the menti pages you presented, so you can relaunch a poll in one
-/// tap at the start of the next lecture. Stored as "title\turl" in UserDefaults.
+/// click or tap at the start of the next lecture. Stored as "title\turl" in UserDefaults.
 enum MentiLinks {
     private static let key = "mentiRecentLinks"
     static let didChange = Notification.Name("MentiLinksDidChange")

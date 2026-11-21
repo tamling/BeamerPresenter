@@ -1,0 +1,74 @@
+name: macOS app
+
+# The macOS target cannot be compiled anywhere but on macOS — AppKit, SwiftUI and
+# PDFKit do not exist elsewhere — so this is the only place it is type-checked at
+# all. It runs on every push that touches the macOS sources, and attaches a
+# ready-to-run .app to the release when main is pushed.
+on:
+  push:
+    branches: [main, "claude/**"]
+    paths:
+      - "Sources/**"
+      - "Package.swift"
+      - "Resources/**"
+      - "Tools/make_icon.py"
+      - "build-app.sh"
+      - ".github/workflows/build-macos.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Use the full Xcode
+        # build-app.sh needs xcbuild for a universal binary; the runner's default
+        # xcode-select may point at the Command Line Tools.
+        run: sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+
+      - name: Versions
+        run: |
+          swift --version
+          xcodebuild -version
+
+      - name: Build the app
+        # Universal, so the result runs on both Apple Silicon and Intel. No signing
+        # identity exists on the runner, so build-app.sh falls back to ad-hoc.
+        env:
+          ARCHS: "arm64 x86_64"
+        run: ./build-app.sh
+
+      - name: Check what was produced
+        run: |
+          test -x "build/BeamerPresenter.app/Contents/MacOS/BeamerPresenter"
+          lipo -archs "build/BeamerPresenter.app/Contents/MacOS/BeamerPresenter"
+          /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" \
+            "build/BeamerPresenter.app/Contents/Info.plist"
+          codesign --verify --verbose "build/BeamerPresenter.app"
+
+      - name: Zip it
+        # ditto keeps the bundle's symlinks and resource forks; zip(1) does not.
+        run: |
+          V="$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" \
+               build/BeamerPresenter.app/Contents/Info.plist)"
+          echo "APP_VERSION=$V" >> "$GITHUB_ENV"
+          ditto -c -k --sequesterRsrc --keepParent \
+            build/BeamerPresenter.app "BeamerPresenter-$V-macOS.zip"
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: BeamerPresenter-macOS
+          path: BeamerPresenter-*-macOS.zip
+          if-no-files-found: error
+
+      - name: Attach to the release
+        if: github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
+        with:
+          tag_name: v${{ env.APP_VERSION }}.0
+          files: BeamerPresenter-*-macOS.zip
+          fail_on_unmatched_files: true

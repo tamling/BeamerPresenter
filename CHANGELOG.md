@@ -1,5 +1,104 @@
 # Changelog
 
+## v7.8 — 2026-11-16
+
+**The control bar no longer breaks apart when the window is made narrow.**
+
+- **Captions were wrapping.** The labels under each tool — `CURSOR`, `TARGET`,
+  `RESET`, `ELAPSED` — had no line limit, so the moment the window got too
+  narrow to lay the bar out at its natural width, SwiftUI's first move was to
+  squeeze them and break them mid-word: `CURSO` over `R`. They now carry
+  `lineLimit(1)` and refuse to be compressed horizontally, so they stay one
+  line whatever the window does.
+- **The bar scrolls instead of clipping.** With the captions held at their full
+  width the bar is simply wider than a small window, so it is now a horizontal
+  scroll view with `minWidth` pinned to the window — identical at full size,
+  scrollable below it. Before, the overflow was taken out of whichever end
+  lost: `Exit` disappeared off the left while the right-hand captions wrapped.
+- **The Linux bar had the same bug**, in CSS rather than SwiftUI: at 700&nbsp;px
+  the page counter `1 / 6` broke into three lines and the deck title was pushed
+  out of the bar. Its children now refuse to shrink or wrap, the title
+  ellipsises rather than collapsing, and the bar scrolls.
+
+Found on macOS from a screenshot, then reproduced on Linux by driving the real
+app at 700×620 — not by reading the stylesheet.
+
+## v7.7 — 2026-11-16
+
+- **The iPad text colours were still the pre-7.0 ones.** macOS had its contrast
+  ladder corrected to clear WCAG AA in 7.0; the iPad target kept its own copy of
+  `Theme.swift` and never got the fix. Secondary, muted and faint text on iPad
+  were all darker than they should have been. Fixed by removing the second copy.
+- **Six files no longer exist twice.** `Theme.swift`, `NotesMarkup.swift`,
+  `TexNotes.swift`, `NightComponents.swift`, `MentiLinks.swift` and the
+  UserDefaults keys now live once, in `Sources/Shared/`, compiled by the macOS
+  target through `Package.swift` and by the iPad target through `project.yml`.
+  They stay one module rather than a separate library, so nothing had to become
+  `public` for the sake of a boundary that buys nothing here.
+- The UserDefaults key list is shared too. Those are strings: a key that drifts
+  between copies does not fail to build, it silently reads a setting nobody
+  wrote.
+
+Files that genuinely differ per platform — the views, the whiteboard, the
+Mentimeter browser — are untouched and stay per-target.
+
+## v7.6 — 2026-11-16
+
+The interface now matches the icon.
+
+- **The accent is no longer lime.** Fills — the primary button, the LIVE badge,
+  the active tool, the ring on the current thumbnail — take the icon's orange.
+- **Text keeps a gold, not the orange.** Against the dark ground the orange only
+  reaches about 5:1, which would have undone part of the contrast work in 7.0;
+  the gold reaches about 11:1. It is also deliberately lighter than the
+  "dependency missing" amber, so a tagline cannot be read as a warning.
+- **The home screen leads with the app icon**, centred above the name, tagline
+  and pitch. On macOS the icon comes from the running app, so it follows the
+  Night/Paper swap rather than pinning one variant into the window.
+- Screenshots and the README banner retaken in the new palette.
+
+## v7.5 — 2026-11-16
+
+Presentation only — the app is byte-for-byte 7.4.
+
+- **Rewritten README.** The old one still announced "Version 5.7" and described
+  the app as macOS-only, which stopped being true several releases ago. It now
+  leads with what the app is for, puts the download first, and names the two
+  things it does that other presenter apps do not: the translated twin deck and
+  the whiteboard on the projector.
+- **New banner** (`docs/banner.png`) built from the app icon and the app's own
+  typefaces, so the repository page and the home screen look like the same
+  product.
+- **All five screenshots retaken** from the current build. The old ones predated
+  7.0 and 7.1 and showed neither the lazy thumbnail strip, nor the Paper toggle,
+  nor the fixed overview — and still carried the old icon.
+
+## v7.4 — 2026-11-16
+
+- **New app icon: Mina.** Flat and friendly, drawn from a photo — black fur, the
+  white bib, her white fleck set off to one side under the nose, amber eyes and
+  big ears. Orange ground, with a cream variant for the light appearance.
+- `Tools/make_icon.py` now renders every platform from one description: the
+  macOS `.iconset`, the Linux bundle icons and the iOS app icon. They had been
+  three separate sets, free to drift apart.
+- The iOS icon is rendered full-bleed and opaque. It previously had transparent
+  corners, which iOS treats as a defect — the system supplies its own mask.
+
+## v7.3 — 2026-11-16
+
+- **The release now carries a macOS app, not just a Linux `.deb`.** A macOS
+  runner builds `BeamerPresenter.app` universal (Apple Silicon and Intel) from
+  `build-app.sh` and attaches it as `BeamerPresenter-<version>-macOS.zip`.
+- That runner is also the first thing ever to type-check the macOS target.
+  AppKit, SwiftUI and PDFKit exist nowhere else, so until now every macOS change
+  shipped compiled only on whatever machine happened to build it. It now
+  compiles on every push that touches `Sources/`, `Package.swift`, `Resources/`
+  or `build-app.sh`.
+- The app is **ad-hoc signed**: the runner holds no Developer ID. macOS will
+  refuse the first launch from Finder — right-click the app and choose *Open*,
+  or run `xattr -dr com.apple.quarantine BeamerPresenter.app` once. Build it
+  yourself with `./build-app.sh` for a locally signed copy.
+
 ## v7.2 — 2026-11-16
 
 Documentation only — the app is byte-for-byte 7.1.
