@@ -50,7 +50,10 @@ the cached covers, and the status line says the folder is not reachable
 
 ## Troubleshooting
 
-- **Folder not readable.** The status line says "Musikordner nicht erreichbar".
+- **Folder not readable.** With no covers cached yet, the wall shows "Musikordner
+  nicht erreichbar – siehe Screensaver-Optionen"; with covers cached, it keeps
+  showing those. The status line in the screensaver's Options (System Settings →
+  Screen Saver → AlbumArtwork → "Options…") then says "Musikordner nicht erreichbar".
   The screensaver runs in a sandboxed system process, and it tries several ways
   to open the folder. Try the other way: if you used the button, type the path
   instead, or the reverse. Otherwise use a folder under `/Users/Shared`.

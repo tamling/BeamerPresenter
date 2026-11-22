@@ -77,8 +77,13 @@ final class StatusTextTests: XCTestCase {
                        "Keine Cover gefunden")
         // A finished scan with a few albums: the wall shows them, no hint.
         XCTAssertNil(StatusText.hint(folder: .available, albumCount: 10, isScanning: false, needed: 66))
-        // Out of reach and nothing cached: nothing to say beyond the black wall.
-        XCTAssertNil(StatusText.hint(folder: .unavailable, albumCount: 0, isScanning: false, needed: 66))
+        // Out of reach and nothing cached: the wall says where to look, instead of staying black.
+        XCTAssertEqual(StatusText.hint(folder: .unavailable, albumCount: 0, isScanning: false, needed: 66),
+                       "Musikordner nicht erreichbar – siehe Screensaver-Optionen")
+        XCTAssertEqual(StatusText.hint(folder: .unavailable, albumCount: 0, isScanning: true, needed: 66),
+                       "Musikordner nicht erreichbar – siehe Screensaver-Optionen")
+        // Out of reach with covers cached: the wall shows them, no hint.
+        XCTAssertNil(StatusText.hint(folder: .unavailable, albumCount: 10, isScanning: false, needed: 66))
         XCTAssertEqual(StatusText.hint(folder: .available, albumCount: 1_234, isScanning: true, needed: 2_000),
                        "Lese Musik ein … 1.234 Alben")
         XCTAssertEqual(StatusText.hint(folder: .available, albumCount: 1, isScanning: true, needed: 66),

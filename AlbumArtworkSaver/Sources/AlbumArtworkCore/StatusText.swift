@@ -28,6 +28,9 @@ enum StatusText {
     /// when there is nothing to say. `needed` is the number of cells.
     static func hint(folder: FolderStatus, albumCount: Int, isScanning: Bool, needed: Int) -> String? {
         if folder == .notChosen { return "Musikordner in den Screensaver-Optionen wählen" }
+        // The status line in the options tells more (most likely the sandbox
+        // does not let the screensaver read the folder).
+        if folder == .unavailable, albumCount == 0 { return "Musikordner nicht erreichbar – siehe Screensaver-Optionen" }
         if isScanning, albumCount < needed { return "Lese Musik ein … \(albumsText(albumCount))" }
         if !isScanning, folder == .available, albumCount == 0 { return "Keine Cover gefunden" }
         return nil
