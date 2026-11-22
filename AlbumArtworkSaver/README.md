@@ -51,7 +51,7 @@ animations (1–10 s).
 
 Choosing a folder starts reading it at once; the status line counts the albums
 found. Until the screensaver has covers for every place on the wall, or has
-read the whole folder once, it shows a black screen with "Lese Musik ein …"
+been through the whole folder, it shows a black screen with "Lese Musik ein …"
 and the number of albums so far. Then the wall starts and takes in new albums
 as they are found. Every later start shows the cached wall at once and looks
 for new music in the background.

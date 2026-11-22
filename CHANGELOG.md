@@ -17,8 +17,8 @@ adds the screensaver in its own folder, `AlbumArtworkSaver/`.
 - Built with `./build-saver.sh` (Command Line Tools are enough) or downloaded
   as the `AlbumArtwork-saver` artifact of the "Build Saver" workflow, which
   tests the core, builds a universal bundle and runs it in a test host.
-- `AlbumArtworkSaver/README.md` explains installing, Gatekeeper and what to do
-  when the folder cannot be read.
+- `AlbumArtworkSaver/README.md` explains installing, Gatekeeper, the first run,
+  uninstalling and what to do when the folder cannot be read.
 
 ## v7.9 — 2026-11-22
 
