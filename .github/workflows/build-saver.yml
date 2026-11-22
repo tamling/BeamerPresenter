@@ -52,27 +52,45 @@ jobs:
       - name: Load the bundle
         run: swift Scripts/load-saver.swift build/AlbumArtwork.saver | grep '^OK AlbumArtworkView'
 
-      - name: Smoke-test the TestHost
+      - name: Run the wall in the TestHost
         # A GUI app needs a window server. Hosted runners have one; if not, say
-        # so and go on. A TestHost that quits on its own fails the job.
+        # so and go on. A TestHost that quits on its own fails the job: first
+        # without covers (the wall stays black), then with 120 fixture covers.
+        # The frame times the wall logs are printed for reading, not checked.
         run: |
           if ! pgrep -x WindowServer >/dev/null; then
-            echo "::warning::No WindowServer on this runner, so the TestHost smoke test was skipped."
+            echo "::warning::No WindowServer on this runner, so the TestHost runs were skipped."
             exit 0
           fi
-          ./build/TestHost >build/testhost.log 2>&1 &
-          pid=$!
-          sleep 5
-          if ! kill -0 "$pid" 2>/dev/null; then
-            status=0
-            wait "$pid" || status=$?
-            echo "✗ TestHost quit within 5 s (exit status $status):"
+          # start_host <seconds> [args…]: fails the step if the TestHost quits sooner.
+          start_host() {
+            local seconds="$1" status=0
+            shift
+            ./build/TestHost "$@" >build/testhost.log 2>&1 &
+            host_pid=$!
+            sleep "$seconds"
+            if ! kill -0 "$host_pid" 2>/dev/null; then
+              wait "$host_pid" || status=$?
+              echo "✗ TestHost $* quit within $seconds s (exit status $status):"
+              cat build/testhost.log
+              exit 1
+            fi
+            echo "✓ TestHost $* still running after $seconds s (pid $host_pid)."
+          }
+          stop_host() {
+            kill "$host_pid"
+            wait "$host_pid" 2>/dev/null || true
             cat build/testhost.log
-            exit 1
-          fi
-          echo "✓ TestHost still running after 5 s (pid $pid)."
-          kill "$pid"
-          cat build/testhost.log
+          }
+          start_host 5
+          stop_host
+          python3 Scripts/make-fixtures.py images 120 "$RUNNER_TEMP/aa-covers"
+          start_host 20 --covers "$RUNNER_TEMP/aa-covers"
+          echo "▶︎ The wall's log (category wall):"
+          log show --last 2m --style compact \
+            --predicate 'subsystem == "app.beamerpresenter.AlbumArtworkSaver" && category == "wall"' \
+            || echo "::warning::log show failed, so the wall's frame times are not shown."
+          stop_host
 
       - name: Zip it
         # ditto keeps the bundle's symlinks and resource forks; zip(1) does not.
