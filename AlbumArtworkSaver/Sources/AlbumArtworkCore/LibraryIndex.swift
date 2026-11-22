@@ -2,7 +2,19 @@ import Foundation
 
 struct FileStamp: Codable, Equatable {
     var size: Int64
-    var modified: Double
+    /// The modification date in whole milliseconds since 1970: an integer far
+    /// below 2^53 is exact in JSON for every decoder (Foundation on macOS 13
+    /// goes through NSNumber), so an unchanged file always compares equal.
+    var modified: Int64
+
+    init(size: Int64, modified: Int64) {
+        self.size = size
+        self.modified = modified
+    }
+
+    init(size: Int64, modifiedAt date: Date) {
+        self.init(size: size, modified: Int64((date.timeIntervalSince1970 * 1000).rounded()))
+    }
 }
 
 struct IndexedFile: Codable, Equatable {

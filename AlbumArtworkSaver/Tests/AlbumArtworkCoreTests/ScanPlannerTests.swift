@@ -2,7 +2,7 @@ import XCTest
 @testable import AlbumArtworkCore
 
 final class ScanPlannerTests: XCTestCase {
-    private func stamp(_ size: Int64, _ modified: Double = 1) -> FileStamp { FileStamp(size: size, modified: modified) }
+    private func stamp(_ size: Int64, _ modified: Int64 = 1) -> FileStamp { FileStamp(size: size, modified: modified) }
 
     func testPlanNewChangedVanished() {
         var index = LibraryIndex()
@@ -81,12 +81,33 @@ final class ScanPlannerTests: XCTestCase {
 
     func testIndexCodableRoundTrip() throws {
         var index = LibraryIndex()
-        _ = ScanPlanner.record(path: "x.mp3", stamp: stamp(7, 12.5), album: "a-x",
+        // A real modification date: APFS gives nanoseconds, which no Double keeps.
+        let modified = FileStamp(size: 7, modifiedAt: Date(timeIntervalSince1970: 1_763_830_123.456_789_123))
+        _ = ScanPlanner.record(path: "x.mp3", stamp: modified, album: "a-x",
                                info: IndexedAlbum(fingerprint: UInt64.max, title: "T", artist: "A"), into: &index)
         index.lastCompleteScan = Date(timeIntervalSince1970: 1000)
         let data = try JSONEncoder().encode(index)
         XCTAssertEqual(try JSONDecoder().decode(LibraryIndex.self, from: data), index)
         XCTAssertEqual(index.version, LibraryIndex.currentVersion)
+    }
+
+    /// Whole milliseconds since 1970 are exact in JSON for every decoder, so
+    /// an unchanged file reads back with the stamp it was listed with.
+    func testModificationDateIsWholeMilliseconds() throws {
+        let date = Date(timeIntervalSince1970: 1_763_830_123.456_789_123)
+        let stamp = FileStamp(size: 7, modifiedAt: date)
+        XCTAssertEqual(stamp.modified, 1_763_830_123_457)
+        XCTAssertEqual(FileStamp(size: 7, modifiedAt: date), stamp)
+        XCTAssertNotEqual(FileStamp(size: 7, modifiedAt: date.addingTimeInterval(0.001)), stamp)
+        let json = String(decoding: try JSONEncoder().encode(stamp), as: UTF8.self)
+        XCTAssertTrue(json.contains(#""modified":1763830123457"#), json)
+        XCTAssertEqual(try JSONDecoder().decode(FileStamp.self, from: Data(json.utf8)), stamp)
+        // Listed again from the same date: nothing to read.
+        var index = LibraryIndex()
+        index.files["x.mp3"] = IndexedFile(stamp: try JSONDecoder().decode(FileStamp.self, from: Data(json.utf8)),
+                                           album: nil)
+        XCTAssertEqual(ScanPlanner.plan(index: index, listing: ["x.mp3": FileStamp(size: 7, modifiedAt: date)]),
+                       ScanPlan(toRead: [], vanished: []))
     }
 
     func testFingerprintRoundTripsAtBothEnds() throws {

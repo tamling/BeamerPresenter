@@ -210,7 +210,7 @@ final class LibraryScanner {
                 continue
             }
             listing.files[String(path.dropFirst(prefix.count))] =
-                FileStamp(size: Int64(size), modified: modified.timeIntervalSinceReferenceDate)
+                FileStamp(size: Int64(size), modifiedAt: modified)
         }
         if errors > 0 || unlisted > 0 {
             Logger.scan.error("""
