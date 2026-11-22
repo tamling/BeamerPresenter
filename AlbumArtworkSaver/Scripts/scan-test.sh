@@ -20,6 +20,8 @@ T="$(mktemp -d)"
 LOCKER=""
 cleanup() {
     if [ -n "$LOCKER" ]; then kill "$LOCKER" 2>/dev/null || true; fi
+    # A step that failed may have left a folder that cannot be listed.
+    chmod -R u+rwX "$T" 2>/dev/null || true
     rm -rf "$T"
 }
 trap cleanup EXIT
@@ -184,7 +186,24 @@ scan "$MUSIC" outcome=complete albums=3 files=8 new=0 read=1
 expect_album "$album_c"
 expect_covers 3
 
-echo "▶︎ 9. An empty folder in its place (a mount point without its disk): the cache stays as it is"
+echo "▶︎ 9. A subfolder that cannot be listed: its files count as missed, not gone, and nothing is removed"
+album_a="$(album_of A/01.mp3)"
+[ "$album_a" != "-" ] || fail "A/01.mp3 has no album"
+chmod 000 "$MUSIC/A"
+if ls "$MUSIC/A" >/dev/null 2>&1; then
+    echo "  skipped: this user can list a folder with mode 000 (root?)"
+else
+    scan "$MUSIC" outcome=incomplete albums=3 files=8 new=0 read=0
+    [ "$(album_of A/01.mp3)" = "$album_a" ] || fail "A/01.mp3 was forgotten"
+    expect_album "$album_a"
+    expect_covers 3
+fi
+chmod 755 "$MUSIC/A"
+scan "$MUSIC" outcome=complete albums=3 files=8 new=0 read=0
+expect_album "$album_a"
+expect_covers 3
+
+echo "▶︎ 10. An empty folder in its place (a mount point without its disk): the cache stays as it is"
 mkdir "$T/empty-mount"
 cp "$CACHE/index.json" "$T/index-before.json"
 find "$CACHE/covers" -type f | LC_ALL=C sort >"$T/covers-before"
@@ -193,7 +212,7 @@ cmp -s "$CACHE/index.json" "$T/index-before.json" || fail "index.json changed"
 find "$CACHE/covers" -type f | LC_ALL=C sort | diff "$T/covers-before" - || fail "covers/ changed"
 [ -z "$(ls -A "$T/empty-mount")" ] || fail "the scan wrote into the folder"
 
-echo "▶︎ 10. The music folder is as the steps left it: the scans only read"
+echo "▶︎ 11. The music folder is as the steps left it: the scans only read"
 manifest >"$T/after"
 grep -v -e ' \./B/01\.mp3$' "$T/before" >"$T/before-kept"
 grep -v -e '^folder \./C$' -e ' \./C/0[12]\.mp3$' "$T/after" >"$T/after-kept"
