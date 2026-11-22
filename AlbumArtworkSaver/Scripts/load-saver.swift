@@ -3,7 +3,9 @@
 //
 //   swift Scripts/load-saver.swift build/AlbumArtwork.saver
 //
-// Prints "OK <class name>" and exits 0, or explains on stderr and exits 1.
+// The view must offer its options sheet, and make its window, as System
+// Settings asks for it. Prints "OK <class name> (options sheet <w>×<h>)" and
+// exits 0, or explains on stderr and exits 1.
 import AppKit
 import ScreenSaver
 
@@ -20,6 +22,8 @@ guard arguments.count == 1, let path = arguments.first else {
 // Top-level code is nonisolated, but views are main-actor-only; this runs on
 // the main thread.
 MainActor.assumeIsolated {
+    // The options sheet is a window; windows want an application object.
+    _ = NSApplication.shared
     guard let bundle = Bundle(path: path) else {
         fail("\(path) is not a bundle")
     }
@@ -38,5 +42,15 @@ MainActor.assumeIsolated {
     guard let view = saverClass.init(frame: frame, isPreview: false) else {
         fail("\(NSStringFromClass(saverClass))(frame:isPreview:) returned nil")
     }
-    print("OK \(NSStringFromClass(type(of: view)))")
+    guard view.hasConfigureSheet else {
+        fail("\(NSStringFromClass(saverClass)).hasConfigureSheet is false")
+    }
+    guard let sheet = view.configureSheet else {
+        fail("\(NSStringFromClass(saverClass)).configureSheet returned nil")
+    }
+    let size = sheet.frame.size
+    guard size.width > 0, size.height > 0 else {
+        fail("the options sheet has no size (\(size.width)×\(size.height))")
+    }
+    print("OK \(NSStringFromClass(type(of: view))) (options sheet \(Int(size.width))×\(Int(size.height)))")
 }

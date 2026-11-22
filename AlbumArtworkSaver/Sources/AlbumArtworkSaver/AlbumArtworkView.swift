@@ -14,6 +14,12 @@ enum HostOverride {
 /// The screensaver's principal class (`NSPrincipalClass` in Info.plist): a
 /// black, layer-backed view showing the cover wall. The engine decides every
 /// pose; this view feeds it time and mirrors its sprites into layers.
+///
+/// The real screensaver shows the cache of the music folder chosen in its
+/// options and scans that folder at every start. `stopAnimation`, and the
+/// `com.apple.screensaver.willstop` notification the host sends even when it
+/// forgets to stop the view, end the scan and let go of the wall, its images
+/// and the folder, so the process does nothing once the screensaver is over.
 @objc(AlbumArtworkView)
 final class AlbumArtworkView: ScreenSaverView {
     /// Set by the TestHost before it creates the view; `nil` in the real screensaver.
@@ -23,6 +29,7 @@ final class AlbumArtworkView: ScreenSaverView {
     /// Mac slept) a fresh wall starts, instead of every missed tick at once.
     private static let maxFrameGap: TimeInterval = 1
     private static let statsInterval: TimeInterval = 10
+    private static let willStop = Notification.Name("com.apple.screensaver.willstop")
 
     private enum Phase {
         /// Nothing to show: the wall stays black.
@@ -32,11 +39,19 @@ final class AlbumArtworkView: ScreenSaverView {
         case running
     }
 
-    private let settings = WallSettings()
+    private var settings = WallSettings()
     private var layout: GridLayout?
     private var store: CoverImageStore?
-    /// The albums of a music folder's cache (`HostOverride.music`), else nil.
+    /// The albums of the music folder's cache; nil for `HostOverride.covers`.
     private var library: LibraryService?
+    /// Whether the music folder can be read, for the hint.
+    private var folder = FolderStatus.notChosen
+    /// The chosen folder as `FolderAccess.resolve` gave it, with its access;
+    /// nil when it cannot be read, and in the TestHost.
+    private var folderURL: URL?
+    /// The quiet line in the middle of a wall that has not started.
+    private var hint: CATextLayer?
+    private var optionsSheet: OptionsSheet?
     private var wall: CoverWall?
     private var engine: WallEngine?
     private var rng = SplitMix64(seed: 0)
@@ -68,7 +83,24 @@ final class AlbumArtworkView: ScreenSaverView {
 
     override func startAnimation() {
         super.startAnimation()
-        setUpWall()
+        start(with: SaverSettings.load())
+    }
+
+    override func stopAnimation() {
+        tearDown(cancellingScan: true)
+        super.stopAnimation()
+    }
+
+    override var hasConfigureSheet: Bool { true }
+
+    override var configureSheet: NSWindow? {
+        if let window = optionsSheet?.window, window.isVisible { return window }
+        let service = library ?? Self.cacheDirectory(for: Self.hostOverride).map(LibraryService.shared)
+        let sheet = OptionsSheet(settings: SaverSettings.load(), service: service) { [weak self] settings in
+            self?.optionsDone(settings)
+        }
+        optionsSheet = sheet
+        return sheet.window
     }
 
     override func animateOneFrame() {
@@ -82,6 +114,77 @@ final class AlbumArtworkView: ScreenSaverView {
         wantsLayer = true
     }
 
+    // MARK: - Start and stop
+
+    /// Shows the wall from the cache and scans the music folder. A start
+    /// without a stop before it first lets go of what the last one set up.
+    private func start(with saved: SaverSettings) {
+        tearDown(cancellingScan: false)
+        settings = saved.wall
+        switch Self.hostOverride {
+        case nil:
+            (folder, folderURL) = FolderAccess.resolve(saved)
+        case let .music(root, cache: _):
+            var isFolder: ObjCBool = false
+            let exists = FileManager.default.fileExists(atPath: root.path, isDirectory: &isFolder)
+            folder = exists && isFolder.boolValue ? .available : .unavailable
+        case .covers:
+            folder = .available
+        }
+        DistributedNotificationCenter.default().addObserver(
+            self, selector: #selector(screensaverWillStop(_:)), name: Self.willStop, object: nil)
+        setUpWall()
+        if let library, let root = scanRoot { library.scan(root: root) }
+        updateHint()
+    }
+
+    /// The folder to scan: the TestHost's, or the chosen one if it can be read.
+    private var scanRoot: URL? {
+        if case let .music(root, cache: _) = Self.hostOverride { return root }
+        return folderURL
+    }
+
+    /// Lets go of the wall, its images, the hint and the folder. Safe to call
+    /// again: what is gone stays gone.
+    private func tearDown(cancellingScan: Bool) {
+        DistributedNotificationCenter.default().removeObserver(self, name: Self.willStop, object: nil)
+        if let library {
+            library.removeObserver(self)
+            if cancellingScan { library.cancelScan() }
+        }
+        library = nil
+        engine = nil
+        wall = nil
+        store = nil
+        layout = nil
+        phase = .idle
+        lastFrame = nil
+        showHint(nil)
+        if let folderURL { FolderAccess.stopAccessing(folderURL) }
+        folderURL = nil
+        folder = .notChosen
+    }
+
+    /// The host may keep the process, and this view, running after the
+    /// screensaver ends; this notification still comes. System Settings'
+    /// preview keeps showing.
+    @objc private func screensaverWillStop(_ notification: Notification) {
+        guard Thread.isMainThread else {
+            DispatchQueue.main.async { [weak self] in self?.screensaverWillStop(notification) }
+            return
+        }
+        guard !isPreview else { return }
+        Logger.wall.notice("screensaver will stop: wall and scan stopped")
+        stopAnimation()
+    }
+
+    /// The options sheet saved new settings: a running wall starts over with
+    /// them. The scan the sheet started for a new folder goes on.
+    private func optionsDone(_ saved: SaverSettings) {
+        guard isAnimating else { return }
+        start(with: saved)
+    }
+
     // MARK: - The wall
 
     private func setUpWall() {
@@ -93,7 +196,7 @@ final class AlbumArtworkView: ScreenSaverView {
         resetStats(at: now)
         guard let host = layer, bounds.width > 0, bounds.height > 0 else { return }
         let layout = GridLayout(rows: settings.rows, aspect: Double(bounds.width / bounds.height))
-        let store = makeStore(for: Self.hostOverride)
+        let store = makeStore()
         let wall = CoverWall(hostLayer: host, layout: layout, images: store)
         let scale = window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2
         store.pixelEdge = Int((wall.coverEdge * scale).rounded(.up))
@@ -108,16 +211,27 @@ final class AlbumArtworkView: ScreenSaverView {
             wall: \(albums, privacy: .public) albums, \(rows, privacy: .public)×\(columns, privacy: .public) \
             covers of \(edge, privacy: .public) px, seed \(seed, privacy: .public)
             """)
+        // The cache's albums start the wall at once; with none (the very
+        // first time) it waits in `libraryChanged`.
         fill(from: store.pool, since: now)
-        if case let .music(root, cache: _) = Self.hostOverride { library?.scan(root: root) }
     }
 
-    /// The images for `host`: a music folder's cache, whose albums arrive
-    /// while the library scans, or a folder of cover images.
-    private func makeStore(for host: HostOverride?) -> CoverImageStore {
+    /// The cache of the real screensaver and of `HostOverride.music`; nil for a
+    /// folder of cover images.
+    private static func cacheDirectory(for host: HostOverride?) -> URL? {
+        switch host {
+        case nil: return CoverCache.defaultDirectory
+        case let .music(_, cache: directory): return directory
+        case .covers: return nil
+        }
+    }
+
+    /// The images to show: a music folder's cache, whose albums arrive while
+    /// the library scans, or the TestHost's folder of cover images.
+    private func makeStore() -> CoverImageStore {
         library = nil
-        guard case let .music(_, cache: directory) = host else {
-            let covers = Self.coverFiles(for: host)
+        guard let directory = Self.cacheDirectory(for: Self.hostOverride) else {
+            let covers = Self.coverFiles(for: Self.hostOverride)
             let store = CoverImageStore { covers[$0] }
             store.pool = covers.keys.sorted()
             return store
@@ -132,13 +246,16 @@ final class AlbumArtworkView: ScreenSaverView {
     }
 
     /// New albums join the pool, so the next animations can show them. A black
-    /// wall starts once there are enough for every cell, or the scan is done.
+    /// wall starts once there are enough for every cell, or the scan is done
+    /// and found at least one (`WallEngine.start` needs one per cell).
     private func libraryChanged() {
         guard let library, let store, let layout else { return }
         store.pool = library.albums
-        guard case .idle = phase, library.albums.count >= layout.cellCount || !library.isScanning else { return }
-        let readable = store.pool.filter { !store.hasFailed($0) }
-        if !readable.isEmpty { fill(from: readable, since: CACurrentMediaTime()) }
+        if case .idle = phase, library.albums.count >= layout.cellCount || !library.isScanning {
+            let readable = store.pool.filter { !store.hasFailed($0) }
+            if !readable.isEmpty { fill(from: readable, since: CACurrentMediaTime()) }
+        }
+        updateHint()
     }
 
     private func step(at now: TimeInterval) {
@@ -166,10 +283,12 @@ final class AlbumArtworkView: ScreenSaverView {
         let albums = AlbumPicker.initialFill(count: layout.cellCount, pool: pool, using: &rng)
         guard !albums.isEmpty else {
             phase = .idle
+            updateHint()
             return
         }
         store.prefetch(albums)
         phase = .waiting(albums, since: since)
+        updateHint()
     }
 
     /// Starts the engine as soon as every one of `albums` is ready, so the wall
@@ -210,6 +329,54 @@ final class AlbumArtworkView: ScreenSaverView {
         if case let .waiting(albums, since: since) = phase {
             startIfReady(albums, waitingSince: since, at: now)
         }
+    }
+
+    // MARK: - The hint
+
+    /// What a wall that has not started waits for: a folder, the scan, covers.
+    /// Gone as soon as the wall has albums to start with.
+    private func updateHint() {
+        guard case .idle = phase, let library, let layout else {
+            showHint(nil)
+            return
+        }
+        showHint(StatusText.hint(folder: folder, albumCount: library.albums.count, isScanning: library.isScanning,
+                                 needed: layout.cellCount))
+    }
+
+    /// White at 60 %, centred, at most two lines.
+    private func showHint(_ text: String?) {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        defer { CATransaction.commit() }
+        guard let text, let host = layer else {
+            hint?.removeFromSuperlayer()
+            hint = nil
+            return
+        }
+        let hint = self.hint ?? CATextLayer()
+        guard hint.string as? String != text else { return }
+        Logger.wall.notice("hint: \(text, privacy: .public)")
+        let size = max(9, bounds.height / 36)
+        let font = NSFont.systemFont(ofSize: size)
+        let width = bounds.width * 0.8
+        let height = (text as NSString).boundingRect(
+            with: CGSize(width: width, height: .greatestFiniteMagnitude),
+            options: [.usesLineFragmentOrigin, .usesFontLeading], attributes: [.font: font], context: nil
+        ).height.rounded(.up)
+        hint.string = text
+        hint.font = font
+        hint.fontSize = size
+        hint.foregroundColor = CGColor(gray: 1, alpha: 0.6)
+        hint.alignmentMode = .center
+        hint.isWrapped = true
+        hint.contentsScale = window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2
+        hint.frame = CGRect(x: (bounds.width - width) / 2, y: (bounds.height - height) / 2,
+                            width: width, height: height)
+        // Above the wall's black layer, however the two were added.
+        hint.zPosition = 1
+        if hint.superlayer == nil { host.addSublayer(hint) }
+        self.hint = hint
     }
 
     // MARK: - Frame time

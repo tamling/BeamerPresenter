@@ -54,6 +54,12 @@ final class LibraryService {
         observers.append(Observer(owner: owner, onChange: onChange))
     }
 
+    /// Stops calling `owner`'s `onChange`; does nothing if `owner` is not observing.
+    func removeObserver(_ owner: AnyObject) {
+        dispatchPrecondition(condition: .onQueue(.main))
+        observers.removeAll { $0.owner == nil || $0.owner === owner }
+    }
+
     /// Scans `root` in the background. Does nothing while a scan runs, so the
     /// views of a process, which share this service, start one scan between
     /// them; scans in other processes are kept out by the cache's lock.
