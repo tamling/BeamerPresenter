@@ -23,6 +23,8 @@ struct ScanSummary: Equatable {
     var outcome: Outcome
     var albums: Int
     var files: Int
+    /// Files whose tags this pass read: new and changed ones only.
+    var read: Int
     var newAlbums: Int
     var removedAlbums: Int
 }
@@ -145,6 +147,7 @@ final class LibraryScanner {
         }
         let outcome: ScanSummary.Outcome = listing.cancelled ? .cancelled : (complete && saved ? .complete : .incomplete)
         var summary = Self.summary(outcome, of: index)
+        summary.read = read
         summary.newAlbums = newAlbums
         summary.removedAlbums = removed.count
         let seconds = Date().timeIntervalSince(began)
@@ -299,7 +302,7 @@ final class LibraryScanner {
     }
 
     private static func summary(_ outcome: ScanSummary.Outcome, of index: LibraryIndex) -> ScanSummary {
-        ScanSummary(outcome: outcome, albums: index.albums.count, files: index.files.count,
+        ScanSummary(outcome: outcome, albums: index.albums.count, files: index.files.count, read: 0,
                     newAlbums: 0, removedAlbums: 0)
     }
 }

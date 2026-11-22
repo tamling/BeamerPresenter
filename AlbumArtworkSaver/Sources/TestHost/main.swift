@@ -13,7 +13,8 @@ import AppKit
 //                                     screensaver's), new albums join as found
 //   ./build/TestHost --scan <dir> --cache <dir>
 //                                     no window: scans <dir> into the cache once,
-//                                     prints "outcome=… albums=… files=… new=…"
+//                                     prints "outcome=… albums=… files=… new=…
+//                                     read=…" (read: files whose tags it read)
 //                                     and exits 0
 
 final class TestHostDelegate: NSObject, NSApplicationDelegate {
@@ -102,7 +103,10 @@ func mode(from arguments: [String]) -> Mode {
 func runScan(music: URL, cache: URL) -> Never {
     let summary = LibraryScanner(root: music, cache: CoverCache(directory: cache))
         .run(isCancelled: { false }, onNewAlbums: { _ in })
-    print("outcome=\(summary.outcome.rawValue) albums=\(summary.albums) files=\(summary.files) new=\(summary.newAlbums)")
+    print("""
+        outcome=\(summary.outcome.rawValue) albums=\(summary.albums) files=\(summary.files) \
+        new=\(summary.newAlbums) read=\(summary.read)
+        """)
     exit(0)
 }
 

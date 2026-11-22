@@ -87,7 +87,7 @@ manifest >"$T/before"
 echo "  $(grep -vc '^folder ' "$T/before") files"
 
 echo "▶︎ 2. First scan: three albums from seven files; the hidden one is skipped"
-scan "$MUSIC" outcome=complete albums=3 files=7 new=3
+scan "$MUSIC" outcome=complete albums=3 files=7 new=3 read=7
 expect_covers 3
 if command -v sips >/dev/null; then
     # Square JPEGs: the 1000×800 cover scaled down to 640, the 64×48 ones not scaled up.
@@ -100,23 +100,23 @@ if command -v sips >/dev/null; then
     [ "$sizes" = "jpeg 48x48;jpeg 640x640;" ] || fail "covers should be jpeg 48x48 and 640x640"
 fi
 
-echo "▶︎ 3. Nothing changed: nothing new"
-scan "$MUSIC" outcome=complete albums=3 files=7 new=0
+echo "▶︎ 3. Nothing changed: no file is read again"
+scan "$MUSIC" outcome=complete albums=3 files=7 new=0 read=0
 
 echo "▶︎ 4. A new album; a track with another title but loose.mp3's picture joins that album"
 python3 "$FIXTURES" mp3-one "$MUSIC/C/01.mp3" "Album C" 255,160,0 >/dev/null
 python3 "$FIXTURES" mp3-one "$MUSIC/C/02.mp3" "Album D" 30,200,30 >/dev/null
-scan "$MUSIC" outcome=complete albums=4 files=9 new=1
+scan "$MUSIC" outcome=complete albums=4 files=9 new=1 read=2
 expect_covers 4
 
 echo "▶︎ 5. The only track of album B deleted: album and cover go"
 rm "$MUSIC/B/01.mp3"
-scan "$MUSIC" outcome=complete albums=3 files=8 new=0
+scan "$MUSIC" outcome=complete albums=3 files=8 new=0 read=0
 expect_covers 3
 
 echo "▶︎ 6. Music folder missing: the cache stays as it is"
 cp "$CACHE/index.json" "$T/index-before.json"
-scan "$T/missing" outcome=unavailable
+scan "$T/missing" outcome=unavailable read=0
 cmp -s "$CACHE/index.json" "$T/index-before.json" || fail "index.json changed"
 expect_covers 3
 [ ! -e "$T/missing" ] || fail "the scan made the missing folder"
@@ -152,12 +152,12 @@ for _ in $(seq 100); do
 done
 grep -q locked "$T/locker" || fail "could not take the lock for the test"
 cp "$CACHE/index.json" "$T/index-before.json"
-scan "$MUSIC" outcome=busy
+scan "$MUSIC" outcome=busy read=0
 cmp -s "$CACHE/index.json" "$T/index-before.json" || fail "a busy scan changed index.json"
 kill "$LOCKER"
 wait "$LOCKER" 2>/dev/null || true
 LOCKER=""
-scan "$MUSIC" outcome=complete albums=3 files=8 new=0
+scan "$MUSIC" outcome=complete albums=3 files=8 new=0 read=0
 expect_covers 3
 
 echo "▶︎ 8. An unreadable file is kept, read again later, and removes nothing meanwhile"
@@ -171,14 +171,14 @@ chmod 000 "$MUSIC/C/01.mp3"
 if [ -r "$MUSIC/C/01.mp3" ]; then
     echo "  skipped: this user can read a file with mode 000 (root?)"
 else
-    scan "$MUSIC" outcome=incomplete albums=3 files=8 new=0
+    scan "$MUSIC" outcome=incomplete albums=3 files=8 new=0 read=0
     [ "$(album_of C/01.mp3)" = "$album_c" ] || fail "C/01.mp3 lost its album"
     [ "$(modified_of C/01.mp3)" = "$modified" ] || fail "the unreadable C/01.mp3 was recorded"
     expect_album "$album_c"
     expect_covers 3
 fi
 chmod 644 "$MUSIC/C/01.mp3"
-scan "$MUSIC" outcome=complete albums=3 files=8 new=0
+scan "$MUSIC" outcome=complete albums=3 files=8 new=0 read=1
 [ "$(modified_of C/01.mp3)" != "$modified" ] || fail "C/01.mp3 was not read again"
 [ "$(album_of C/01.mp3)" = "$album_c" ] || fail "C/01.mp3 lost its album"
 expect_album "$album_c"
@@ -188,7 +188,7 @@ echo "▶︎ 9. An empty folder in its place (a mount point without its disk): t
 mkdir "$T/empty-mount"
 cp "$CACHE/index.json" "$T/index-before.json"
 find "$CACHE/covers" -type f | LC_ALL=C sort >"$T/covers-before"
-scan "$T/empty-mount" outcome=incomplete albums=3 files=8 new=0
+scan "$T/empty-mount" outcome=incomplete albums=3 files=8 new=0 read=0
 cmp -s "$CACHE/index.json" "$T/index-before.json" || fail "index.json changed"
 find "$CACHE/covers" -type f | LC_ALL=C sort | diff "$T/covers-before" - || fail "covers/ changed"
 [ -z "$(ls -A "$T/empty-mount")" ] || fail "the scan wrote into the folder"
