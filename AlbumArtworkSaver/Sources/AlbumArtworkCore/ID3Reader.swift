@@ -53,21 +53,27 @@ enum ID3Reader {
             let id = String(decoding: body[pos..<pos + idLength], as: UTF8.self)
             let sizeBytes = body[pos + idLength..<pos + idLength + (version == 2 ? 3 : 4)]
             let frameFlags: [UInt8] = version == 2 ? [0, 0] : Array(body[pos + 8..<pos + 10])
-            let size: Int
-            if version == 4 {
-                guard let s = syncSafe(sizeBytes) else { break }
-                size = s
-            } else {
-                size = sizeBytes.reduce(0) { $0 << 8 | Int($1) }
-            }
             let start = pos + frameHeader
-            guard size <= body.count - start else { break }
+            guard let size = frameSize(sizeBytes, version: version, start: start, in: body),
+                  size <= body.count - start else { break }
             pos = start + size
             var content = Array(body[start..<pos])
 
-            if version == 3, frameFlags[1] & 0xC0 != 0 { continue }
+            // Skipped: compressed and encrypted frames. Dropped: the grouping
+            // identity byte, then (v2.4) the data length indicator.
+            if version == 3 {
+                if frameFlags[1] & 0xC0 != 0 { continue }
+                if frameFlags[1] & 0x20 != 0 {
+                    guard !content.isEmpty else { continue }
+                    content.removeFirst()
+                }
+            }
             if version == 4 {
                 if frameFlags[1] & 0x0C != 0 { continue }
+                if frameFlags[1] & 0x40 != 0 {
+                    guard !content.isEmpty else { continue }
+                    content.removeFirst()
+                }
                 if frameFlags[1] & 0x01 != 0 {
                     guard content.count >= 4 else { continue }
                     content.removeFirst(4)
@@ -95,6 +101,28 @@ enum ID3Reader {
     }
 
     // MARK: - Helpers
+
+    /// A frame's size from its header. v2.4 sizes are sync-safe, but old
+    /// iTunes versions wrote plain integers: the plain reading is taken when
+    /// the sync-safe one is no number or ends where no frame follows, and the
+    /// plain one does end where one follows (as mutagen does).
+    private static func frameSize(_ bytes: ArraySlice<UInt8>, version: UInt8, start: Int, in body: [UInt8]) -> Int? {
+        let plain = bytes.reduce(0) { $0 << 8 | Int($1) }
+        guard version == 4 else { return plain }
+        let standard = syncSafe(bytes)
+        if let standard, endsFrame(at: start + standard, in: body) { return standard }
+        if endsFrame(at: start + plain, in: body) { return plain }
+        return standard
+    }
+
+    /// Whether a v2.3/2.4 frame can end at `end`: the tag ends there, or
+    /// padding (zeros) or another frame's ID (A–Z, 0–9) follows.
+    private static func endsFrame(at end: Int, in body: [UInt8]) -> Bool {
+        guard end <= body.count else { return false }
+        if body[end..<min(end + 10, body.count)].allSatisfy({ $0 == 0 }) { return true }
+        guard end + 4 <= body.count else { return false }
+        return body[end..<end + 4].allSatisfy { (0x41...0x5A).contains($0) || (0x30...0x39).contains($0) }
+    }
 
     private static func syncSafe<S: Sequence>(_ bytes: S) -> Int? where S.Element == UInt8 {
         var value = 0

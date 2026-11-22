@@ -5,6 +5,8 @@ struct ID3Builder {
     let version: UInt8
     var unsynchronised = false
     var extendedHeader = false
+    /// v2.4 frame sizes as plain 32-bit integers, as old iTunes versions wrote them.
+    var plainFrameSizes = false
     private var frames: [(id: String, flags: [UInt8], body: Data, sizeOverride: UInt32?)] = []
 
     init(version: UInt8) { self.version = version }
@@ -79,6 +81,7 @@ struct ID3Builder {
             switch version {
             case 2: payload += [UInt8(size >> 16 & 0xFF), UInt8(size >> 8 & 0xFF), UInt8(size & 0xFF)]
             case 3: payload += ID3Builder.bigEndian(size) + frame.flags
+            case 4 where plainFrameSizes: payload += ID3Builder.bigEndian(size) + frame.flags
             default: payload += ID3Builder.syncSafe(Int(size)) + frame.flags
             }
             payload += body

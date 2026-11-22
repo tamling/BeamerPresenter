@@ -114,6 +114,47 @@ final class ID3ReaderTests: XCTestCase {
         XCTAssertEqual(ID3Reader.parse(b.build())?.album, "Hello")
     }
 
+    /// Old iTunes wrote v2.4 tags with plain-integer frame sizes. A size of 128
+    /// or more then either is no sync-safe number at all (a byte ≥ 0x80) or
+    /// reads as a shorter one that ends inside the frame.
+    func testV24PlainIntegerFrameSizes() {
+        // 200 bytes: the frame is 214 = 0x000000D6 long, not sync-safe.
+        // 300 bytes: 314 = 0x0000013A reads sync-safe as 186, inside the picture.
+        for count in [200, 300] {
+            let picture = Data(repeating: 0xEE, count: count)
+            for plain in [true, false] {
+                var b = ID3Builder(version: 4)
+                b.plainFrameSizes = plain
+                b.text("TALB", "Album", encoding: 3)
+                b.picture(type: 3, mime: "image/jpeg", description: "", data: picture, encoding: 3)
+                b.text("TPE1", "Artist", encoding: 3)
+                let tags = ID3Reader.parse(b.build())
+                let label = "picture \(count), plain sizes \(plain)"
+                XCTAssertEqual(tags?.album, "Album", label)
+                XCTAssertEqual(tags?.picture, picture, label)
+                XCTAssertEqual(tags?.artist, "Artist", label)
+            }
+        }
+    }
+
+    /// A grouping identity byte comes before the frame's content (v2.3 flag
+    /// 0x20, v2.4 flag 0x40; in v2.4 before a data length indicator).
+    func testGroupingByteSkipped() {
+        var text = Data([0])
+        text.append(Data("Grouped".utf8))
+        var v3 = ID3Builder(version: 3)
+        v3.rawFrame(id: "TALB", flags: [0, 0x20], body: Data([0x07]) + text)
+        XCTAssertEqual(ID3Reader.parse(v3.build())?.album, "Grouped")
+
+        var v4 = ID3Builder(version: 4)
+        v4.rawFrame(id: "TALB", flags: [0, 0x40], body: Data([0x07]) + text)
+        XCTAssertEqual(ID3Reader.parse(v4.build())?.album, "Grouped")
+
+        var v4Length = ID3Builder(version: 4)
+        v4Length.rawFrame(id: "TALB", flags: [0, 0x41], body: Data([0x07, 0, 0, 0, 8]) + text)
+        XCTAssertEqual(ID3Reader.parse(v4Length.build())?.album, "Grouped")
+    }
+
     func testExtendedHeaders() {
         for version: UInt8 in [3, 4] {
             var b = ID3Builder(version: version)
@@ -177,8 +218,8 @@ final class ID3ReaderTests: XCTestCase {
 
     func testRandomGarbageNeverCrashes() {
         var rng = SplitMix64(seed: 7)
-        for _ in 0..<2000 {
-            var input = Data([0x49, 0x44, 0x33, 3, 0, 0])
+        for round in 0..<4000 {
+            var input = Data([0x49, 0x44, 0x33, round < 2000 ? 3 : 4, 0, 0])
             for _ in 0..<4 { input.append(UInt8.random(in: 0..<0x80, using: &rng)) }
             let count = Int.random(in: 0...2000, using: &rng)
             for _ in 0..<count { input.append(UInt8.random(in: 0...255, using: &rng)) }
