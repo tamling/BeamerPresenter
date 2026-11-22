@@ -23,6 +23,9 @@ final class CoverImageStore: ArtworkSource {
     private let queue = DispatchQueue(label: "app.beamerpresenter.AlbumArtworkSaver.covers",
                                       qos: .userInitiated, autoreleaseFrequency: .workItem)
     private var decoding: Set<AlbumID> = []
+    /// Albums forgotten while they were decoding: that decode may have read
+    /// the old file, so its result is dropped.
+    private var stale: Set<AlbumID> = []
     /// Albums without a readable image; they are not asked for again.
     private var failed: Set<AlbumID> = []
 
@@ -44,6 +47,17 @@ final class CoverImageStore: ArtworkSource {
         failed.contains(album)
     }
 
+    /// Drops what is known of `albums`, whose cover files were written anew:
+    /// the next `prefetch` decodes the new files. Layers keep the image they
+    /// show until their album is shown again.
+    func forget(_ albums: [AlbumID]) {
+        for album in albums {
+            cache.removeObject(forKey: album as NSString)
+            failed.remove(album)
+            if decoding.contains(album) { stale.insert(album) }
+        }
+    }
+
     /// Starts decoding every album that is not ready, not decoding and not failed.
     func prefetch(_ albums: [AlbumID]) {
         let edge = pixelEdge
@@ -62,6 +76,7 @@ final class CoverImageStore: ArtworkSource {
 
     private func finishDecoding(_ album: AlbumID, _ image: CGImage?) {
         decoding.remove(album)
+        guard stale.remove(album) == nil else { return }
         guard let image else {
             failed.insert(album)
             return

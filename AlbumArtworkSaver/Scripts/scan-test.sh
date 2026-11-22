@@ -203,7 +203,20 @@ scan "$MUSIC" outcome=complete albums=3 files=8 new=0 read=0
 expect_album "$album_a"
 expect_covers 3
 
-echo "▶︎ 10. An empty folder in its place (a mount point without its disk): the cache stays as it is"
+echo "▶︎ 10. The track a cover came from, tagged with another picture: the cover changes"
+# C/01.mp3 is album C's only track, so its cover came from it.
+cover_c="$CACHE/covers/$album_c.jpg"
+[ -f "$cover_c" ] || fail "album C has no cover"
+cover_before="$(checksum "$cover_c" | cut -d ' ' -f 1)"
+python3 "$FIXTURES" mp3-one "$MUSIC/C/01.mp3" "Album C" 0,90,255 >/dev/null
+scan "$MUSIC" outcome=complete albums=3 files=8 new=0 read=1
+[ "$(album_of C/01.mp3)" = "$album_c" ] || fail "C/01.mp3 lost its album"
+expect_album "$album_c"
+expect_covers 3
+[ "$(checksum "$cover_c" | cut -d ' ' -f 1)" != "$cover_before" ] || fail "the cover of album C did not change"
+scan "$MUSIC" outcome=complete albums=3 files=8 new=0 read=0
+
+echo "▶︎ 11. An empty folder in its place (a mount point without its disk): the cache stays as it is"
 mkdir "$T/empty-mount"
 cp "$CACHE/index.json" "$T/index-before.json"
 find "$CACHE/covers" -type f | LC_ALL=C sort >"$T/covers-before"
@@ -212,7 +225,7 @@ cmp -s "$CACHE/index.json" "$T/index-before.json" || fail "index.json changed"
 find "$CACHE/covers" -type f | LC_ALL=C sort | diff "$T/covers-before" - || fail "covers/ changed"
 [ -z "$(ls -A "$T/empty-mount")" ] || fail "the scan wrote into the folder"
 
-echo "▶︎ 11. The music folder is as the steps left it: the scans only read"
+echo "▶︎ 12. The music folder is as the steps left it: the scans only read"
 manifest >"$T/after"
 grep -v -e ' \./B/01\.mp3$' "$T/before" >"$T/before-kept"
 grep -v -e '^folder \./C$' -e ' \./C/0[12]\.mp3$' "$T/after" >"$T/after-kept"

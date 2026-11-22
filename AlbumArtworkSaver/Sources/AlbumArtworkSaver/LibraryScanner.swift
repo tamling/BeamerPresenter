@@ -31,8 +31,8 @@ struct ScanSummary: Equatable {
 
 /// One incremental pass over a music folder into a `CoverCache`: lists every
 /// `.mp3`, reads the tags of the new and changed ones, writes one cover per new
-/// album, and only after a complete pass forgets what is gone. The music
-/// folder is only ever read.
+/// album (and anew when the track it came from changed its picture), and only
+/// after a complete pass forgets what is gone. The music folder is only ever read.
 ///
 /// `run` blocks; call it off the main thread.
 final class LibraryScanner {
@@ -52,7 +52,11 @@ final class LibraryScanner {
         self.cache = cache
     }
 
-    func run(isCancelled: () -> Bool, onNewAlbums: ([AlbumID]) -> Void) -> ScanSummary {
+    /// `onNewAlbums` gets the albums whose covers were written for the first
+    /// time, `onChangedCovers` those whose covers were written anew; both in
+    /// batches, while the scan goes on.
+    func run(isCancelled: () -> Bool, onNewAlbums: ([AlbumID]) -> Void,
+             onChangedCovers: ([AlbumID]) -> Void = { _ in }) -> ScanSummary {
         let began = Date()
         // 1. No folder: leave the cache alone. Deleting now would empty it
         //    whenever the disk is not mounted.
@@ -84,8 +88,11 @@ final class LibraryScanner {
             """)
 
         // 4. Read what is new or changed.
+        let listed = listing.files
         var pending: [AlbumID] = []
+        var pendingCovers: [AlbumID] = []
         var newAlbums = 0
+        var changedCovers = 0
         var read = 0
         var unsaved = 0
         var unreadable = 0
@@ -96,7 +103,9 @@ final class LibraryScanner {
             }
             guard let stamp = listing.files[path] else { continue }
             let url = folder.appendingPathComponent(path, isDirectory: false)
-            let result = autoreleasepool { ingest(url, path: path, stamp: stamp, into: &index) }
+            let result = autoreleasepool {
+                ingest(url, path: path, stamp: stamp, isListed: { listed[$0] != nil }, into: &index)
+            }
             if case .unreadable = result {
                 // Not recorded, so it is read again next time; and since this
                 // pass missed a file, it removes nothing.
@@ -115,6 +124,10 @@ final class LibraryScanner {
                 pending.append(album)
                 newAlbums += 1
             }
+            if case let .coverChanged(album) = result {
+                pendingCovers.append(album)
+                changedCovers += 1
+            }
             if case .notStored = result { listing.complete = false }
             read += 1
             unsaved += 1
@@ -126,6 +139,10 @@ final class LibraryScanner {
             if !pending.isEmpty, saving || pending.count >= Self.reportEvery {
                 onNewAlbums(pending)
                 pending.removeAll()
+            }
+            if !pendingCovers.isEmpty, saving || pendingCovers.count >= Self.reportEvery {
+                onChangedCovers(pendingCovers)
+                pendingCovers.removeAll()
             }
         }
 
@@ -141,6 +158,7 @@ final class LibraryScanner {
         // 6. Save (unless nothing changed), report, summarise (the lock goes with `defer`).
         let saved = index == loaded || save(index)
         if !pending.isEmpty { onNewAlbums(pending) }
+        if !pendingCovers.isEmpty { onChangedCovers(pendingCovers) }
         if saved {
             for album in removed { cache.removeCover(album) }
             if complete { cache.removeOrphanCovers(keeping: Set(index.albums.keys)) }
@@ -155,6 +173,7 @@ final class LibraryScanner {
             scan: \(outcome.rawValue, privacy: .public), \(summary.albums, privacy: .public) albums \
             from \(summary.files, privacy: .public) files; read \(read, privacy: .public), \
             \(unreadable, privacy: .public) unreadable, \(newAlbums, privacy: .public) new, \
+            \(changedCovers, privacy: .public) covers changed, \
             \(removed.count, privacy: .public) removed, \
             in \(seconds, format: .fixed(precision: 1), privacy: .public) s
             """)
@@ -230,13 +249,17 @@ final class LibraryScanner {
     private enum Ingested {
         case recorded
         case newAlbum(AlbumID)
+        /// The album's cover was written anew from this file's changed picture.
+        case coverChanged(AlbumID)
         /// The cover could not be written; the file stays unknown and is read again next time.
         case notStored
         /// The file could not be read; nothing was recorded, so it is read again next time.
         case unreadable
     }
 
-    private func ingest(_ url: URL, path: String, stamp: FileStamp, into index: inout LibraryIndex) -> Ingested {
+    /// `isListed` tells whether a path is in this pass's listing.
+    private func ingest(_ url: URL, path: String, stamp: FileStamp, isListed: (String) -> Bool,
+                        into index: inout LibraryIndex) -> Ingested {
         let tag: Data?
         switch TagFileReader.read(at: url) {
         case let .tag(data): tag = data
@@ -251,28 +274,57 @@ final class LibraryScanner {
         let fingerprint = Fingerprint.fnv1a64(picture)
         let album = AlbumKey.make(album: tags.album, albumArtist: tags.albumArtist, artist: tags.artist,
                                   pictureFingerprint: fingerprint)
-        if let existing = ScanPlanner.existingAlbum(id: album, fingerprint: fingerprint, in: index) {
+        switch ScanPlanner.coverPlan(path: path, album: album, fingerprint: fingerprint, in: index,
+                                     isListed: isListed) {
+        case let .join(existing):
             // A further track of a known album, or a known picture: no image work.
             _ = ScanPlanner.record(path: path, stamp: stamp, album: existing, info: nil, into: &index)
             return .recorded
-        }
-        guard let jpeg = CoverImageProcessor.makeSquareJPEG(from: picture) else {
-            _ = ScanPlanner.record(path: path, stamp: stamp, album: nil, info: nil, into: &index)
+        case let .adopt(existing):
+            // Takes over from the gone track the cover came from; same picture, no image work.
+            ScanPlanner.setCover(of: existing, source: path, fingerprint: fingerprint, into: &index)
+            _ = ScanPlanner.record(path: path, stamp: stamp, album: existing, info: nil, into: &index)
             return .recorded
+        case let .replace(existing):
+            guard let jpeg = CoverImageProcessor.makeSquareJPEG(from: picture) else {
+                // The new picture cannot be read: the old cover stays.
+                _ = ScanPlanner.record(path: path, stamp: stamp, album: existing, info: nil, into: &index)
+                return .recorded
+            }
+            // Written over the old cover atomically: a wall sees the old one or the new one.
+            guard store(jpeg, for: existing, from: path) else { return .notStored }
+            ScanPlanner.setCover(of: existing, source: path, fingerprint: fingerprint, into: &index)
+            _ = ScanPlanner.record(path: path, stamp: stamp, album: existing, info: nil, into: &index)
+            Logger.scan.notice("""
+                scan: the cover of \(existing, privacy: .public) changed with \(path, privacy: .public)
+                """)
+            return .coverChanged(existing)
+        case .new:
+            guard let jpeg = CoverImageProcessor.makeSquareJPEG(from: picture) else {
+                _ = ScanPlanner.record(path: path, stamp: stamp, album: nil, info: nil, into: &index)
+                return .recorded
+            }
+            guard store(jpeg, for: album, from: path) else { return .notStored }
+            let info = IndexedAlbum(fingerprint: fingerprint, title: tags.album ?? "",
+                                    artist: tags.albumArtist ?? tags.artist ?? "", source: path)
+            let recorded = ScanPlanner.record(path: path, stamp: stamp, album: album, info: info, into: &index)
+            return recorded.isNew ? .newAlbum(album) : .recorded
         }
+    }
+
+    /// Writes `album`'s cover, made from the file at `path`; false (and
+    /// logged) if it cannot be written.
+    private func store(_ jpeg: Data, for album: AlbumID, from path: String) -> Bool {
         do {
             try cache.writeCover(jpeg, for: album)
+            return true
         } catch {
             Logger.scan.error("""
                 scan: cannot write the cover of \(path, privacy: .public): \
                 \(error.localizedDescription, privacy: .public)
                 """)
-            return .notStored
+            return false
         }
-        let info = IndexedAlbum(fingerprint: fingerprint, title: tags.album ?? "",
-                                artist: tags.albumArtist ?? tags.artist ?? "")
-        let recorded = ScanPlanner.record(path: path, stamp: stamp, album: album, info: info, into: &index)
-        return recorded.isNew ? .newAlbum(album) : .recorded
     }
 
     // MARK: - Helpers

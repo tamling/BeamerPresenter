@@ -24,21 +24,26 @@ struct IndexedFile: Codable, Equatable {
 }
 
 struct IndexedAlbum: Codable, Equatable {
+    /// Of the picture the cover was made from.
     var fingerprint: UInt64
     var title: String
     var artist: String
+    /// The track the cover was made from, relative to the music folder; nil
+    /// in an index from before it was recorded.
+    var source: String?
 
-    init(fingerprint: UInt64, title: String, artist: String) {
+    init(fingerprint: UInt64, title: String, artist: String, source: String? = nil) {
         self.fingerprint = fingerprint
         self.title = title
         self.artist = artist
+        self.source = source
     }
 
     // In JSON the fingerprint is 16 lowercase hex digits: a number above 2^53
     // need not survive every JSON decoder (Foundation on macOS 13 goes through
     // NSNumber), and a lost digit would break the dedup of identical pictures.
     private enum CodingKeys: String, CodingKey {
-        case fingerprint, title, artist
+        case fingerprint, title, artist, source
     }
 
     init(from decoder: Decoder) throws {
@@ -54,6 +59,7 @@ struct IndexedAlbum: Codable, Equatable {
         self.fingerprint = fingerprint
         title = try container.decode(String.self, forKey: .title)
         artist = try container.decode(String.self, forKey: .artist)
+        source = try container.decodeIfPresent(String.self, forKey: .source)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -62,6 +68,7 @@ struct IndexedAlbum: Codable, Equatable {
         try container.encode(String(repeating: "0", count: 16 - hex.count) + hex, forKey: .fingerprint)
         try container.encode(title, forKey: .title)
         try container.encode(artist, forKey: .artist)
+        try container.encodeIfPresent(source, forKey: .source)
     }
 }
 

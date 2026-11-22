@@ -62,7 +62,7 @@ final class OptionsSheet: NSWindowController {
         showWallSettings()
         // Only to tell the status line whether the folder can be read now.
         resolveFolder(then: .show)
-        service?.addObserver(self) { [weak self] in self?.serviceChanged() }
+        service?.addObserver(self, onChange: { [weak self] in self?.serviceChanged() })
         refreshStatus()
     }
 

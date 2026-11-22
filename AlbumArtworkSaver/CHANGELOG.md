@@ -8,6 +8,7 @@ First release.
   wall: the grid, seven animations and timings of
   [lingkuma/AlbumArtwork](https://github.com/lingkuma/AlbumArtwork).
 - Options: music folder, rows (3–12), interval (1–10 s), "Jetzt neu einlesen".
-- Incremental scanning with a cover cache; nothing is removed after an
-  incomplete pass.
+- Incremental scanning with a cover cache: only new and changed files are
+  read, a track re-tagged with another picture renews its album's cover, and
+  nothing is removed after an incomplete pass.
 - Universal bundle (Apple Silicon and Intel), macOS 13 or later.

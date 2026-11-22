@@ -264,7 +264,8 @@ final class AlbumArtworkView: ScreenSaverView {
         let cache = CoverCache(directory: directory)
         let store = CoverImageStore { cache.coverURL(for: $0) }
         store.pool = library.albums
-        library.addObserver(self) { [weak self] in self?.libraryChanged() }
+        library.addObserver(self, onChange: { [weak self] in self?.libraryChanged() },
+                            onCoversChanged: { [weak self] albums in self?.store?.forget(albums) })
         self.library = library
         return store
     }

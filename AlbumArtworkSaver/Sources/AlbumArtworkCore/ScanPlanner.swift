@@ -5,6 +5,19 @@ struct ScanPlan: Equatable {
     var vanished: [String]
 }
 
+/// What a track with a picture, just read, asks of the album covers.
+enum CoverPlan: Equatable {
+    /// The track joins this album; its cover stays as it is.
+    case join(AlbumID)
+    /// The track becomes the album's cover source; its picture is the cover already.
+    case adopt(AlbumID)
+    /// The track is (or becomes) the album's cover source, and its picture is
+    /// another: the cover is made anew from it.
+    case replace(AlbumID)
+    /// A new album, its cover made from this track.
+    case new
+}
+
 enum ScanPlanner {
     static func plan(index: LibraryIndex, listing: [String: FileStamp]) -> ScanPlan {
         var toRead: [String] = []
@@ -22,6 +35,33 @@ enum ScanPlanner {
     static func existingAlbum(id: AlbumID, fingerprint: UInt64, in index: LibraryIndex) -> AlbumID? {
         if index.albums[id] != nil { return id }
         return index.albums.filter { $0.value.fingerprint == fingerprint }.keys.sorted().first
+    }
+
+    /// What reading the track at `path`, of album `id`, with a picture of
+    /// `fingerprint`, does to the covers. The cover comes from the album's
+    /// source track: when that track changes its picture, the cover changes.
+    /// A source that `isListed` no longer finds (renamed, ripped again) hands
+    /// over to the next track of the album that is read. Unknown albums join
+    /// an album with the same picture, or are new.
+    static func coverPlan(path: String, album id: AlbumID, fingerprint: UInt64, in index: LibraryIndex,
+                          isListed: (String) -> Bool) -> CoverPlan {
+        if let known = index.albums[id] {
+            let isSource = known.source.map { $0 == path || !isListed($0) } ?? true
+            guard isSource else { return .join(id) }
+            if known.fingerprint != fingerprint { return .replace(id) }
+            return known.source == path ? .join(id) : .adopt(id)
+        }
+        if let twin = existingAlbum(id: id, fingerprint: fingerprint, in: index) { return .join(twin) }
+        return .new
+    }
+
+    /// Makes the track at `path`, with a picture of `fingerprint`, the source
+    /// of `album`'s cover; does nothing for an album the index does not know.
+    static func setCover(of album: AlbumID, source path: String, fingerprint: UInt64,
+                         into index: inout LibraryIndex) {
+        guard index.albums[album] != nil else { return }
+        index.albums[album]?.source = path
+        index.albums[album]?.fingerprint = fingerprint
     }
 
     /// Records a parsed file. The first track of an album provides its cover; later tracks

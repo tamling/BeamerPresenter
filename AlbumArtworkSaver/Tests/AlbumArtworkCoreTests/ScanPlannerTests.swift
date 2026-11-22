@@ -55,6 +55,80 @@ final class ScanPlannerTests: XCTestCase {
         XCTAssertNil(ScanPlanner.existingAlbum(id: "a-2", fingerprint: 6, in: index))
     }
 
+    /// Album "a-1" with its cover from 1.mp3 (picture 5), and a second track 2.mp3.
+    private func albumWithTwoTracks() -> LibraryIndex {
+        var index = LibraryIndex()
+        _ = ScanPlanner.record(path: "1.mp3", stamp: stamp(1), album: "a-1",
+                               info: IndexedAlbum(fingerprint: 5, title: "T", artist: "A", source: "1.mp3"),
+                               into: &index)
+        _ = ScanPlanner.record(path: "2.mp3", stamp: stamp(2), album: "a-1", info: nil, into: &index)
+        return index
+    }
+
+    func testNewAlbumRemembersItsCoverSource() {
+        XCTAssertEqual(albumWithTwoTracks().albums["a-1"]?.source, "1.mp3")
+    }
+
+    /// Spec §9.2: a changed file is read for cover and tags. Re-tagged with
+    /// another picture, the track the cover came from gives the album a new one.
+    func testChangedPictureOfTheCoverSourceReplacesTheCover() {
+        let index = albumWithTwoTracks()
+        let listed: (String) -> Bool = { ["1.mp3", "2.mp3"].contains($0) }
+        XCTAssertEqual(ScanPlanner.coverPlan(path: "1.mp3", album: "a-1", fingerprint: 6, in: index, isListed: listed),
+                       .replace("a-1"))
+        XCTAssertEqual(ScanPlanner.coverPlan(path: "1.mp3", album: "a-1", fingerprint: 5, in: index, isListed: listed),
+                       .join("a-1"))
+    }
+
+    func testOtherTracksLeaveTheCoverAlone() {
+        let index = albumWithTwoTracks()
+        let listed: (String) -> Bool = { ["1.mp3", "2.mp3", "3.mp3"].contains($0) }
+        XCTAssertEqual(ScanPlanner.coverPlan(path: "2.mp3", album: "a-1", fingerprint: 6, in: index, isListed: listed),
+                       .join("a-1"))
+        XCTAssertEqual(ScanPlanner.coverPlan(path: "3.mp3", album: "a-1", fingerprint: 6, in: index, isListed: listed),
+                       .join("a-1"))
+    }
+
+    /// The cover's track is gone (an album ripped again under new names): the
+    /// next track of the album that is read takes over as its source.
+    func testATrackTakesOverFromAGoneCoverSource() {
+        let index = albumWithTwoTracks()
+        let listed: (String) -> Bool = { ["2.mp3", "3.mp3"].contains($0) }
+        XCTAssertEqual(ScanPlanner.coverPlan(path: "3.mp3", album: "a-1", fingerprint: 5, in: index, isListed: listed),
+                       .adopt("a-1"))
+        XCTAssertEqual(ScanPlanner.coverPlan(path: "3.mp3", album: "a-1", fingerprint: 6, in: index, isListed: listed),
+                       .replace("a-1"))
+    }
+
+    func testUnknownAlbumsJoinTheirPictureOrAreNew() {
+        let index = albumWithTwoTracks()
+        let listed: (String) -> Bool = { _ in true }
+        XCTAssertEqual(ScanPlanner.coverPlan(path: "9.mp3", album: "a-2", fingerprint: 5, in: index, isListed: listed),
+                       .join("a-1"))
+        XCTAssertEqual(ScanPlanner.coverPlan(path: "9.mp3", album: "a-2", fingerprint: 7, in: index, isListed: listed),
+                       .new)
+    }
+
+    func testSetCoverMakesTheTrackTheSource() {
+        var index = albumWithTwoTracks()
+        ScanPlanner.setCover(of: "a-1", source: "3.mp3", fingerprint: 6, into: &index)
+        XCTAssertEqual(index.albums["a-1"], IndexedAlbum(fingerprint: 6, title: "T", artist: "A", source: "3.mp3"))
+        XCTAssertEqual(ScanPlanner.coverPlan(path: "3.mp3", album: "a-1", fingerprint: 6, in: index,
+                                             isListed: { _ in true }), .join("a-1"))
+        // Nothing for an album the index does not know.
+        let before = index
+        ScanPlanner.setCover(of: "a-9", source: "x.mp3", fingerprint: 1, into: &index)
+        XCTAssertEqual(index, before)
+    }
+
+    func testCoverSourceIsOptionalInJSON() throws {
+        let json = #"{"fingerprint":"0000000000000005","title":"T","artist":"A"}"#
+        XCTAssertEqual(try JSONDecoder().decode(IndexedAlbum.self, from: Data(json.utf8)),
+                       IndexedAlbum(fingerprint: 5, title: "T", artist: "A"))
+        let album = IndexedAlbum(fingerprint: 5, title: "T", artist: "A", source: "Ä/01 b.mp3")
+        XCTAssertEqual(try JSONDecoder().decode(IndexedAlbum.self, from: JSONEncoder().encode(album)), album)
+    }
+
     func testFinishCompleteRemovesOrphans() {
         var index = LibraryIndex()
         let info = IndexedAlbum(fingerprint: 1, title: "", artist: "")

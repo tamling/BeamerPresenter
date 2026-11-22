@@ -28,6 +28,7 @@ final class LibraryService {
     private struct Observer {
         weak var owner: AnyObject?
         let onChange: () -> Void
+        let onCoversChanged: ([AlbumID]) -> Void
     }
 
     private let cache: CoverCache
@@ -45,13 +46,15 @@ final class LibraryService {
     }
 
     /// Calls `onChange` on the main thread whenever `albums`, `isScanning` or
-    /// `lastCompleteScan` change, until `owner` goes away. One entry per owner:
-    /// adding again replaces it. `owner` is held weakly; `onChange` must not
-    /// hold it strongly either.
-    func addObserver(_ owner: AnyObject, onChange: @escaping () -> Void) {
+    /// `lastCompleteScan` change, and `onCoversChanged` with the albums whose
+    /// cover files the scan wrote anew, until `owner` goes away. One entry per
+    /// owner: adding again replaces it. `owner` is held weakly; the closures
+    /// must not hold it strongly either.
+    func addObserver(_ owner: AnyObject, onChange: @escaping () -> Void,
+                     onCoversChanged: @escaping ([AlbumID]) -> Void = { _ in }) {
         dispatchPrecondition(condition: .onQueue(.main))
         observers.removeAll { $0.owner == nil || $0.owner === owner }
-        observers.append(Observer(owner: owner, onChange: onChange))
+        observers.append(Observer(owner: owner, onChange: onChange, onCoversChanged: onCoversChanged))
     }
 
     /// Stops calling `owner`'s `onChange`; does nothing if `owner` is not observing.
@@ -76,6 +79,8 @@ final class LibraryService {
             // The scanner logs its summary.
             _ = scanner.run(isCancelled: { stop.isSet }, onNewAlbums: { albums in
                 DispatchQueue.main.async { self.add(albums) }
+            }, onChangedCovers: { albums in
+                DispatchQueue.main.async { self.coversChanged(albums) }
             })
             // What the scan left: removed albums disappear, the date is set.
             let index = self.cache.loadIndex()
@@ -98,6 +103,11 @@ final class LibraryService {
         guard !added.isEmpty else { return }
         albums += added
         notify()
+    }
+
+    private func coversChanged(_ albums: [AlbumID]) {
+        observers.removeAll { $0.owner == nil }
+        for observer in observers { observer.onCoversChanged(albums) }
     }
 
     private func finish(_ index: LibraryIndex) {

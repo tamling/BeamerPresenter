@@ -11,9 +11,9 @@ adds the screensaver in its own folder, `AlbumArtworkSaver/`.
   [lingkuma/AlbumArtwork](https://github.com/lingkuma/AlbumArtwork) (MIT).
 - Options: the music folder ("Ordner wählen…" or a typed path), rows (3–12),
   interval (1–10 s) and "Jetzt neu einlesen".
-- New MP3s are picked up on the next start; only changed files are re-read, and
-  nothing is forgotten after an incomplete pass, for instance when the disk
-  is unplugged.
+- New MP3s are picked up on the next start; only changed files are re-read
+  (a re-tagged cover replaces the old one), and nothing is forgotten after an
+  incomplete pass, for instance when the disk is unplugged.
 - Built with `./build-saver.sh` (Command Line Tools are enough) or downloaded
   as the `AlbumArtwork-saver` artifact of the "Build Saver" workflow, which
   tests the core, builds a universal bundle and runs it in a test host.

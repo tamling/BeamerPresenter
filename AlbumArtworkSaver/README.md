@@ -43,7 +43,8 @@ the time between animations (1–10 s).
 ## How updates work
 
 New MP3s are read the next time the screensaver starts. Only new or changed
-files are read again. A scan that could not finish (for example because the disk
+files are read again; when the track an album's cover came from gets another
+picture, the cover changes too. A scan that could not finish (for example because the disk
 holding the music is unplugged) never deletes anything: the wall keeps showing
 the cached covers, and the status line says the folder is not reachable
 ("Musikordner nicht erreichbar"). The music folder itself is only ever read.
