@@ -67,7 +67,14 @@ final class LibraryScanner {
 
         // 3. The listing.
         var listing = list(folder, isCancelled: isCancelled)
-        var index = cache.loadIndex()
+        let loaded = cache.loadIndex()
+        var index = loaded
+        if listing.files.isEmpty, !index.files.isEmpty, !listing.cancelled {
+            // Most likely the empty mount point of a disk that is not plugged
+            // in, not a music library deleted to the last file.
+            Logger.scan.notice("scan: \(folder.path, privacy: .public) lists no MP3s; nothing is removed")
+            listing.complete = false
+        }
         let plan = ScanPlanner.plan(index: index, listing: listing.files)
         Logger.scan.notice("""
             scan: \(listing.files.count, privacy: .public) files in \(folder.path, privacy: .public), \
@@ -79,6 +86,7 @@ final class LibraryScanner {
         var newAlbums = 0
         var read = 0
         var unsaved = 0
+        var unreadable = 0
         for path in plan.toRead where !listing.cancelled {
             if isCancelled() {
                 listing.cancelled = true
@@ -87,11 +95,19 @@ final class LibraryScanner {
             guard let stamp = listing.files[path] else { continue }
             let url = folder.appendingPathComponent(path, isDirectory: false)
             let result = autoreleasepool { ingest(url, path: path, stamp: stamp, into: &index) }
-            if case .folderGone = result {
-                // The disk went away while reading: stop, and keep everything.
-                Logger.scan.error("scan: \(folder.path, privacy: .public) went away while reading")
+            if case .unreadable = result {
+                // Not recorded, so it is read again next time; and since this
+                // pass missed a file, it removes nothing.
                 listing.complete = false
-                break
+                unreadable += 1
+                if unreadable <= Self.loggedErrors {
+                    Logger.scan.error("scan: cannot read \(path, privacy: .public)")
+                }
+                if Self.existingFolder(root) == nil {
+                    Logger.scan.error("scan: \(folder.path, privacy: .public) went away while reading")
+                    break
+                }
+                continue
             }
             if case let .newAlbum(album) = result {
                 pending.append(album)
@@ -111,13 +127,17 @@ final class LibraryScanner {
             }
         }
 
-        // 5. Forget what is gone, but only after a complete pass. The index is
+        // 5. Forget what is gone, but only after a complete pass, and only if
+        //    the folder is still there: a disk that went away during the
+        //    listing may have ended it early without an error. The index is
         //    saved before covers are deleted, so it never names a missing cover.
-        let complete = listing.complete && !listing.cancelled
+        let stillThere = Self.existingFolder(root)?.path == folder.path
+        if !stillThere { Logger.scan.error("scan: \(folder.path, privacy: .public) went away during the scan") }
+        let complete = listing.complete && !listing.cancelled && stillThere
         let removed = ScanPlanner.finish(vanished: plan.vanished, listingComplete: complete, at: Date(),
                                          into: &index)
-        // 6. Save, report, summarise (the lock goes with `defer`).
-        let saved = save(index)
+        // 6. Save (unless nothing changed), report, summarise (the lock goes with `defer`).
+        let saved = index == loaded || save(index)
         if !pending.isEmpty { onNewAlbums(pending) }
         if saved {
             for album in removed { cache.removeCover(album) }
@@ -131,7 +151,8 @@ final class LibraryScanner {
         Logger.scan.notice("""
             scan: \(outcome.rawValue, privacy: .public), \(summary.albums, privacy: .public) albums \
             from \(summary.files, privacy: .public) files; read \(read, privacy: .public), \
-            \(newAlbums, privacy: .public) new, \(removed.count, privacy: .public) removed, \
+            \(unreadable, privacy: .public) unreadable, \(newAlbums, privacy: .public) new, \
+            \(removed.count, privacy: .public) removed, \
             in \(seconds, format: .fixed(precision: 1), privacy: .public) s
             """)
         return summary
@@ -208,13 +229,17 @@ final class LibraryScanner {
         case newAlbum(AlbumID)
         /// The cover could not be written; the file stays unknown and is read again next time.
         case notStored
-        /// The file could not be read because the music folder is gone.
-        case folderGone
+        /// The file could not be read; nothing was recorded, so it is read again next time.
+        case unreadable
     }
 
     private func ingest(_ url: URL, path: String, stamp: FileStamp, into index: inout LibraryIndex) -> Ingested {
-        let tag = TagFileReader.readTag(at: url)
-        if tag == nil, Self.existingFolder(root) == nil { return .folderGone }
+        let tag: Data?
+        switch TagFileReader.read(at: url) {
+        case let .tag(data): tag = data
+        case .noTag: tag = nil
+        case .unreadable: return .unreadable
+        }
         guard let tags = tag.flatMap(ID3Reader.parse), let picture = tags.picture else {
             // No cover: remembered, so the file is not read again until it changes.
             _ = ScanPlanner.record(path: path, stamp: stamp, album: nil, info: nil, into: &index)

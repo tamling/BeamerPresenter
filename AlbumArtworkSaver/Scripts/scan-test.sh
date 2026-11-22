@@ -49,6 +49,25 @@ expect_covers() {
     [ "$count" = "$1" ] || fail "covers/ holds $count files, not $1"
 }
 
+# album_of <path>: the album the index gives the music file <path> ("-" for none).
+album_of() {
+    python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["files"][sys.argv[2]].get("album", "-"))' \
+        "$CACHE/index.json" "$1"
+}
+
+# modified_of <path>: the modification date the index has for the music file <path>.
+modified_of() {
+    python3 -c 'import json, sys; print(repr(json.load(open(sys.argv[1]))["files"][sys.argv[2]]["stamp"]["modified"]))' \
+        "$CACHE/index.json" "$1"
+}
+
+# expect_album <id>: the index knows the album <id>, and its cover is there.
+expect_album() {
+    python3 -c 'import json, sys; sys.exit(sys.argv[2] not in json.load(open(sys.argv[1]))["albums"])' \
+        "$CACHE/index.json" "$1" || fail "album $1 is not in the index"
+    [ -f "$CACHE/covers/$1.jpg" ] || fail "the cover of album $1 is gone"
+}
+
 checksum() {
     if command -v shasum >/dev/null; then shasum -a 256 "$1"; else sha256sum "$1"; fi
 }
@@ -141,7 +160,40 @@ LOCKER=""
 scan "$MUSIC" outcome=complete albums=3 files=8 new=0
 expect_covers 3
 
-echo "▶︎ 8. The music folder is as the steps left it: the scans only read"
+echo "▶︎ 8. An unreadable file is kept, read again later, and removes nothing meanwhile"
+# C/01.mp3 is the only track of album C. Changed and unreadable, it must not be
+# recorded as a file without a cover, which would orphan album C and delete it.
+album_c="$(album_of C/01.mp3)"
+[ "$album_c" != "-" ] || fail "C/01.mp3 has no album"
+modified="$(modified_of C/01.mp3)"
+touch "$MUSIC/C/01.mp3"
+chmod 000 "$MUSIC/C/01.mp3"
+if [ -r "$MUSIC/C/01.mp3" ]; then
+    echo "  skipped: this user can read a file with mode 000 (root?)"
+else
+    scan "$MUSIC" outcome=incomplete albums=3 files=8 new=0
+    [ "$(album_of C/01.mp3)" = "$album_c" ] || fail "C/01.mp3 lost its album"
+    [ "$(modified_of C/01.mp3)" = "$modified" ] || fail "the unreadable C/01.mp3 was recorded"
+    expect_album "$album_c"
+    expect_covers 3
+fi
+chmod 644 "$MUSIC/C/01.mp3"
+scan "$MUSIC" outcome=complete albums=3 files=8 new=0
+[ "$(modified_of C/01.mp3)" != "$modified" ] || fail "C/01.mp3 was not read again"
+[ "$(album_of C/01.mp3)" = "$album_c" ] || fail "C/01.mp3 lost its album"
+expect_album "$album_c"
+expect_covers 3
+
+echo "▶︎ 9. An empty folder in its place (a mount point without its disk): the cache stays as it is"
+mkdir "$T/empty-mount"
+cp "$CACHE/index.json" "$T/index-before.json"
+find "$CACHE/covers" -type f | LC_ALL=C sort >"$T/covers-before"
+scan "$T/empty-mount" outcome=incomplete albums=3 files=8 new=0
+cmp -s "$CACHE/index.json" "$T/index-before.json" || fail "index.json changed"
+find "$CACHE/covers" -type f | LC_ALL=C sort | diff "$T/covers-before" - || fail "covers/ changed"
+[ -z "$(ls -A "$T/empty-mount")" ] || fail "the scan wrote into the folder"
+
+echo "▶︎ 10. The music folder is as the steps left it: the scans only read"
 manifest >"$T/after"
 grep -v -e ' \./B/01\.mp3$' "$T/before" >"$T/before-kept"
 grep -v -e '^folder \./C$' -e ' \./C/0[12]\.mp3$' "$T/after" >"$T/after-kept"

@@ -7,20 +7,35 @@ enum TagFileReader {
     /// size comes from untrusted bytes.
     static let maxTagBytes = 16 << 20
 
-    /// The whole tag, header included; shorter than the header says when the
-    /// file ends early. `nil` without a tag, for a tag larger than
-    /// `maxTagBytes`, or when the file cannot be read.
-    static func readTag(at url: URL) -> Data? {
-        guard let file = try? FileHandle(forReadingFrom: url) else { return nil }
-        defer { try? file.close() }
-        guard let header = try? file.read(upToCount: ID3Reader.headerLength),
-              let length = ID3Reader.tagLength(header: header), length <= maxTagBytes
-        else { return nil }
+    enum Outcome: Equatable {
+        /// The whole tag, header included; shorter than the header says when
+        /// the file ends early.
+        case tag(Data)
+        /// The file has no ID3v2 tag, or one larger than `maxTagBytes`: it
+        /// has no cover to offer, until it changes.
+        case noTag
+        /// The file could not be opened or read (permissions, a share that
+        /// timed out, a disk that went away): try again next time.
+        case unreadable
+    }
+
+    static func read(at url: URL) -> Outcome {
+        let file: FileHandle
         do {
-            // nil: the file ends right after the header.
-            return header + (try file.read(upToCount: length - ID3Reader.headerLength) ?? Data())
+            file = try FileHandle(forReadingFrom: url)
         } catch {
-            return nil
+            return .unreadable
+        }
+        defer { try? file.close() }
+        do {
+            // nil: the file is empty.
+            guard let header = try file.read(upToCount: ID3Reader.headerLength),
+                  let length = ID3Reader.tagLength(header: header), length <= maxTagBytes
+            else { return .noTag }
+            // nil: the file ends right after the header.
+            return .tag(header + (try file.read(upToCount: length - ID3Reader.headerLength) ?? Data()))
+        } catch {
+            return .unreadable
         }
     }
 }
