@@ -1,5 +1,8 @@
 name: Build Saver
 
+# The screensaver's AppKit layer compiles only on macOS, so this is the only
+# place it is type-checked at all: test the core, build the universal .saver,
+# prove macOS can load it, and attach it as a ready-to-install zip.
 on:
   push:
     branches: [main, 'claude/**']
@@ -14,6 +17,12 @@ permissions:
 jobs:
   macos:
     runs-on: macos-latest
+    defaults:
+      run:
+        # An explicit bash runs with -eo pipefail, so a failure on the left of
+        # a pipe fails the step.
+        shell: bash
+        working-directory: AlbumArtworkSaver
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: Select Xcode
@@ -21,4 +30,56 @@ jobs:
       - name: Swift version
         run: swift --version
       - name: Test core
-        run: cd AlbumArtworkSaver && swift test
+        run: swift test
+
+      - name: Build the saver
+        # Universal, so the zip runs on Apple Silicon and Intel Macs alike.
+        env:
+          ARCHS: "arm64 x86_64"
+        run: ./build-saver.sh
+
+      - name: Check the bundle
+        run: |
+          BIN=build/AlbumArtwork.saver/Contents/MacOS/AlbumArtwork
+          KIND="$(file "$BIN")"
+          echo "$KIND"
+          grep -q bundle <<<"$KIND"
+          lipo "$BIN" -verify_arch arm64 x86_64
+          /usr/libexec/PlistBuddy -c "Print :LSMinimumSystemVersion" \
+            build/AlbumArtwork.saver/Contents/Info.plist
+          codesign --verify --verbose build/AlbumArtwork.saver
+
+      - name: Load the bundle
+        run: swift Scripts/load-saver.swift build/AlbumArtwork.saver | grep '^OK AlbumArtworkView'
+
+      - name: Smoke-test the TestHost
+        # A GUI app needs a window server. Hosted runners have one; if not, say
+        # so and go on. A TestHost that quits on its own fails the job.
+        run: |
+          if ! pgrep -x WindowServer >/dev/null; then
+            echo "::warning::No WindowServer on this runner, so the TestHost smoke test was skipped."
+            exit 0
+          fi
+          ./build/TestHost >build/testhost.log 2>&1 &
+          pid=$!
+          sleep 5
+          if ! kill -0 "$pid" 2>/dev/null; then
+            status=0
+            wait "$pid" || status=$?
+            echo "✗ TestHost quit within 5 s (exit status $status):"
+            cat build/testhost.log
+            exit 1
+          fi
+          echo "✓ TestHost still running after 5 s (pid $pid)."
+          kill "$pid"
+          cat build/testhost.log
+
+      - name: Zip it
+        # ditto keeps the bundle's symlinks and resource forks; zip(1) does not.
+        run: ditto -c -k --sequesterRsrc --keepParent build/AlbumArtwork.saver AlbumArtwork-saver.zip
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: AlbumArtwork-saver
+          path: AlbumArtworkSaver/AlbumArtwork-saver.zip
+          if-no-files-found: error
