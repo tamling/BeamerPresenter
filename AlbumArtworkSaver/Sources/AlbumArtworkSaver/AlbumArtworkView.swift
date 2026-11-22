@@ -283,12 +283,10 @@ final class AlbumArtworkView: ScreenSaverView {
         let albums = AlbumPicker.initialFill(count: layout.cellCount, pool: pool, using: &rng)
         guard !albums.isEmpty else {
             phase = .idle
-            updateHint()
             return
         }
         store.prefetch(albums)
         phase = .waiting(albums, since: since)
-        updateHint()
     }
 
     /// Starts the engine as soon as every one of `albums` is ready, so the wall
@@ -299,6 +297,7 @@ final class AlbumArtworkView: ScreenSaverView {
             // An image that cannot be read never becomes ready: pick again without it.
             fill(from: store.pool.filter { !store.hasFailed($0) }, since: since)
             if case .idle = phase { Logger.wall.error("wall: none of the cover images can be read") }
+            updateHint()
             return
         }
         let missing = albums.filter { !store.isReady($0) }
@@ -334,7 +333,8 @@ final class AlbumArtworkView: ScreenSaverView {
     // MARK: - The hint
 
     /// What a wall that has not started waits for: a folder, the scan, covers.
-    /// Gone as soon as the wall has albums to start with.
+    /// Gone as soon as the wall has albums to start with. Asked for after the
+    /// wall's phase or the library changed, and once a start has begun its scan.
     private func updateHint() {
         guard case .idle = phase, let library, let layout else {
             showHint(nil)
