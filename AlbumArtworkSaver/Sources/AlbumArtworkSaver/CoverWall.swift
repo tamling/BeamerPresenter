@@ -6,9 +6,10 @@ extension Logger {
     static let wall = Logger(subsystem: "app.beamerpresenter.AlbumArtworkSaver", category: "wall")
 }
 
-/// The wall on screen: a black layer filling the host layer, with the camera's
-/// perspective, and one layer per engine sprite, posed from the engine on
-/// every `apply`. Removing the wall (releasing it) takes its layers along.
+/// The wall on screen: a black layer filling `bounds` of the host layer, with
+/// the camera's perspective, and one layer per engine sprite, posed from the
+/// engine on every `apply`. Removing the wall (releasing it) takes its layers
+/// along. A wall is laid out once; another size needs another wall.
 ///
 /// World units map to points as `pointsPerUnit` (the screen is
 /// `GridLayout.worldHeight` units tall); y points up in both.
@@ -26,9 +27,10 @@ final class CoverWall {
     /// Layers whose album's image the store did not have yet, with that album.
     private var waiting: [SpriteID: AlbumID] = [:]
 
-    init(hostLayer: CALayer, layout: GridLayout, images: CoverImageStore) {
+    /// `bounds` is the view's: the host layer may not have caught up with a
+    /// size the view was just given.
+    init(hostLayer: CALayer, bounds: CGRect, layout: GridLayout, images: CoverImageStore) {
         self.images = images
-        let bounds = hostLayer.bounds
         pointsPerUnit = bounds.height / CGFloat(GridLayout.worldHeight)
         coverEdge = CGFloat(layout.coverSize) * pointsPerUnit
         center = CGPoint(x: bounds.width / 2, y: bounds.height / 2)

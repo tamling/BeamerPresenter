@@ -18,8 +18,10 @@ enum HostOverride {
 /// The real screensaver shows the cache of the music folder chosen in its
 /// options and scans that folder at every start. `stopAnimation`, and the
 /// `com.apple.screensaver.willstop` notification the host sends even when it
-/// forgets to stop the view, end the scan and let go of the wall, its images
-/// and the folder, so the process does nothing once the screensaver is over.
+/// forgets to stop the view, end the scan (and a pending retry of it) and let
+/// go of the wall, its images and the folder, so the process does nothing once
+/// the screensaver is over. A view the host sizes, or sizes anew, after
+/// starting it lays its wall out for the new size.
 @objc(AlbumArtworkView)
 final class AlbumArtworkView: ScreenSaverView {
     /// Set by the TestHost before it creates the view; `nil` in the real screensaver.
@@ -29,6 +31,9 @@ final class AlbumArtworkView: ScreenSaverView {
     /// Mac slept) a fresh wall starts, instead of every missed tick at once.
     private static let maxFrameGap: TimeInterval = 1
     private static let statsInterval: TimeInterval = 10
+    /// How long to wait before scanning again when another process's scan
+    /// held the cache (the options sheet runs in its own process).
+    private static let busyRetryDelay: TimeInterval = 10
     private static let willStop = Notification.Name("com.apple.screensaver.willstop")
 
     private enum Phase {
@@ -61,6 +66,19 @@ final class AlbumArtworkView: ScreenSaverView {
     private var rng = SplitMix64(seed: 0)
     private var phase = Phase.idle
     private var lastFrame: TimeInterval?
+    /// Between `start` and the tear-down that ends it.
+    private var isShowing = false
+    /// The bounds size the wall was laid out for (zero: none yet).
+    private var wallSize = CGSize.zero
+    /// The music folder this start scans, for a retry.
+    private var scanRoot: URL?
+    /// `library.scansEnded` when this start began: a larger count means a
+    /// scan ended for it.
+    private var scansAtStart = 0
+    /// The scans whose end this start has looked at.
+    private var scansSeen = 0
+    /// The pending retry of a scan another process held off.
+    private var busyRetry: DispatchWorkItem?
 
     private var statsSince: TimeInterval = 0
     private var frameCount = 0
@@ -107,6 +125,16 @@ final class AlbumArtworkView: ScreenSaverView {
         return sheet.window
     }
 
+    override func setFrameSize(_ newSize: NSSize) {
+        super.setFrameSize(newSize)
+        sizeChanged()
+    }
+
+    override func viewDidEndLiveResize() {
+        super.viewDidEndLiveResize()
+        sizeChanged()
+    }
+
     override func animateOneFrame() {
         let begin = CACurrentMediaTime()
         step(at: begin)
@@ -124,11 +152,14 @@ final class AlbumArtworkView: ScreenSaverView {
     /// real screensaver resolves the folder in the background first: a disk
     /// or share that is slow to answer must not keep the cached wall waiting.
     /// A start without a stop before it first lets go of what the last one set up.
+    /// The scan does not wait for the view to have a size.
     private func start(with saved: SaverSettings) {
         tearDown(cancellingScan: false)
+        isShowing = true
         settings = saved.wall
         DistributedNotificationCenter.default().addObserver(
             self, selector: #selector(screensaverWillStop(_:)), name: Self.willStop, object: nil)
+        attachLibrary()
         setUpWall()
         switch Self.hostOverride {
         case nil:
@@ -151,19 +182,39 @@ final class AlbumArtworkView: ScreenSaverView {
             var isFolder: ObjCBool = false
             let exists = FileManager.default.fileExists(atPath: root.path, isDirectory: &isFolder)
             folder = exists && isFolder.boolValue ? .available : .unavailable
-            library?.scan(root: root)
+            scan(root)
         case .covers:
             folder = .available
         }
         updateHint()
     }
 
-    /// The real screensaver's folder is known: scan it if it can be read.
+    /// The real screensaver's folder is known: scan it if it can be read; if
+    /// not, the wall starts from what the cache has.
     private func folderResolved(_ status: FolderStatus, _ url: URL?) {
         folder = status
         folderURL = url
-        if let library, let url { library.scan(root: url) }
+        if let url { scan(url) }
+        startIfAllowed()
         updateHint()
+    }
+
+    /// The music folder's cache, shared with the process's other views; none
+    /// for `HostOverride.covers`.
+    private func attachLibrary() {
+        guard let directory = Self.cacheDirectory(for: Self.hostOverride) else { return }
+        let library = LibraryService.shared(cacheDirectory: directory)
+        library.addObserver(self, onChange: { [weak self] in self?.libraryChanged() },
+                            onCoversChanged: { [weak self] albums in self?.store?.forget(albums) })
+        scansAtStart = library.scansEnded
+        scansSeen = library.scansEnded
+        self.library = library
+    }
+
+    /// Scans `root` (or joins the scan of `root` already running in this process).
+    private func scan(_ root: URL) {
+        scanRoot = root
+        library?.scan(root: root)
     }
 
     /// Lets go of the wall, its images, the hint and the folder. Safe to call
@@ -177,10 +228,15 @@ final class AlbumArtworkView: ScreenSaverView {
             if cancellingScan { library.cancelScan() }
         }
         library = nil
+        busyRetry?.cancel()
+        busyRetry = nil
+        scanRoot = nil
+        isShowing = false
         engine = nil
         wall = nil
         store = nil
         layout = nil
+        wallSize = .zero
         phase = .idle
         lastFrame = nil
         showHint(nil)
@@ -211,17 +267,23 @@ final class AlbumArtworkView: ScreenSaverView {
 
     // MARK: - The wall
 
+    /// A fresh wall for the view's size, started from the albums at hand if
+    /// it may; none while the view has no size.
     private func setUpWall() {
         let now = CACurrentMediaTime()
         wall = nil
         engine = nil
+        store = nil
+        layout = nil
         phase = .idle
         lastFrame = nil
+        showHint(nil)
         resetStats(at: now)
+        wallSize = bounds.size
         guard let host = layer, bounds.width > 0, bounds.height > 0 else { return }
         let layout = GridLayout(rows: settings.rows, aspect: Double(bounds.width / bounds.height))
         let store = makeStore()
-        let wall = CoverWall(hostLayer: host, layout: layout, images: store)
+        let wall = CoverWall(hostLayer: host, bounds: bounds, layout: layout, images: store)
         let scale = window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2
         store.pixelEdge = Int((wall.coverEdge * scale).rounded(.up))
         let seed = UInt64.random(in: .min ... .max)
@@ -235,9 +297,18 @@ final class AlbumArtworkView: ScreenSaverView {
             wall: \(albums, privacy: .public) albums, \(rows, privacy: .public)×\(columns, privacy: .public) \
             covers of \(edge, privacy: .public) px, seed \(seed, privacy: .public)
             """)
-        // The cache's albums start the wall at once; with none (the very
-        // first time) it waits in `libraryChanged`.
-        fill(from: store.pool, since: now)
+        startIfAllowed()
+    }
+
+    /// The view was given another size: while showing, a wall laid out for the
+    /// old size (or none, for a view that had no size) gives way to a new one.
+    /// A live resize (the TestHost's window) waits for its end.
+    private func sizeChanged() {
+        guard isShowing, !inLiveResize, bounds.size != wallSize else { return }
+        let width = Int(bounds.width), height = Int(bounds.height)
+        Logger.wall.notice("wall: laid out anew for \(width, privacy: .public)×\(height, privacy: .public) points")
+        setUpWall()
+        updateHint()
     }
 
     /// The cache of the real screensaver and of `HostOverride.music`; nil for a
@@ -253,34 +324,73 @@ final class AlbumArtworkView: ScreenSaverView {
     /// The images to show: a music folder's cache, whose albums arrive while
     /// the library scans, or the TestHost's folder of cover images.
     private func makeStore() -> CoverImageStore {
-        library = nil
-        guard let directory = Self.cacheDirectory(for: Self.hostOverride) else {
+        guard let library, let directory = Self.cacheDirectory(for: Self.hostOverride) else {
             let covers = Self.coverFiles(for: Self.hostOverride)
             let store = CoverImageStore { covers[$0] }
             store.pool = covers.keys.sorted()
             return store
         }
-        let library = LibraryService.shared(cacheDirectory: directory)
         let cache = CoverCache(directory: directory)
         let store = CoverImageStore { cache.coverURL(for: $0) }
         store.pool = library.albums
-        library.addObserver(self, onChange: { [weak self] in self?.libraryChanged() },
-                            onCoversChanged: { [weak self] albums in self?.store?.forget(albums) })
-        self.library = library
         return store
     }
 
-    /// New albums join the pool, so the next animations can show them. A black
-    /// wall starts once there are enough for every cell, or the scan is done
-    /// and found at least one (`WallEngine.start` needs one per cell).
+    /// New albums join the pool, so the next animations can show them; a
+    /// black wall starts once it may. A scan that ended for this start is
+    /// looked at once: one that another process held off is tried again.
     private func libraryChanged() {
-        guard let library, let store, let layout else { return }
-        store.pool = library.albums
-        if case .idle = phase, library.albums.count >= layout.cellCount || !library.isScanning {
-            let readable = store.pool.filter { !store.hasFailed($0) }
-            if !readable.isEmpty { fill(from: readable, since: CACurrentMediaTime()) }
+        guard let library else { return }
+        if library.scansEnded > scansSeen {
+            scansSeen = library.scansEnded
+            scanEnded(library.lastOutcome)
         }
+        store?.pool = library.albums
+        startIfAllowed()
         updateHint()
+    }
+
+    private func scanEnded(_ outcome: ScanSummary.Outcome?) {
+        switch outcome {
+        case .busy?:
+            // The options sheet's process (or another screen's) is scanning the
+            // same cache. What it saved so far was just read; try again later.
+            guard busyRetry == nil, let root = scanRoot else { return }
+            let retry = DispatchWorkItem { [weak self] in
+                guard let self else { return }
+                self.busyRetry = nil
+                Logger.scan.notice("scan: trying again; another scan held the cache")
+                self.scan(root)
+                self.updateHint()
+            }
+            busyRetry = retry
+            DispatchQueue.main.asyncAfter(deadline: .now() + Self.busyRetryDelay, execute: retry)
+        case .unavailable?:
+            // The folder went away between resolving it and scanning it.
+            if folder == .available { folder = .unavailable }
+        default:
+            break
+        }
+    }
+
+    /// Starts a black wall from the albums the cache has, once it may: at
+    /// once when they fill every cell or a complete scan made them; else once
+    /// this start's scan is over (one another process held off does not
+    /// count), or when no scan can run because the folder is not chosen or out
+    /// of reach. Until then the hint shows the scan's progress, so a cache
+    /// that a first scan has only begun does not start a wall of a few covers
+    /// repeated. `WallEngine.start` needs one album per cell; `fill` repeats.
+    private func startIfAllowed() {
+        guard case .idle = phase, let store, let layout else { return }
+        if let library {
+            let cached = library.albums.count >= layout.cellCount || library.lastCompleteScan != nil
+            let noScan = folder != nil && folder != .available
+            let scanOver = library.scansEnded > scansAtStart && !library.isScanning && busyRetry == nil
+                && library.lastOutcome != .busy
+            guard cached || noScan || scanOver else { return }
+        }
+        let readable = store.pool.filter { !store.hasFailed($0) }
+        if !readable.isEmpty { fill(from: readable, since: CACurrentMediaTime()) }
     }
 
     private func step(at now: TimeInterval) {
@@ -346,7 +456,8 @@ final class AlbumArtworkView: ScreenSaverView {
         // One transaction, so the new covers replace the old ones in one frame.
         CATransaction.begin()
         defer { CATransaction.commit() }
-        wall = CoverWall(hostLayer: host, layout: layout, images: store)
+        wall = CoverWall(hostLayer: host, bounds: CGRect(origin: .zero, size: wallSize), layout: layout,
+                         images: store)
         engine = WallEngine(layout: layout, settings: settings, source: store, seed: rng.next())
         let ready = store.pool.filter(store.isReady)
         fill(from: ready.isEmpty ? store.pool : ready, since: now)
@@ -360,14 +471,15 @@ final class AlbumArtworkView: ScreenSaverView {
     /// What a wall that has not started waits for: a folder, the scan, covers.
     /// Gone as soon as the wall has albums to start with, and not shown while
     /// the folder is being resolved. Asked for after the wall's phase, the
-    /// library or the folder changed, and once a start has begun its scan.
+    /// library, the folder or the size changed, and once a start has begun
+    /// its scan. A scan waiting to try again counts as reading.
     private func updateHint() {
         guard case .idle = phase, let library, let layout, let folder else {
             showHint(nil)
             return
         }
-        showHint(StatusText.hint(folder: folder, albumCount: library.albums.count, isScanning: library.isScanning,
-                                 needed: layout.cellCount))
+        showHint(StatusText.hint(folder: folder, albumCount: library.albums.count,
+                                 isScanning: library.isScanning || busyRetry != nil, needed: layout.cellCount))
     }
 
     /// White at 60 %, centred, at most two lines.

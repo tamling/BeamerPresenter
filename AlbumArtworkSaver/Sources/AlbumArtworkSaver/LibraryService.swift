@@ -24,6 +24,12 @@ final class LibraryService {
     private(set) var albums: [AlbumID]
     private(set) var isScanning = false
     private(set) var lastCompleteScan: Date?
+    /// How the last scan in this process ended; nil before the first.
+    /// `.busy`: another process's scan held the cache, and nothing was read.
+    private(set) var lastOutcome: ScanSummary.Outcome?
+    /// How many scans in this process have ended, so a view can tell a scan
+    /// that ended after it started from one before.
+    private(set) var scansEnded = 0
 
     private struct Observer {
         weak var owner: AnyObject?
@@ -45,8 +51,8 @@ final class LibraryService {
         lastCompleteScan = index.lastCompleteScan
     }
 
-    /// Calls `onChange` on the main thread whenever `albums`, `isScanning` or
-    /// `lastCompleteScan` change, and `onCoversChanged` with the albums whose
+    /// Calls `onChange` on the main thread whenever `albums`, `isScanning`,
+    /// `lastCompleteScan` or `scansEnded` change, and `onCoversChanged` with the albums whose
     /// cover files the scan wrote anew, until `owner` goes away. One entry per
     /// owner: adding again replaces it. `owner` is held weakly; the closures
     /// must not hold it strongly either.
@@ -77,14 +83,15 @@ final class LibraryService {
         // The scan keeps the service; services live as long as the process anyway.
         queue.async {
             // The scanner logs its summary.
-            _ = scanner.run(isCancelled: { stop.isSet }, onNewAlbums: { albums in
+            let summary = scanner.run(isCancelled: { stop.isSet }, onNewAlbums: { albums in
                 DispatchQueue.main.async { self.add(albums) }
             }, onChangedCovers: { albums in
                 DispatchQueue.main.async { self.coversChanged(albums) }
             })
-            // What the scan left: removed albums disappear, the date is set.
+            // What the scan left (or, when it was busy, what the other
+            // process's scan saved): removed albums disappear, the date is set.
             let index = self.cache.loadIndex()
-            DispatchQueue.main.async { self.finish(index) }
+            DispatchQueue.main.async { self.finish(index, outcome: summary.outcome) }
         }
     }
 
@@ -110,9 +117,11 @@ final class LibraryService {
         for observer in observers { observer.onCoversChanged(albums) }
     }
 
-    private func finish(_ index: LibraryIndex) {
+    private func finish(_ index: LibraryIndex, outcome: ScanSummary.Outcome) {
         albums = index.albumIDs
         lastCompleteScan = index.lastCompleteScan
+        lastOutcome = outcome
+        scansEnded += 1
         isScanning = false
         stop = nil
         notify()
