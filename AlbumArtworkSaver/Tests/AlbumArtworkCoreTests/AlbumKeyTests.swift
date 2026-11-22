@@ -12,6 +12,16 @@ final class AlbumKeyTests: XCTestCase {
                        AlbumKey.make(album: "  blue   TRAIN ", albumArtist: nil, artist: "JOHN COLTRANE", pictureFingerprint: 2))
     }
 
+    /// macOS file systems and taggers hand out both forms of "é"; one album must get one key.
+    func testComposedAndDecomposedAccentsMatch() {
+        let composed = AlbumKey.make(album: "Caf\u{E9} del Mar", albumArtist: nil, artist: "Ren\u{E9}e",
+                                     pictureFingerprint: 1)
+        let decomposed = AlbumKey.make(album: "Cafe\u{301} del Mar", albumArtist: nil, artist: "Rene\u{301}e",
+                                       pictureFingerprint: 2)
+        XCTAssertEqual(composed, decomposed)
+        XCTAssertEqual(Array(AlbumKey.normalize("Cafe\u{301}").utf8), Array("caf\u{E9}".utf8))
+    }
+
     func testAlbumArtistBeatsArtist() {
         XCTAssertEqual(AlbumKey.make(album: "Hits", albumArtist: "VA", artist: "A", pictureFingerprint: 1),
                        AlbumKey.make(album: "Hits", albumArtist: "VA", artist: "B", pictureFingerprint: 1))
