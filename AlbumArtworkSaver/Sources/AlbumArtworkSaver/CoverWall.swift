@@ -1,4 +1,10 @@
+import os
 import QuartzCore
+
+extension Logger {
+    /// The wall's log: subsystem = bundle ID, category `wall`.
+    static let wall = Logger(subsystem: "app.beamerpresenter.AlbumArtworkSaver", category: "wall")
+}
 
 /// The wall on screen: a black layer filling the host layer, with the camera's
 /// perspective, and one layer per engine sprite, posed from the engine on
@@ -17,6 +23,8 @@ final class CoverWall {
     private var layers: [SpriteID: CALayer] = [:]
     /// The pose each layer was last given, so resting covers are not set again every frame.
     private var shownPoses: [SpriteID: CoverPose] = [:]
+    /// Layers whose album's image the store did not have yet, with that album.
+    private var waiting: [SpriteID: AlbumID] = [:]
 
     init(hostLayer: CALayer, layout: GridLayout, images: CoverImageStore) {
         self.images = images
@@ -50,19 +58,20 @@ final class CoverWall {
             switch change {
             case let .added(id):
                 guard let sprite = engine.sprites[id] else { continue }
-                let layer = makeLayer(showing: sprite.album)
+                let layer = makeLayer()
                 layers[id] = layer
                 wallLayer.addSublayer(layer)
+                show(sprite.album, id: id, on: layer)
             case let .removed(id):
                 layers.removeValue(forKey: id)?.removeFromSuperlayer()
                 shownPoses[id] = nil
+                waiting[id] = nil
             case let .albumChanged(id):
-                // The engine only picks ready albums; should the cache have
-                // dropped this one since, the cover keeps its old image.
-                guard let album = engine.sprites[id]?.album, let image = images.image(for: album) else { continue }
-                layers[id]?.contents = image
+                guard let album = engine.sprites[id]?.album, let layer = layers[id] else { continue }
+                show(album, id: id, on: layer)
             }
         }
+        if !waiting.isEmpty { fillWaitingLayers() }
         for (id, layer) in layers {
             guard let pose = engine.sprites[id]?.pose, pose != shownPoses[id] else { continue }
             place(layer, at: pose)
@@ -71,10 +80,50 @@ final class CoverWall {
         CATransaction.commit()
     }
 
-    private func makeLayer(showing album: AlbumID) -> CALayer {
+    /// Puts `album`'s image on the layer. The engine only picks ready albums,
+    /// but the cache may have dropped one since: then the layer keeps what it
+    /// shows and waits while the store decodes the image again.
+    private func show(_ album: AlbumID, id: SpriteID, on layer: CALayer) {
+        if let image = images.image(for: album) {
+            layer.contents = image
+            waiting[id] = nil
+            return
+        }
+        waiting[id] = album
+        images.prefetch([album])
+        Logger.wall.notice("cover \(id.raw, privacy: .public) waits for its image to be decoded again")
+    }
+
+    private func fillWaitingLayers() {
+        for (id, album) in waiting {
+            guard let layer = layers[id] else {
+                waiting[id] = nil
+                continue
+            }
+            if let image = images.image(for: album) {
+                layer.contents = image
+                waiting[id] = nil
+            } else if images.hasFailed(album) {
+                // The image cannot be read any more: any cover beats a hole.
+                if layer.contents == nil { layer.contents = anyImage() }
+                guard layer.contents != nil else { continue }
+                waiting[id] = nil
+                Logger.wall.error("cover \(id.raw, privacy: .public): its image cannot be read, showing another")
+            } else {
+                // Nothing while it decodes; asks again if the cache dropped it on arrival.
+                images.prefetch([album])
+            }
+        }
+    }
+
+    private func anyImage() -> CGImage? {
+        let images = self.images
+        return images.pool.lazy.compactMap { images.image(for: $0) }.first
+    }
+
+    private func makeLayer() -> CALayer {
         let layer = CALayer()
         layer.bounds = CGRect(x: 0, y: 0, width: coverEdge, height: coverEdge)
-        layer.contents = images.image(for: album)
         layer.contentsGravity = .resizeAspectFill
         layer.masksToBounds = true
         layer.isDoubleSided = true

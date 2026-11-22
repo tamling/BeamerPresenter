@@ -23,7 +23,6 @@ final class AlbumArtworkView: ScreenSaverView {
     /// Mac slept) a fresh wall starts, instead of every missed tick at once.
     private static let maxFrameGap: TimeInterval = 1
     private static let statsInterval: TimeInterval = 10
-    private static let log = Logger(subsystem: "app.beamerpresenter.AlbumArtworkSaver", category: "wall")
 
     private enum Phase {
         /// Nothing to show: the wall stays black.
@@ -105,7 +104,7 @@ final class AlbumArtworkView: ScreenSaverView {
         self.wall = wall
         engine = WallEngine(layout: layout, settings: settings, source: store, seed: rng.next())
         let albums = store.pool.count, rows = layout.rows, columns = layout.columns, edge = store.pixelEdge
-        Self.log.notice("""
+        Logger.wall.notice("""
             wall: \(albums, privacy: .public) albums, \(rows, privacy: .public)×\(columns, privacy: .public) \
             covers of \(edge, privacy: .public) px, seed \(seed, privacy: .public)
             """)
@@ -150,7 +149,7 @@ final class AlbumArtworkView: ScreenSaverView {
         if albums.contains(where: store.hasFailed) {
             // An image that cannot be read never becomes ready: pick again without it.
             fill(from: store.pool.filter { !store.hasFailed($0) }, since: since)
-            if case .idle = phase { Self.log.error("wall: none of the cover images can be read") }
+            if case .idle = phase { Logger.wall.error("wall: none of the cover images can be read") }
             return
         }
         let missing = albums.filter { !store.isReady($0) }
@@ -163,14 +162,14 @@ final class AlbumArtworkView: ScreenSaverView {
         wall.apply(engine.sprites.keys.sorted { $0.raw < $1.raw }.map(WallChange.added), engine: engine)
         phase = .running
         let waited = (now - since) * 1000
-        Self.log.notice("wall started after \(waited, format: .fixed(precision: 0), privacy: .public) ms")
+        Logger.wall.notice("wall started after \(waited, format: .fixed(precision: 0), privacy: .public) ms")
     }
 
     /// A fresh engine and wall after a long pause, from the images already
     /// decoded, so the wall does not replay every tick it missed at once.
     private func restart(at now: TimeInterval, after gap: TimeInterval) {
         guard let host = layer, let layout, let store else { return }
-        Self.log.notice("wall restarted after a \(gap, format: .fixed(precision: 1), privacy: .public) s pause")
+        Logger.wall.notice("wall restarted after a \(gap, format: .fixed(precision: 1), privacy: .public) s pause")
         // One transaction, so the new covers replace the old ones in one frame.
         CATransaction.begin()
         defer { CATransaction.commit() }
@@ -201,7 +200,7 @@ final class AlbumArtworkView: ScreenSaverView {
         guard elapsed >= Self.statsInterval else { return }
         let frames = frameCount, mean = frameTotal / Double(frameCount) * 1000, longest = frameLongest * 1000
         let covers = engine?.sprites.count ?? 0
-        Self.log.notice("""
+        Logger.wall.notice("""
             frames: \(frames, privacy: .public) in \(elapsed, format: .fixed(precision: 1), privacy: .public) s, \
             mean \(mean, format: .fixed(precision: 3), privacy: .public) ms, \
             longest \(longest, format: .fixed(precision: 3), privacy: .public) ms, \
