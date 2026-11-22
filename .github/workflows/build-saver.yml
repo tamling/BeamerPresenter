@@ -66,7 +66,12 @@ jobs:
         # restart), then with a fixture music folder scanned into a fresh
         # cache. Both walls must log that they started, and the scan that it
         # completed; the bare real saver, with no folder chosen, must log its
-        # hint to choose one. The frame times the wall logs are printed, not checked.
+        # hint to choose one. Last, a start whose scan another process holds
+        # off (as the options sheet's process does during its first scan),
+        # from a cache an incomplete scan left: the wall must wait with its
+        # progress hint instead of starting from three covers, try again,
+        # and start once the cache is free. The frame times the wall logs
+        # are printed, not checked.
         run: |
           if ! pgrep -x WindowServer >/dev/null; then
             echo "::warning::No WindowServer on this runner, so the TestHost runs were skipped."
@@ -118,6 +123,16 @@ jobs:
             echo "▶︎ The log of TestHost $host_pid:"
             grep -E "TestHost\[${host_pid}[]:]" build/saver.log || true
           }
+          # expect_no_log <text>: fails the step if the running TestHost has logged <text>.
+          expect_no_log() {
+            fetch_log
+            if grep -Eq "TestHost\[${host_pid}[]:].*$1" build/saver.log; then
+              echo "✗ TestHost $host_pid logged \"$1\" too early."
+              show_log
+              exit 1
+            fi
+            echo "✓ TestHost $host_pid has not logged \"$1\"."
+          }
           launch_host
           expect_running 5
           expect_log "Musikordner in den Screensaver-Optionen wählen"
@@ -136,6 +151,39 @@ jobs:
           python3 Scripts/make-fixtures.py mp3 "$RUNNER_TEMP/aa-music"
           launch_host --music "$RUNNER_TEMP/aa-music" --cache "$RUNNER_TEMP/aa-music-cache"
           expect_running 8
+          expect_log "scan: complete"
+          expect_log "wall started after"
+          show_log
+          stop_host
+          # A cache with three albums but no complete scan: nopic.mp3 could not be read.
+          python3 Scripts/make-fixtures.py mp3 "$RUNNER_TEMP/aa-busy-music"
+          chmod 000 "$RUNNER_TEMP/aa-busy-music/nopic.mp3"
+          scan_line="$(./build/TestHost --scan "$RUNNER_TEMP/aa-busy-music" --cache "$RUNNER_TEMP/aa-busy-cache")"
+          echo "$scan_line"
+          grep -q '^outcome=incomplete albums=3 ' <<<"$scan_line"
+          chmod 644 "$RUNNER_TEMP/aa-busy-music/nopic.mp3"
+          python3 -c '
+          import fcntl, sys, time
+          lock = open(sys.argv[1], "a")
+          fcntl.flock(lock, fcntl.LOCK_EX)
+          print("locked", flush=True)
+          time.sleep(300)
+          ' "$RUNNER_TEMP/aa-busy-cache/scan.lock" >build/locker.log &
+          locker_pid=$!
+          for _ in $(seq 100); do
+            if grep -q locked build/locker.log; then break; fi
+            sleep 0.1
+          done
+          grep -q locked build/locker.log
+          launch_host --music "$RUNNER_TEMP/aa-busy-music" --cache "$RUNNER_TEMP/aa-busy-cache"
+          expect_running 3
+          expect_log "scan: another scan is writing"
+          expect_log "hint: Lese Musik ein … 3 Alben"
+          expect_running 9
+          expect_log "scan: trying again"
+          expect_no_log "wall started after"
+          kill "$locker_pid"
+          expect_running 11
           expect_log "scan: complete"
           expect_log "wall started after"
           show_log
