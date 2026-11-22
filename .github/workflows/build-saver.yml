@@ -55,37 +55,45 @@ jobs:
       - name: Run the wall in the TestHost
         # A GUI app needs a window server. Hosted runners have one; if not, say
         # so and go on. A TestHost that quits on its own fails the job: first
-        # without covers (the wall stays black), then with 120 fixture covers.
-        # The frame times the wall logs are printed for reading, not checked.
+        # without covers (the wall stays black), then with 120 fixture covers,
+        # stopped for 2 s on the way like a paused screensaver (the wall must
+        # restart). The frame times the wall logs are printed, not checked.
         run: |
           if ! pgrep -x WindowServer >/dev/null; then
             echo "::warning::No WindowServer on this runner, so the TestHost runs were skipped."
             exit 0
           fi
-          # start_host <seconds> [args…]: fails the step if the TestHost quits sooner.
-          start_host() {
-            local seconds="$1" status=0
-            shift
+          launch_host() {
             ./build/TestHost "$@" >build/testhost.log 2>&1 &
             host_pid=$!
-            sleep "$seconds"
+          }
+          # expect_running <seconds>: fails the step if the TestHost quits within them.
+          expect_running() {
+            local status=0
+            sleep "$1"
             if ! kill -0 "$host_pid" 2>/dev/null; then
               wait "$host_pid" || status=$?
-              echo "✗ TestHost $* quit within $seconds s (exit status $status):"
+              echo "✗ TestHost quit (exit status $status):"
               cat build/testhost.log
               exit 1
             fi
-            echo "✓ TestHost $* still running after $seconds s (pid $host_pid)."
+            echo "✓ TestHost still running after another $1 s (pid $host_pid)."
           }
           stop_host() {
             kill "$host_pid"
             wait "$host_pid" 2>/dev/null || true
             cat build/testhost.log
           }
-          start_host 5
+          launch_host
+          expect_running 5
           stop_host
           python3 Scripts/make-fixtures.py images 120 "$RUNNER_TEMP/aa-covers"
-          start_host 20 --covers "$RUNNER_TEMP/aa-covers"
+          launch_host --covers "$RUNNER_TEMP/aa-covers"
+          expect_running 10
+          kill -STOP "$host_pid"
+          sleep 2
+          kill -CONT "$host_pid"
+          expect_running 10
           echo "▶︎ The wall's log (category wall):"
           log show --last 2m --style compact \
             --predicate 'subsystem == "app.beamerpresenter.AlbumArtworkSaver" && category == "wall"' \
