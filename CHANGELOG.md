@@ -1,5 +1,24 @@
 # Changelog
 
+## v7.9 — 2026-11-22
+
+**Design for a companion macOS screensaver, AlbumArtworkSaver.** BeamerPresenter
+itself is unchanged; this release only adds the design document.
+
+- `docs/superpowers/specs/2026-11-22-albumartwork-screensaver-design.md`
+  describes a native `.saver` that reads the album covers embedded in the MP3s
+  of a local music folder and shows them as a moving wall, modelled on
+  [lingkuma/AlbumArtwork](https://github.com/lingkuma/AlbumArtwork) (MIT) — the
+  same grid, the same seven animations, the same timings and weights, read
+  from its source rather than guessed from its GIF.
+- New music is picked up on every start without rescanning everything, and the
+  cover cache is never cleared just because the music drive is not mounted.
+- It will live in its own folder, `AlbumArtworkSaver/`, with its own package,
+  version and changelog, and its own macOS CI workflow.
+- Before anything is built, a throwaway spike checks on the real Mac whether
+  Apple's sandboxed screen-saver host can read a user-chosen folder at all. If
+  it cannot, a small helper app does the reading instead.
+
 ## v7.8 — 2026-11-16
 
 **The control bar no longer breaks apart when the window is made narrow.**
