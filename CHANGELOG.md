@@ -2,8 +2,8 @@
 
 ## v7.9 — 2026-11-22
 
-**Design for a companion macOS screensaver, AlbumArtworkSaver.** BeamerPresenter
-itself is unchanged; this release only adds the design document.
+**Design and plan for a companion macOS screensaver, AlbumArtworkSaver.**
+BeamerPresenter itself is unchanged; this release only adds the two documents.
 
 - `docs/superpowers/specs/2026-11-22-albumartwork-screensaver-design.md`
   describes a native `.saver` that reads the album covers embedded in the MP3s
@@ -18,6 +18,10 @@ itself is unchanged; this release only adds the design document.
 - Before anything is built, a throwaway spike checks on the real Mac whether
   Apple's sandboxed screen-saver host can read a user-chosen folder at all. If
   it cannot, a small helper app does the reading instead.
+- `docs/superpowers/plans/2026-11-22-albumartwork-screensaver.md` breaks the
+  build into 13 tasks: the spike, then everything that needs no Apple framework
+  — grid, motions, wall engine, ID3 reader, incremental index — as plain Swift
+  tested on Linux, then the thin macOS layer, built and checked in CI.
 
 ## v7.8 — 2026-11-16
 
