@@ -28,10 +28,7 @@ struct SaverSettings {
     /// The saved settings; the defaults (6 rows, 3 s, no folder) for what was
     /// never saved. Values out of range are clamped.
     static func load() -> SaverSettings {
-        guard let defaults = ScreenSaverDefaults(forModuleWithName: moduleName) else {
-            Logger.scan.error("settings: no ScreenSaverDefaults for \(moduleName, privacy: .public)")
-            return SaverSettings()
-        }
+        guard let defaults = defaults() else { return SaverSettings() }
         // Another process (System Settings' preview) may have saved since.
         defaults.synchronize()
         let standard = WallSettings()
@@ -44,14 +41,28 @@ struct SaverSettings {
     }
 
     func save() {
-        guard let defaults = ScreenSaverDefaults(forModuleWithName: Self.moduleName) else {
-            Logger.scan.error("settings: no ScreenSaverDefaults for \(Self.moduleName, privacy: .public)")
-            return
-        }
+        guard let defaults = Self.defaults() else { return }
         defaults.set(wall.rows, forKey: Key.rows)
         defaults.set(wall.interval, forKey: Key.interval)
         defaults.set(folderBookmark, forKey: Key.folderBookmark)
         defaults.set(folderPath, forKey: Key.folderPath)
         defaults.synchronize()
+    }
+
+    /// Saves only the folder, so a bookmark renewed off the main thread does
+    /// not undo rows or an interval saved meanwhile.
+    func saveFolder() {
+        guard let defaults = Self.defaults() else { return }
+        defaults.set(folderBookmark, forKey: Key.folderBookmark)
+        defaults.set(folderPath, forKey: Key.folderPath)
+        defaults.synchronize()
+    }
+
+    private static func defaults() -> ScreenSaverDefaults? {
+        let defaults = ScreenSaverDefaults(forModuleWithName: moduleName)
+        if defaults == nil {
+            Logger.scan.error("settings: no ScreenSaverDefaults for \(moduleName, privacy: .public)")
+        }
+        return defaults
     }
 }

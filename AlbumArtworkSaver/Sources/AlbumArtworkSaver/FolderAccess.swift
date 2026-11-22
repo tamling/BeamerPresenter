@@ -8,9 +8,15 @@ import os
 /// bookmark, and the plain path. Each attempt and its outcome is logged in
 /// category `scan` ("folder: …"), so the log shows which way this Mac allows.
 ///
-/// Main thread only.
+/// Resolving waits on the disk (a share may take seconds to wake), so the
+/// screensaver resolves on `queue` and gets the result on the main thread.
+/// Any thread may call these functions.
 enum FolderAccess {
-    /// URLs `resolve` started security-scoped access for, not stopped yet.
+    /// Serial, so resolutions finish in the order they were asked for.
+    private static let queue = DispatchQueue(label: "app.beamerpresenter.AlbumArtworkSaver.folder",
+                                             qos: .userInitiated)
+    private static let lock = NSLock()
+    /// URLs `resolve` started security-scoped access for, not stopped yet; under `lock`.
     private static var accessing: [URL] = []
 
     /// Stores `url` in `settings` as its path and as a bookmark: a
@@ -25,12 +31,23 @@ enum FolderAccess {
         }
     }
 
+    /// `resolve(_:)` off the main thread; `deliver` gets its result on the
+    /// main thread. A caller that no longer wants the URL must still give it
+    /// to `stopAccessing`.
+    static func resolve(_ settings: SaverSettings,
+                        then deliver: @escaping (_ status: FolderStatus, _ url: URL?) -> Void) {
+        queue.async {
+            let (status, url) = resolve(settings)
+            DispatchQueue.main.async { deliver(status, url) }
+        }
+    }
+
     /// The chosen folder, the first way that gives a readable folder: the
     /// bookmark (security-scoped, then plain; a stale one is made anew), then
     /// the path. A security-scoped URL comes back with access started: give it
-    /// to `stopAccessing` once it is no longer read.
+    /// to `stopAccessing` once it is no longer read. Blocks while the disk
+    /// answers; not for the main thread.
     static func resolve(_ settings: SaverSettings) -> (status: FolderStatus, url: URL?) {
-        dispatchPrecondition(condition: .onQueue(.main))
         guard settings.folderBookmark != nil || settings.folderPath != nil else {
             Logger.scan.notice("folder: none chosen")
             return (.notChosen, nil)
@@ -53,9 +70,11 @@ enum FolderAccess {
     /// Ends the access `resolve` started for `url`; does nothing for a URL
     /// without one, so any URL `resolve` returned may be passed, once.
     static func stopAccessing(_ url: URL) {
-        dispatchPrecondition(condition: .onQueue(.main))
-        guard let index = accessing.firstIndex(of: url) else { return }
-        accessing.remove(at: index)
+        lock.lock()
+        let index = accessing.firstIndex(of: url)
+        if let index { accessing.remove(at: index) }
+        lock.unlock()
+        guard index != nil else { return }
         url.stopAccessingSecurityScopedResource()
         Logger.scan.notice("folder: access ended for \(url.path, privacy: .public)")
     }
@@ -97,7 +116,11 @@ enum FolderAccess {
             return nil
         }
         let started = securityScoped && url.startAccessingSecurityScopedResource()
-        if started { accessing.append(url) }
+        if started {
+            lock.lock()
+            accessing.append(url)
+            lock.unlock()
+        }
         let access = securityScoped ? (started ? ", access started" : ", access not granted") : ""
         Logger.scan.notice("""
             folder: \(kind, privacy: .public) bookmark resolved to \(url.path, privacy: .public)\
@@ -119,7 +142,7 @@ enum FolderAccess {
         guard saved.folderBookmark == old, let fresh = bookmark(for: url, securityScoped: securityScoped) else { return }
         saved.folderBookmark = fresh
         saved.folderPath = url.standardizedFileURL.path
-        saved.save()
+        saved.saveFolder()
         Logger.scan.notice("folder: stale bookmark replaced")
     }
 

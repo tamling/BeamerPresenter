@@ -44,11 +44,15 @@ final class AlbumArtworkView: ScreenSaverView {
     private var store: CoverImageStore?
     /// The albums of the music folder's cache; nil for `HostOverride.covers`.
     private var library: LibraryService?
-    /// Whether the music folder can be read, for the hint.
-    private var folder = FolderStatus.notChosen
+    /// Whether the music folder can be read, for the hint; nil while it is
+    /// being resolved.
+    private var folder: FolderStatus?
     /// The chosen folder as `FolderAccess.resolve` gave it, with its access;
     /// nil when it cannot be read, and in the TestHost.
     private var folderURL: URL?
+    /// Counts tear-downs, so a folder resolved for an earlier start is let go
+    /// of instead of scanned.
+    private var generation = 0
     /// The quiet line in the middle of a wall that has not started.
     private var hint: CATextLayer?
     private var optionsSheet: OptionsSheet?
@@ -116,37 +120,57 @@ final class AlbumArtworkView: ScreenSaverView {
 
     // MARK: - Start and stop
 
-    /// Shows the wall from the cache and scans the music folder. A start
-    /// without a stop before it first lets go of what the last one set up.
+    /// Shows the wall from the cache at once, then scans the music folder. The
+    /// real screensaver resolves the folder in the background first: a disk
+    /// or share that is slow to answer must not keep the cached wall waiting.
+    /// A start without a stop before it first lets go of what the last one set up.
     private func start(with saved: SaverSettings) {
         tearDown(cancellingScan: false)
         settings = saved.wall
+        DistributedNotificationCenter.default().addObserver(
+            self, selector: #selector(screensaverWillStop(_:)), name: Self.willStop, object: nil)
+        setUpWall()
         switch Self.hostOverride {
         case nil:
-            (folder, folderURL) = FolderAccess.resolve(saved)
+            let began = CACurrentMediaTime(), generation = self.generation
+            FolderAccess.resolve(saved) { [weak self] status, url in
+                let waited = (CACurrentMediaTime() - began) * 1000
+                guard let self, self.generation == generation else {
+                    // Stopped (or started again) meanwhile: nothing to scan for.
+                    if let url { FolderAccess.stopAccessing(url) }
+                    Logger.scan.notice("folder: resolved after the wall stopped; let go")
+                    return
+                }
+                Logger.scan.notice("""
+                    folder: \(String(describing: status), privacy: .public) for the wall, \
+                    resolved in \(waited, format: .fixed(precision: 0), privacy: .public) ms
+                    """)
+                self.folderResolved(status, url)
+            }
         case let .music(root, cache: _):
             var isFolder: ObjCBool = false
             let exists = FileManager.default.fileExists(atPath: root.path, isDirectory: &isFolder)
             folder = exists && isFolder.boolValue ? .available : .unavailable
+            library?.scan(root: root)
         case .covers:
             folder = .available
         }
-        DistributedNotificationCenter.default().addObserver(
-            self, selector: #selector(screensaverWillStop(_:)), name: Self.willStop, object: nil)
-        setUpWall()
-        if let library, let root = scanRoot { library.scan(root: root) }
         updateHint()
     }
 
-    /// The folder to scan: the TestHost's, or the chosen one if it can be read.
-    private var scanRoot: URL? {
-        if case let .music(root, cache: _) = Self.hostOverride { return root }
-        return folderURL
+    /// The real screensaver's folder is known: scan it if it can be read.
+    private func folderResolved(_ status: FolderStatus, _ url: URL?) {
+        folder = status
+        folderURL = url
+        if let library, let url { library.scan(root: url) }
+        updateHint()
     }
 
     /// Lets go of the wall, its images, the hint and the folder. Safe to call
     /// again: what is gone stays gone.
     private func tearDown(cancellingScan: Bool) {
+        // A folder still being resolved is let go of when it arrives.
+        generation += 1
         DistributedNotificationCenter.default().removeObserver(self, name: Self.willStop, object: nil)
         if let library {
             library.removeObserver(self)
@@ -162,7 +186,7 @@ final class AlbumArtworkView: ScreenSaverView {
         showHint(nil)
         if let folderURL { FolderAccess.stopAccessing(folderURL) }
         folderURL = nil
-        folder = .notChosen
+        folder = nil
     }
 
     /// The host may keep the process, and this view, running after the
@@ -333,10 +357,11 @@ final class AlbumArtworkView: ScreenSaverView {
     // MARK: - The hint
 
     /// What a wall that has not started waits for: a folder, the scan, covers.
-    /// Gone as soon as the wall has albums to start with. Asked for after the
-    /// wall's phase or the library changed, and once a start has begun its scan.
+    /// Gone as soon as the wall has albums to start with, and not shown while
+    /// the folder is being resolved. Asked for after the wall's phase, the
+    /// library or the folder changed, and once a start has begun its scan.
     private func updateHint() {
-        guard case .idle = phase, let library, let layout else {
+        guard case .idle = phase, let library, let layout, let folder else {
             showHint(nil)
             return
         }

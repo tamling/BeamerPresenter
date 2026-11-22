@@ -19,7 +19,10 @@ final class OptionsSheet: NSWindowController {
     private var settings: SaverSettings
     private let service: LibraryService?
     private let onDone: (SaverSettings) -> Void
-    private var folder = FolderStatus.notChosen
+    /// Whether the folder can be read; nil until it was first resolved.
+    private var folder: FolderStatus?
+    /// Counts requests to resolve the folder; only the latest one's result is used.
+    private var resolution = 0
     /// The folder this sheet asked the service to scan, with the access
     /// `FolderAccess.resolve` started for it; let go once that scan is over.
     private var scanFolder: URL?
@@ -58,7 +61,7 @@ final class OptionsSheet: NSWindowController {
         buildContent(in: window)
         showWallSettings()
         // Only to tell the status line whether the folder can be read now.
-        if let url = resolveFolder() { FolderAccess.stopAccessing(url) }
+        resolveFolder(then: .show)
         service?.addObserver(self) { [weak self] in self?.serviceChanged() }
         refreshStatus()
     }
@@ -95,7 +98,7 @@ final class OptionsSheet: NSWindowController {
     }
 
     @objc private func rescan(_ sender: Any?) {
-        resolveAndScan(cancellingRunning: false)
+        resolveFolder(then: .scan(cancellingRunning: false))
     }
 
     @objc private func rowsChanged(_ sender: NSSlider) {
@@ -139,27 +142,43 @@ final class OptionsSheet: NSWindowController {
         settings.save()
         pathField.stringValue = settings.folderPath ?? ""
         // The earlier folder's scan makes way for this one.
-        resolveAndScan(cancellingRunning: true)
+        resolveFolder(then: .scan(cancellingRunning: true))
     }
 
-    private func resolveAndScan(cancellingRunning: Bool) {
-        if let url = resolveFolder() { scan(url, cancellingRunning: cancellingRunning) }
-        refreshStatus()
+    private enum AfterResolving {
+        /// Only the status line.
+        case show
+        case scan(cancellingRunning: Bool)
     }
 
-    /// The chosen folder, with its access started (see `FolderAccess.resolve`),
-    /// or nil if it cannot be read.
-    private func resolveFolder() -> URL? {
-        let (status, url) = FolderAccess.resolve(settings)
-        folder = status
-        // Resolving saves a stale bookmark anew; "Fertig" must not put the old one back.
-        let saved = SaverSettings.load()
-        if saved.folderBookmark != settings.folderBookmark || saved.folderPath != settings.folderPath {
-            settings.folderBookmark = saved.folderBookmark
-            settings.folderPath = saved.folderPath
-            pathField.stringValue = settings.folderPath ?? ""
+    /// Resolves the chosen folder in the background (a disk or share may be
+    /// slow to answer), then shows whether it can be read and does `next`
+    /// with it. The status line keeps its text until the result is in. A
+    /// result for an earlier request, or for a sheet that is gone, is let go of.
+    private func resolveFolder(then next: AfterResolving) {
+        resolution += 1
+        let request = resolution
+        FolderAccess.resolve(settings) { [weak self] status, url in
+            guard let self, self.resolution == request else {
+                if let url { FolderAccess.stopAccessing(url) }
+                return
+            }
+            self.folder = status
+            // Resolving saves a stale bookmark anew; "Fertig" must not put the old one back.
+            let saved = SaverSettings.load()
+            if saved.folderBookmark != self.settings.folderBookmark || saved.folderPath != self.settings.folderPath {
+                self.settings.folderBookmark = saved.folderBookmark
+                self.settings.folderPath = saved.folderPath
+                self.pathField.stringValue = self.settings.folderPath ?? ""
+            }
+            if let url {
+                switch next {
+                case .show: FolderAccess.stopAccessing(url)
+                case let .scan(cancellingRunning): self.scan(url, cancellingRunning: cancellingRunning)
+                }
+            }
+            self.refreshStatus()
         }
-        return url
     }
 
     private func scan(_ url: URL, cancellingRunning: Bool) {
@@ -205,6 +224,12 @@ final class OptionsSheet: NSWindowController {
     }
 
     private func refreshStatus() {
+        guard let folder else {
+            // Not resolved yet: no status to tell.
+            statusLabel.stringValue = ""
+            rescanButton.isEnabled = false
+            return
+        }
         let scanning = service?.isScanning ?? false
         statusLabel.stringValue = StatusText.make(albumCount: service?.albums.count ?? 0,
                                                   lastCompleteScan: service?.lastCompleteScan, now: Date(),
