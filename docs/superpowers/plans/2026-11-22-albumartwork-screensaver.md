@@ -67,6 +67,15 @@ AlbumArtworkSaver/
 
 ### Task 1: Spike — Ordnerzugriff im echten Screensaver (Prüfpunkt 1)
 
+> **Entfallen (Entscheidung des Nutzers, R14).** Kein Spike auf dem Mac mini:
+> Der Nutzer wollte ein installierbares Zip statt Remote Control. Die Prüfungen
+> stecken im echten Screensaver (Task 12): Statuszeile im Optionen-Blatt und
+> `folder:`-Logs. `MACOS_MIN` = 13.0, CI baut universell (`ARCHS="arm64
+> x86_64"`), das Link-Flag `-Xclang-linker -bundle` ist auf dem CI-Runner
+> geprüft (`file` und `Scripts/load-saver.swift`), Auslieferung als
+> CI-Artefakt `AlbumArtwork-saver`. Die Mac-mini-Schritte der Tasks 9–13 wurden
+> zu CI-Prüfungen. Die Schritte unten sind der ursprüngliche Plan.
+
 **Files:**
 - Wegwerf, nur im Checkout auf dem Mac mini, nicht committen: `AlbumArtworkSaver/Spike/SpikeView.swift`, `Spike/Info.plist`, `Spike/build-spike.sh`
 - Modify: `docs/superpowers/specs/2026-11-22-albumartwork-screensaver-design.md` (neuer Abschnitt „Spike-Ergebnis“)

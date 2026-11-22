@@ -103,6 +103,18 @@ Screensavers behält Reihen und Intervall und verweist auf die Hilfs-App
 
 ## 7. Spike (vor dem eigentlichen Bau)
 
+> **Entfallen (Entscheidung des Nutzers, R14).** Der Spike wurde nicht gebaut:
+> Der Nutzer wollte kein Remote-Control-Setup am Mac mini, sondern ein
+> installierbares Zip. Die Prüfungen unten stecken im echten Screensaver: Die
+> Statuszeile im Optionen-Blatt zeigt, ob der gewählte Ordner lesbar ist
+> (Bookmark und reiner Pfad werden beide versucht), und jeder Versuch steht im
+> Log (Zeilen `folder: …`, Subsystem `app.beamerpresenter.AlbumArtworkSaver`).
+> Deployment-Target `MACOS_MIN` 13.0 (der Mac ist unbekannt, daher die
+> Untergrenze von BeamerPresenter), universeller Build (arm64 und x86_64),
+> Auslieferung als CI-Artefakt `AlbumArtwork-saver`. Scheitert der
+> Ordnerzugriff beim Nutzer, folgt Weg B nachträglich. Der Text unten ist der
+> ursprüngliche Plan.
+
 Ein Wegwerf-`.saver` auf dem Mac mini. Er prüft, jeweils im echten Screensaver
 (nicht nur in der Vorschau):
 
