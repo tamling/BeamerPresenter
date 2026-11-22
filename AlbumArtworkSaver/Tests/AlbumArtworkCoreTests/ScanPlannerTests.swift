@@ -89,6 +89,33 @@ final class ScanPlannerTests: XCTestCase {
         XCTAssertEqual(index.version, LibraryIndex.currentVersion)
     }
 
+    func testFingerprintRoundTripsAtBothEnds() throws {
+        for fingerprint in [UInt64.max, 0] {
+            let album = IndexedAlbum(fingerprint: fingerprint, title: "T", artist: "A")
+            let data = try JSONEncoder().encode(album)
+            XCTAssertEqual(try JSONDecoder().decode(IndexedAlbum.self, from: data), album)
+        }
+    }
+
+    /// A JSON number above 2^53 may not survive every decoder (Foundation on
+    /// macOS 13 goes through NSNumber), so the fingerprint is a hex string.
+    func testFingerprintIsEncodedAsHexString() throws {
+        for (fingerprint, hex) in [(UInt64.max, "ffffffffffffffff"), (0, "0000000000000000"),
+                                   (0xAB, "00000000000000ab")] {
+            let data = try JSONEncoder().encode(IndexedAlbum(fingerprint: fingerprint, title: "", artist: ""))
+            let json = String(decoding: data, as: UTF8.self)
+            XCTAssertTrue(json.contains(#""fingerprint":"\#(hex)""#), json)
+        }
+    }
+
+    func testMalformedFingerprintDoesNotDecode() {
+        for fingerprint in [#""xyz""#, #""ffffffffffffffff0""#, #""fff""#, #""-000000000000001""#,
+                            #""+000000000000001""#, #""FFFFFFFFFFFFFFFF""#, "5"] {
+            let json = #"{"fingerprint":\#(fingerprint),"title":"","artist":""}"#
+            XCTAssertThrowsError(try JSONDecoder().decode(IndexedAlbum.self, from: Data(json.utf8)), json)
+        }
+    }
+
     func testPlanFiftyThousandFilesIsFast() {
         var index = LibraryIndex()
         var listing: [String: FileStamp] = [:]
