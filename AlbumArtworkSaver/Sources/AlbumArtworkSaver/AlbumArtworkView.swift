@@ -35,6 +35,8 @@ final class AlbumArtworkView: ScreenSaverView {
     private let settings = WallSettings()
     private var layout: GridLayout?
     private var store: CoverImageStore?
+    /// The albums of a music folder's cache (`HostOverride.music`), else nil.
+    private var library: LibraryService?
     private var wall: CoverWall?
     private var engine: WallEngine?
     private var rng = SplitMix64(seed: 0)
@@ -91,9 +93,7 @@ final class AlbumArtworkView: ScreenSaverView {
         resetStats(at: now)
         guard let host = layer, bounds.width > 0, bounds.height > 0 else { return }
         let layout = GridLayout(rows: settings.rows, aspect: Double(bounds.width / bounds.height))
-        let covers = Self.coverFiles(for: Self.hostOverride)
-        let store = CoverImageStore { covers[$0] }
-        store.pool = covers.keys.sorted()
+        let store = makeStore(for: Self.hostOverride)
         let wall = CoverWall(hostLayer: host, layout: layout, images: store)
         let scale = window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2
         store.pixelEdge = Int((wall.coverEdge * scale).rounded(.up))
@@ -109,6 +109,36 @@ final class AlbumArtworkView: ScreenSaverView {
             covers of \(edge, privacy: .public) px, seed \(seed, privacy: .public)
             """)
         fill(from: store.pool, since: now)
+        if case let .music(root, cache: _) = Self.hostOverride { library?.scan(root: root) }
+    }
+
+    /// The images for `host`: a music folder's cache, whose albums arrive
+    /// while the library scans, or a folder of cover images.
+    private func makeStore(for host: HostOverride?) -> CoverImageStore {
+        library = nil
+        guard case let .music(_, cache: directory) = host else {
+            let covers = Self.coverFiles(for: host)
+            let store = CoverImageStore { covers[$0] }
+            store.pool = covers.keys.sorted()
+            return store
+        }
+        let library = LibraryService.shared(cacheDirectory: directory)
+        let cache = CoverCache(directory: directory)
+        let store = CoverImageStore { cache.coverURL(for: $0) }
+        store.pool = library.albums
+        library.addObserver(self) { [weak self] in self?.libraryChanged() }
+        self.library = library
+        return store
+    }
+
+    /// New albums join the pool, so the next animations can show them. A black
+    /// wall starts once there are enough for every cell, or the scan is done.
+    private func libraryChanged() {
+        guard let library, let store, let layout else { return }
+        store.pool = library.albums
+        guard case .idle = phase, library.albums.count >= layout.cellCount || !library.isScanning else { return }
+        let readable = store.pool.filter { !store.hasFailed($0) }
+        if !readable.isEmpty { fill(from: readable, since: CACurrentMediaTime()) }
     }
 
     private func step(at now: TimeInterval) {

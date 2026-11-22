@@ -7,6 +7,14 @@ import AppKit
 //   ./build/TestHost                  a 1280×720 window running AlbumArtworkView
 //   ./build/TestHost --covers <dir>   the same wall, with every *.jpg, *.jpeg and
 //                                     *.png in <dir> as an album
+//   ./build/TestHost --music <dir> [--cache <dir>]
+//                                     the real wall: the music folder <dir> is
+//                                     scanned into the cache folder (default: the
+//                                     screensaver's), new albums join as found
+//   ./build/TestHost --scan <dir> --cache <dir>
+//                                     no window: scans <dir> into the cache once,
+//                                     prints "outcome=… albums=… files=… new=…"
+//                                     and exits 0
 
 final class TestHostDelegate: NSObject, NSApplicationDelegate {
     private var window: NSWindow?
@@ -38,37 +46,78 @@ final class TestHostDelegate: NSObject, NSApplicationDelegate {
 
 func fail(_ message: String) -> Never {
     FileHandle.standardError.write(Data("✗ \(message)\n".utf8))
-    FileHandle.standardError.write(Data("usage: TestHost [--covers <dir>]\n".utf8))
+    FileHandle.standardError.write(Data("""
+        usage: TestHost [--covers <dir> | --music <dir> [--cache <dir>] | --scan <dir> --cache <dir>]
+
+        """.utf8))
     exit(2)
 }
 
-/// The command line as the host override for the view.
-func hostOverride(from arguments: [String]) -> HostOverride? {
+enum Mode {
+    /// The view in a window, showing what the override names.
+    case window(HostOverride?)
+    /// One scan, no window.
+    case scan(music: URL, cache: URL)
+}
+
+/// The command line as what to run.
+func mode(from arguments: [String]) -> Mode {
     var arguments = arguments[...]
-    var result: HostOverride?
+    var covers: URL?
+    var music: URL?
+    var scan: URL?
+    var cache: URL?
+    func folder(after option: String) -> URL {
+        guard let path = arguments.popFirst() else { fail("\(option) needs a folder") }
+        return URL(fileURLWithPath: path, isDirectory: true)
+    }
     while let argument = arguments.popFirst() {
         switch argument {
         case "--covers":
-            guard let path = arguments.popFirst() else { fail("--covers needs a folder") }
+            let url = folder(after: argument)
             var isFolder: ObjCBool = false
-            guard FileManager.default.fileExists(atPath: path, isDirectory: &isFolder), isFolder.boolValue else {
-                fail("--covers \(path): no such folder")
+            guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isFolder), isFolder.boolValue else {
+                fail("--covers \(url.path): no such folder")
             }
-            result = .covers(URL(fileURLWithPath: path, isDirectory: true))
+            covers = url
+        // A music folder that is not there is fine: the scan says so.
+        case "--music": music = folder(after: argument)
+        case "--scan": scan = folder(after: argument)
+        case "--cache": cache = folder(after: argument)
         default:
             fail("unknown argument \(argument)")
         }
     }
-    return result
+    if [covers, music, scan].compactMap({ $0 }).count > 1 { fail("--covers, --music and --scan go alone") }
+    if let scan {
+        guard let cache else { fail("--scan needs --cache <dir>") }
+        return .scan(music: scan, cache: cache)
+    }
+    if let music { return .window(.music(music, cache: cache ?? CoverCache.defaultDirectory)) }
+    if cache != nil { fail("--cache goes with --music or --scan") }
+    return .window(covers.map(HostOverride.covers))
+}
+
+/// Scans once, in the foreground, and prints the summary.
+func runScan(music: URL, cache: URL) -> Never {
+    let summary = LibraryScanner(root: music, cache: CoverCache(directory: cache))
+        .run(isCancelled: { false }, onNewAlbums: { _ in })
+    print("outcome=\(summary.outcome.rawValue) albums=\(summary.albums) files=\(summary.files) new=\(summary.newAlbums)")
+    exit(0)
 }
 
 // Top-level code is nonisolated, but AppKit is main-actor-only; this runs on
 // the main thread, so say so instead of fighting the concurrency checker.
-MainActor.assumeIsolated {
-    AlbumArtworkView.hostOverride = hostOverride(from: Array(CommandLine.arguments.dropFirst()))
-    let app = NSApplication.shared
-    let delegate = TestHostDelegate()
-    app.delegate = delegate
-    app.setActivationPolicy(.regular)
-    app.run()
+switch mode(from: Array(CommandLine.arguments.dropFirst())) {
+case let .scan(music, cache):
+    runScan(music: music, cache: cache)
+case let .window(host):
+    MainActor.assumeIsolated {
+        AlbumArtworkView.hostOverride = host
+        let app = NSApplication.shared
+        let delegate = TestHostDelegate()
+        app.delegate = delegate
+        app.setActivationPolicy(.regular)
+        app.run()
+    }
 }
